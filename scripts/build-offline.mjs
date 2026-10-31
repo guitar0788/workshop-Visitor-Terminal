@@ -80,10 +80,15 @@ export function inlineOfflineBundle(html, scriptJs, stylesCss) {
     .replace(links[0][0], "<style>" + safeCss + "</style>")
     .replace("<head>", "<head>\n    " + TAG + "\n    " + csp);
 
+  // Do not treat HTML-looking strings inside the bundled React JS/CSS as
+  // external HTML tags: inspect the true outer document shell instead.
+  const shell = result
+    .replace(/<script type="module">[\s\S]*?<\/script>/, "<script></script>")
+    .replace(/<style>[\s\S]*?<\/style>/, "<style></style>");
   if (!result.includes(TAG) || !result.includes("connect-src 'none'") ||
-    /<script\b[^>]*\bsrc=/.test(result) ||
-    /<link\b[^>]*\bhref=/.test(result) ||
-    /<img\b[^>]*\bsrc=/.test(result) ||
+    /<script\b[^>]*\bsrc=/.test(shell) ||
+    /<link\b[^>]*\bhref=/.test(shell) ||
+    /<img\b[^>]*\bsrc=/.test(shell) ||
     !result.includes('<script type="module">') ||
     !result.includes("<style>")) {
     throw Error("Offline HTML is not self-contained or lacks the deny-network policy");
