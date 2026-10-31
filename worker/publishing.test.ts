@@ -109,7 +109,7 @@ const createEnv = (): PublishEnv & { DB: MockD1 } => ({
   VISIT_HASH_SECRET: adminSecret
 });
 function req(path: string, method = "GET", payload?: unknown, auth?: string, originValue = origin) {
-  return new Request(apiOrigin + path, {
+  return new Request(new URL(path, apiOrigin), {
     method,
     headers: {
       Origin: originValue,
