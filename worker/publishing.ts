@@ -64,6 +64,13 @@ async function digest(value: string): Promise<string> {
   const hash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
   return Array.from(new Uint8Array(hash), b => b.toString(16).padStart(2, "0")).join("");
 }
+async function keyedSource(secret: string, ip: string): Promise<string> {
+  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(secret),
+    { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const signed = await crypto.subtle.sign("HMAC", key,
+    new TextEncoder().encode("oauth-start\0" + ip));
+  return Array.from(new Uint8Array(signed), b => b.toString(16).padStart(2, "0")).join("");
+}
 function b64url(bytes: Uint8Array): string {
   return btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
 }
@@ -174,7 +181,7 @@ async function oauthStart(request: Request, env: PublishEnv, now: number): Promi
   const ip = request.headers.get("CF-Connecting-IP");
   if (!ip || ip.length > 80) return fail("Source address unavailable", 429);
   // HMAC-based 3 OAuth starts per IP in 5 minutes: no raw addresses persisted.
-  const source = await digest(env.VISIT_HASH_SECRET + "\0oauth-start\0" + ip);
+  const source = await keyedSource(env.VISIT_HASH_SECRET, ip);
   const state = secureBytes(32);
   const inserted = await env.DB.prepare(
     "INSERT INTO publish_oauth_states (state_hash, challenge, source_hash, created_at, expires_at) " +
