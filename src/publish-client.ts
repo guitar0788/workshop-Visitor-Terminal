@@ -7,13 +7,15 @@ import type { TerminalDesign } from "./model";
 const vars = (import.meta as ImportMeta & {
   env?: Record<string, string | undefined>
 }).env ?? {};
-const configured = vars.VITE_PUBLISH_API_ORIGIN?.trim() ?? "";
+/** Immutable standalone build gate: never call OAuth or Cloudflare from the offline edition. */
+export const OFFLINE_DEMO_MODE = vars.VITE_OFFLINE_DEMO === "true";
+const configured = OFFLINE_DEMO_MODE ? "" : vars.VITE_PUBLISH_API_ORIGIN?.trim() ?? "";
 export const PUBLIC_API_ORIGIN =
   /^https:\/\/workshop-visitor-terminal-staging\.[a-z0-9-]+\.workers\.dev\/?$/i.test(configured)
     ? configured.replace(/\/+$/, "") : "";
 export const PUBLISH_PILOT_MODE = vars.VITE_PUBLISH_PILOT === "true";
 export const PUBLISH_UI_ENABLED =
-  vars.VITE_PUBLISH_ENABLED === "true" && PUBLISH_PILOT_MODE &&
+  !OFFLINE_DEMO_MODE && vars.VITE_PUBLISH_ENABLED === "true" && PUBLISH_PILOT_MODE &&
   PUBLIC_API_ORIGIN.length > 0;
 const OAUTH_VERIFIER = "workshop-publish-oauth-verifier";
 const OAUTH_STATE = "workshop-publish-oauth-state";
