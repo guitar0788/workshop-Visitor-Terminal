@@ -1,0 +1,175 @@
+name: OAuth Pilot Auto (verified main only)
+
+# This privilege-bearing workflow only runs when Verify has passed on a trusted
+# main push, and the version-controlled deployment channel is explicitly pilot.
+on:
+  workflow_run:
+    workflows: ["Verify"]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: workshop-cloudflare-staging
+  cancel-in-progress: false
+
+jobs:
+  gate:
+    name: Confirm trusted current main and pilot channel
+    if: >-
+      github.repository == 'guitar0788/workshop-Visitor-Terminal' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.head_repository.full_name == github.repository &&
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      deploy: ${{ steps.authorize.outputs.deploy }}
+    steps:
+      - name: Checkout exactly the successfully verified commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Verify current main, deployment channel, and changed files
+        id: authorize
+        env:
+          VERIFY_SOURCE_EVENT: ${{ github.event.workflow_run.event }}
+          VERIFY_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          VERIFY_HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          VERIFY_HEAD_REPOSITORY: ${{ github.event.workflow_run.head_repository.full_name }}
+          VERIFY_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: node worker/check-auto-deploy.mjs
+
+  worker:
+    name: Validate and deploy isolated owner-only OAuth Worker
+    needs: gate
+    if: needs.gate.outputs.deploy == 'true'
+    environment: cloudflare-staging
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout exactly the verified deployment commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install and run complete security test suite
+        run: |
+          npm install
+          npm audit --omit=dev --audit-level=high
+          npm test
+          node --test worker/*.test.mjs
+          npm run build
+      - name: Validate OAuth credentials and prepare temporary config
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          STAGING_D1_DATABASE_ID: ${{ secrets.STAGING_D1_DATABASE_ID }}
+          STAGING_ADMIN_TOKEN: ${{ secrets.STAGING_ADMIN_TOKEN }}
+          STAGING_VISIT_HASH_SECRET: ${{ secrets.STAGING_VISIT_HASH_SECRET }}
+          GITHUB_CLIENT_ID: ${{ secrets.CLIENT_ID }}
+          GITHUB_CLIENT_SECRET: ${{ secrets.CLIENT_SECRET }}
+          PILOT_GITHUB_USER_ID: "124379632"
+          STAGING_ORIGIN: "https://workshop-visitor-terminal-staging.fangcui2007.workers.dev"
+        run: node worker/prepare-oauth-pilot.mjs
+      - name: Recheck authoritative main before remote writes
+        env:
+          VERIFY_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$VERIFY_HEAD_SHA"
+          grep -qx 'pilot' .github/pages-deploy-channel.txt
+      - name: Verify D1 identity before any remote migration
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          STAGING_D1_DATABASE_ID: ${{ secrets.STAGING_D1_DATABASE_ID }}
+        run: |
+          npx wrangler d1 list --json --config wrangler.staging.toml > "$RUNNER_TEMP/wvt-pilot-d1-list.json"
+          node worker/verify-staging-d1.mjs "$RUNNER_TEMP/wvt-pilot-d1-list.json"
+      - name: Apply additive OAuth schema to staging D1
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx wrangler d1 migrations apply workshop-visitor-terminal-staging --remote --config wrangler.staging.toml
+      - name: Deploy owner-only OAuth staging Worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx wrangler deploy --config wrangler.staging.toml --secrets-file "$RUNNER_TEMP/wvt-oauth-pilot-secrets.json"
+      - name: Wait for staging Worker health
+        env:
+          STAGING_ORIGIN: "https://workshop-visitor-terminal-staging.fangcui2007.workers.dev"
+        run: node worker/health-preflight.mjs
+      - name: Verify OAuth endpoints, denied origins and GitHub redirect
+        env:
+          STAGING_ORIGIN: "https://workshop-visitor-terminal-staging.fangcui2007.workers.dev"
+          GITHUB_CLIENT_ID: ${{ secrets.CLIENT_ID }}
+        run: node worker/oauth-pilot-preflight.mjs
+      - name: Delete temporary OAuth credentials
+        if: always()
+        run: |
+          rm -f wrangler.staging.toml
+          rm -f "$RUNNER_TEMP/wvt-oauth-pilot-secrets.json"
+          rm -f "$RUNNER_TEMP/wvt-pilot-d1-list.json"
+
+  pages:
+    name: Publish owner-only OAuth pilot editor
+    needs: worker
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    concurrency:
+      group: github-pages
+      cancel-in-progress: false
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    steps:
+      - name: Checkout exactly the verified deployment commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install and test before pilot frontend build
+        run: |
+          npm install
+          npm test
+      - name: Recheck verified main before replacing the pilot Pages site
+        env:
+          VERIFY_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$VERIFY_HEAD_SHA"
+          grep -qx 'pilot' .github/pages-deploy-channel.txt
+      - name: Build Pages with owner-only staging OAuth controls
+        env:
+          VITE_PUBLISH_ENABLED: "true"
+          VITE_PUBLISH_PILOT: "true"
+          VITE_PUBLISH_API_ORIGIN: "https://workshop-visitor-terminal-staging.fangcui2007.workers.dev"
+        run: npm run build
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+      - name: Upload validated Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+      - name: Deploy pilot editor at existing Studio URL
+        id: deployment
+        uses: actions/deploy-pages@v4
