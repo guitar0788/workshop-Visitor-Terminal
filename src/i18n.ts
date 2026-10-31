@@ -1,0 +1,213 @@
+import { clonePreset, type TerminalDesign, type Theme } from "./model";
+
+export type Language = "zh-CN" | "en";
+export const LANGUAGE_STORAGE_KEY = "workshop-studio-language";
+
+const english = {
+  languageLabel: "Interface language",
+  alpha: "ALPHA",
+  heading: "Make every visit your own.",
+  intro: "Design a personal visitor counter for your GitHub README. Build it visually, preview it instantly, and export it as SVG.",
+  editorLabel: "Editor",
+  designTools: "Design tools",
+  studioTag: "01 / STUDIO",
+  templateLabel: "Start with a template",
+  pixelTemplate: "🎮 Pixel Terminal",
+  cyberTemplate: "✧ Cyber HUD",
+  minimalTemplate: "◻ Minimal",
+  addLayer: "Add a layer",
+  maxLayers: "MAX 32",
+  layerList: "Layers",
+  elements: "ELEMENTS",
+  layerOrderLabel: "Layer order, front to back",
+  layerText: "Text",
+  layerCount: "Visitor count",
+  layerDot: "Status light",
+  layerPanel: "Panel",
+  blankText: "Empty text",
+  hidden: "hidden",
+  edit: "Edit",
+  delete: "Delete",
+  textLabel: "Text",
+  visibilityLabel: "Show this layer",
+  xLabel: "X",
+  yLabel: "Y",
+  widthLabel: "Width",
+  heightLabel: "Height",
+  fontSize: "Font size",
+  color: "Color",
+  sendBack: "Send back",
+  bringForward: "Bring forward",
+  selectLayer: "Select a layer in the list or preview to edit it.",
+  canvas: "Canvas",
+  readmeReady: "README READY",
+  background: "Background",
+  border: "Border",
+  livePreview: "Live preview",
+  svgPreview: "SVG PREVIEW",
+  designSurface: "DESIGN SURFACE",
+  imageAlt: "Custom visitor counter live preview",
+  selectAndMove: "Select and move",
+  emptyText: "empty text",
+  keyboardHelp: "Arrow keys move by one pixel; hold Shift to move by ten.",
+  dragTitle: "Drag to move",
+  moveSelectedLabel: "Move the selected layer",
+  moving: "Moving:",
+  selectFirst: "Select a layer",
+  tapArrows: "Tap arrows to position precisely · 5 px per tap",
+  editProperties: "Edit layer properties ↓",
+  up: "Move selected layer up by 5 pixels",
+  left: "Move selected layer left by 5 pixels",
+  down: "Move selected layer down by 5 pixels",
+  right: "Move selected layer right by 5 pixels",
+  positioningHelp: "✥ Drag or tap a layer in the preview · Use arrows to reposition · Keyboard arrows move 1 px (Shift = 10 px)",
+  exampleCount: "Example visit count",
+  demoWarning: "Preview only · Not a live counter",
+  downloadSvg: "Download SVG ↗",
+  saveDesign: "Save design",
+  loadDesign: "Load design",
+  copySvg: "Copy SVG",
+  importLabel: "Load design JSON",
+  disclosure: "GitHub caches README images. Hosted counting and one-click embed URLs are future milestones; this editor currently exports static SVG artwork.",
+  footerOpenSource: "OPEN SOURCE",
+  footerAlpha: "STUDIO ALPHA",
+  noticeInitial: "Drag an element to move it, or use arrow keys.",
+  noticeTemplate: "Template loaded. You can change every layer.",
+  noticeAdded: "Layer added. Drag it in the preview.",
+  noticeRemoved: "Layer removed.",
+  noticeCopied: "SVG source copied.",
+  noticeClipboardError: "Clipboard access unavailable. Use Download SVG instead.",
+  noticeTooLarge: "Design file exceeds the 64 KB limit.",
+  noticeImported: "Design loaded locally.",
+  noticeBadFile: "Invalid design JSON. Import a file exported from this editor.",
+  languageChange: "Switch language. Your design will not change."
+} as const;
+
+type TranslationKey = keyof typeof english;
+type TranslationCatalog = Record<TranslationKey, string>;
+
+const chinese: TranslationCatalog = {
+  languageLabel: "界面语言",
+  alpha: "测试版",
+  heading: "打造你的专属访客终端",
+  intro: "为 GitHub 个人主页设计访客计数器。自由调整图层、实时预览，还能导出为 SVG 图片。",
+  editorLabel: "编辑器",
+  designTools: "设计工具",
+  studioTag: "01 / 工作台",
+  templateLabel: "选择初始模板",
+  pixelTemplate: "🎮 像素终端",
+  cyberTemplate: "✧ 赛博仪表盘",
+  minimalTemplate: "◻ 极简风格",
+  addLayer: "添加图层",
+  maxLayers: "最多 32 层",
+  layerList: "图层列表",
+  elements: "个图层",
+  layerOrderLabel: "图层顺序（从前到后）",
+  layerText: "文字",
+  layerCount: "访客数字",
+  layerDot: "状态指示灯",
+  layerPanel: "装饰面板",
+  blankText: "空白文字",
+  hidden: "已隐藏",
+  edit: "编辑",
+  delete: "删除",
+  textLabel: "文字内容",
+  visibilityLabel: "显示此图层",
+  xLabel: "横坐标 X",
+  yLabel: "纵坐标 Y",
+  widthLabel: "宽度",
+  heightLabel: "高度",
+  fontSize: "字体大小",
+  color: "颜色",
+  sendBack: "下移一层",
+  bringForward: "上移一层",
+  selectLayer: "在图层列表或预览区选择一个图层，即可开始编辑。",
+  canvas: "画布设置",
+  readmeReady: "适用于 README",
+  background: "背景颜色",
+  border: "边框颜色",
+  livePreview: "实时预览",
+  svgPreview: "SVG 预览",
+  designSurface: "设计画布",
+  imageAlt: "自定义访客计数器实时预览",
+  selectAndMove: "选择并移动",
+  emptyText: "空白文字",
+  keyboardHelp: "方向键移动 1 像素，按住 Shift 时移动 10 像素。",
+  dragTitle: "拖动以移动",
+  moveSelectedLabel: "移动选中的图层",
+  moving: "正在移动：",
+  selectFirst: "请先选择图层",
+  tapArrows: "点击方向按钮精确移动 · 每次 5 像素",
+  editProperties: "编辑图层属性 ↓",
+  up: "将图层向上移动 5 像素",
+  left: "将图层向左移动 5 像素",
+  down: "将图层向下移动 5 像素",
+  right: "将图层向右移动 5 像素",
+  positioningHelp: "✥ 在画布中点按或拖动图层 · 方向按钮可调整位置 · 键盘方向键移动 1 像素（Shift + 方向键移动 10 像素）",
+  exampleCount: "示例访问次数",
+  demoWarning: "仅供预览 · 非真实访问统计",
+  downloadSvg: "下载 SVG ↗",
+  saveDesign: "保存设计",
+  loadDesign: "导入设计",
+  copySvg: "复制 SVG",
+  importLabel: "导入设计 JSON",
+  disclosure: "GitHub 会缓存 README 中的图片。真实访客统计与一键嵌入链接将在后续开发，目前只能导出静态 SVG 图片。",
+  footerOpenSource: "开源项目",
+  footerAlpha: "工作台测试版",
+  noticeInitial: "拖动元素以调整位置，也可以使用方向按钮或键盘方向键。",
+  noticeTemplate: "模板已载入，所有图层都可以继续编辑。",
+  noticeAdded: "已添加图层，可以在预览区拖动调整。",
+  noticeRemoved: "已删除图层。",
+  noticeCopied: "SVG 源码已复制。",
+  noticeClipboardError: "无法访问剪贴板，请改用“下载 SVG”。",
+  noticeTooLarge: "设计文件超过 64 KB 大小限制。",
+  noticeImported: "已在本地载入设计。",
+  noticeBadFile: "设计 JSON 无效，请导入本编辑器导出的文件。",
+  languageChange: "切换界面语言不会修改你的设计。"
+};
+
+export const translations: Record<Language, TranslationCatalog> = {
+  en: english,
+  "zh-CN": chinese
+};
+
+/**
+ * Browser preference is considered only when no valid explicit choice is saved.
+ * Any Chinese browser locale maps to simplified Chinese (the supported Chinese UI).
+ */
+export function resolveLanguage(
+  saved: string | null | undefined,
+  browserLanguages: readonly string[] = []
+): Language {
+  if (saved === "zh-CN" || saved === "en") return saved;
+  const preferred = browserLanguages.find(lang => typeof lang === "string" && lang.length > 0);
+  return preferred?.toLowerCase().startsWith("zh") ? "zh-CN" : "en";
+}
+
+export function readPreferredLanguage(): Language {
+  const browserLanguages = typeof navigator !== "undefined"
+    ? (navigator.languages?.length ? navigator.languages : [navigator.language])
+    : [];
+  try {
+    const stored = typeof window !== "undefined" ? window.localStorage.getItem(LANGUAGE_STORAGE_KEY) : null;
+    return resolveLanguage(stored, browserLanguages);
+  } catch {
+    return resolveLanguage(null, browserLanguages);
+  }
+}
+
+/** Choosing a template may localize its stock content; changing UI language never edits an existing design. */
+export function createLocalizedPreset(theme: Theme, language: Language): TerminalDesign {
+  const design = clonePreset(theme);
+  if (language !== "zh-CN") return design;
+  const title = theme === "pixel" ? "工坊访客终端" : theme === "cyber" ? "赛博访客终端" : "主页访问统计";
+  return {
+    ...design,
+    layers: design.layers.map(layer => {
+      if (layer.id === "heading") return { ...layer, text: title };
+      if (layer.id === "caption") return { ...layer, text: "累计访问量" };
+      if (layer.id === "status") return { ...layer, text: theme === "minimal" ? "感谢你的访问" : "系统运行中" };
+      return layer;
+    })
+  };
+}
