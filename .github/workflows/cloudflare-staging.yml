@@ -1,0 +1,106 @@
+name: Cloudflare Staging (manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_scope:
+        description: "Enter STAGING-ONLY to authorize a staging-only deployment"
+        required: true
+        type: string
+      staging_origin:
+        description: "Exact HTTPS URL: https://workshop-visitor-terminal-staging.<subdomain>.workers.dev"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: workshop-cloudflare-staging
+  cancel-in-progress: false
+
+jobs:
+  staging:
+    if: github.ref == 'refs/heads/main' && inputs.confirm_scope == 'STAGING-ONLY'
+    environment: cloudflare-staging
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout committed main code only
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install and verify build
+        run: |
+          npm install
+          npm audit --omit=dev --audit-level=high
+          npm test
+          node --test worker/staging-prepare.test.mjs worker/verify-staging-d1.test.mjs
+          npm run build
+
+      - name: Validate staging-only origin (before remote operations)
+        env:
+          STAGING_ORIGIN: ${{ inputs.staging_origin }}
+        run: node -e "import('./worker/prepare-staging.mjs').then(m=>m.validateStagingOrigin(process.env.STAGING_ORIGIN))"
+
+      - name: Prepare ignored staging config and ephemeral Worker secrets
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          STAGING_D1_DATABASE_ID: ${{ secrets.STAGING_D1_DATABASE_ID }}
+          STAGING_ADMIN_TOKEN: ${{ secrets.STAGING_ADMIN_TOKEN }}
+          STAGING_VISIT_HASH_SECRET: ${{ secrets.STAGING_VISIT_HASH_SECRET }}
+        run: node worker/prepare-staging.mjs
+
+      - name: Confirm remote D1 identity before any write
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          STAGING_D1_DATABASE_ID: ${{ secrets.STAGING_D1_DATABASE_ID }}
+        run: |
+          npx wrangler d1 list --json --config wrangler.staging.toml > "$RUNNER_TEMP/wvt-d1-list.json"
+          node worker/verify-staging-d1.mjs "$RUNNER_TEMP/wvt-d1-list.json"
+
+      - name: Apply migrations to staging D1 only
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx wrangler d1 migrations apply workshop-visitor-terminal-staging --remote --config wrangler.staging.toml
+
+      - name: Deploy isolated staging Worker and secrets
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx wrangler deploy --config wrangler.staging.toml --secrets-file "$RUNNER_TEMP/wvt-staging-worker-secrets.json"
+
+      - name: Verify Cloudflare D1 API, deduplication, and historical baseline
+        env:
+          STAGING_ORIGIN: ${{ inputs.staging_origin }}
+          STAGING_ADMIN_TOKEN: ${{ secrets.STAGING_ADMIN_TOKEN }}
+        run: node worker/remote-smoke.mjs initial
+
+      - name: Redeploy identical Worker to verify D1 persistence
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx wrangler deploy --config wrangler.staging.toml --secrets-file "$RUNNER_TEMP/wvt-staging-worker-secrets.json"
+
+      - name: Verify persistent counts after redeploy
+        env:
+          STAGING_ORIGIN: ${{ inputs.staging_origin }}
+          STAGING_ADMIN_TOKEN: ${{ secrets.STAGING_ADMIN_TOKEN }}
+        run: node worker/remote-smoke.mjs verify
+
+      - name: Remove ephemeral staging credentials from runner
+        if: always()
+        run: |
+          rm -f wrangler.staging.toml
+          rm -f "$RUNNER_TEMP/wvt-staging-worker-secrets.json"
+          rm -f "$RUNNER_TEMP/wvt-d1-list.json"
+          rm -f "$RUNNER_TEMP/wvt-remote-smoke-state.json"

@@ -34,6 +34,12 @@ A free, open-source visual studio for creating SVG visitor counters for GitHub p
 
 The downloaded SVG is **static**; it does not update visitor counts yet.
 
+### Cloudflare staging / 云端隔离测试
+
+A **manual-only, staging-only deployment workflow** is ready for Cloudflare account setup. See the [English and Chinese staging guide](worker/STAGING.md). The remote Worker and D1 database have **not** been created by this repository or deployed. Live counting in the GitHub Pages editor is **not enabled**.
+
+已准备 Cloudflare 测试专用部署与远程验收工作流。请查看[中英文完整设置说明](worker/STAGING.md)。目前**尚未连接或部署云端 Worker/D1**，GitHub Pages 在线编辑器仍显示演示访问量。
+
 ### Backend prototype (v0.4)
 
 A separate Cloudflare Worker + D1 service is available in [worker/](worker/README.md), including a real persistent counting data model, image endpoint, restricted admin API, request deduplication and a guarded one-time legacy baseline. **Not publicly deployed; this GitHub Pages site does not count real visits yet.** No Cloudflare account or secret is included in this repository.
