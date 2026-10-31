@@ -1,13 +1,16 @@
 {
   "name": "workshop-visitor-terminal",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "test": "vitest run"
+    "test": "vitest run",
+    "dev:worker": "wrangler dev --config wrangler.toml",
+    "deploy:worker": "wrangler deploy --config wrangler.toml",
+    "db:migrate:local": "wrangler d1 migrations apply workshop-visitor-terminal --local --config wrangler.toml"
   },
   "dependencies": {
     "react": "^19.1.0",
@@ -19,6 +22,7 @@
     "@vitejs/plugin-react": "^4.5.0",
     "typescript": "~5.8.3",
     "vite": "^6.3.0",
-    "vitest": "^3.2.0"
+    "vitest": "^3.2.0",
+    "wrangler": "^4.45.0"
   }
 }
