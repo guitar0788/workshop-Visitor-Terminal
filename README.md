@@ -6,7 +6,7 @@ A free, open-source visual studio for creating SVG visitor counters for GitHub p
 
 **[Open Workshop Studio / 打开在线编辑器](https://guitar0788.github.io/workshop-Visitor-Terminal/)**
 
-> **Alpha · v0.2 — This is a static visual editor, not a live visit-counting service.** All numbers shown are examples; hosted counting, persistent storage and dynamic README embed links are future milestones.
+> **Alpha · v0.3 — This is a static visual editor, not a live visit-counting service.** All numbers shown are examples; hosted counting, persistent storage and dynamic README embed links are future milestones.
 
 ## English
 
@@ -17,10 +17,15 @@ A free, open-source visual studio for creating SVG visitor counters for GitHub p
 - Language switching changes **UI labels only**, never the content or arrangement of an existing design.
 - Three starter designs: Pixel Terminal, Cyber HUD and Minimal. New templates use stock text in the selected language.
 - Move, resize, hide, reorder, add and delete text, counter, light and panel layers.
-- Real-time SVG preview, mobile-friendly nudge controls and keyboard navigation.
+- Real-time SVG preview, undo/redo, keyboard navigation and a clean preview mode.
+- Dedicated mobile layout: compact top bar, full-width preview, four-tab bottom navigation and slide-up layer/property/export panels.
+- On touch screens, tap to select a layer, then explicitly enable **Move layers** before dragging; precision buttons are available on demand.
 - Download a static SVG or save/load designs locally as JSON.
 
 ### Getting started
+
+**On mobile:** select **Layers** to add/select elements, **Properties** for adjustments, and **Export** to download. Tap **Clean preview** to hide selection guides. Touch dragging is off until **Move layers** is enabled, preventing accidental movement while scrolling.
+
 
 1. Open the [online editor](https://guitar0788.github.io/workshop-Visitor-Terminal/).
 2. Select **English** or **简体中文** in the header.
@@ -48,7 +53,7 @@ The app builds to the GitHub Pages project path. Pages deployment runs automatic
 
 **[立即打开在线编辑器](https://guitar0788.github.io/workshop-Visitor-Terminal/)**
 
-> **当前为 v0.2 测试版。** 网站已支持设计与导出，但显示的访问数字属于演示数据。真实计数服务、用户设计的在线托管以及动态 README 图片链接仍在规划中。
+> **当前为 v0.3 测试版。** 网站已支持设计与导出，但显示的访问数字属于演示数据。真实计数服务、用户设计的在线托管以及动态 README 图片链接仍在规划中。
 
 ### 已实现的功能
 
@@ -57,10 +62,16 @@ The app builds to the GitHub Pages project path. Pages deployment runs automatic
 - **保护设计内容**：切换界面语言不会翻译、移动、覆盖或清空已有图层。
 - **三个初始模板**：像素终端、赛博仪表盘、极简风格；新建模板使用当前界面的默认语言。
 - **可视化图层编辑**：支持拖动位置、调整尺寸、更改文字及颜色、控制可见性和顺序。
-- **适配手机操作**：提供触屏方向按钮与键盘精确移动。
+- **手机端独立工作台**：紧凑顶部栏、画布优先、底部「预览 / 图层 / 属性 / 导出」四个导航入口。
+- **按需打开编辑面板**：图层、属性和导出内容从底部弹出，无需反复滚动寻找。
+- **防止误操作**：手机点按图层仅选择，开启「移动图层」后才允许拖动；可按需展开精确方向按钮。
+- **纯净预览与撤销/重做**：隐藏选中轮廓，查看导出效果；编辑操作支持撤销与重做。
 - **本地设计导入与导出**：支持 SVG 图片下载和 JSON 设计文件备份。
 
 ### 如何使用
+
+**手机端操作：** 点击底部「图层」添加或选择组件，「属性」修改参数，「导出」下载文件。「纯净预览」可隐藏编辑框；需要手指拖动时，先明确开启「移动图层」，避免上下滑动页面时误移图层。
+
 
 1. 打开[在线编辑器](https://guitar0788.github.io/workshop-Visitor-Terminal/)。
 2. 在页面顶部选择「简体中文」或「English」。
@@ -87,7 +98,8 @@ npm run build
 | 1 | SVG preview and templates / SVG 预览与模板 | Complete / 已完成 |
 | 2 | Visual layer editing / 图层可视化编辑 | Complete / 已完成 |
 | 3 | GitHub Pages editor / 在线编辑器 | Complete / 已上线 |
-| 3.1 | English + Simplified Chinese / 中英双语界面 | v0.2 |
+| 3.1 | English + Simplified Chinese / 中英双语界面 | Complete / 已完成 |
+| 3.2 | Mobile Studio with undo/redo / 手机工作台、撤销与重做 | v0.3 |
 | 4 | Secure server-side designs / 安全的服务端设计托管 | Planned / 规划中 |
 | 5 | Cloudflare Workers + D1 counting / 真实访问统计 | Planned / 规划中 |
 | 6 | README embed links + legacy migration / 嵌入链接与旧计数迁移 | Planned / 规划中 |
