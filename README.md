@@ -6,9 +6,15 @@ A free, open-source visual studio for creating SVG visitor counters for GitHub p
 
 **[Open Workshop Studio / 打开在线编辑器](https://guitar0788.github.io/workshop-Visitor-Terminal/)**
 
-> **Alpha · v0.5 — GitHub OAuth publishing code is under security review and OFF by default.** The public Studio still exports static SVG and shows demonstration counts. The isolated Cloudflare staging Worker + D1 passed real deployment and persistence tests; this is not a public hosting launch.
+> **v0.6 — open-source, free local editing + restricted cloud pilot.** Download the single-file offline editor to work without the maintainer's Cloudflare account. Hosted counters and GitHub OAuth are limited to the approved staging account; this is **not** a public cloud-hosting service.
 
 ## English
+
+### Free offline beta (no account or installation)
+
+The recommended option for everyone trying the editor is the [**single-file offline Studio**](docs/OFFLINE.md). Open [Workshop Studio](https://guitar0788.github.io/workshop-Visitor-Terminal/), choose **Download offline HTML** in the Export panel, and double-click the downloaded `Workshop-Studio-Offline.html`. You can edit, preview and export SVG/JSON even with Wi-Fi switched off. This uses **zero maintainer Cloudflare Worker or D1 requests**.
+
+A static SVG saved from the offline editor is not a live visitor counter. README dynamic visit counting requires a separately hosted public backend and does not come free merely from running the HTML locally.
 
 ### Features
 
@@ -48,9 +54,9 @@ Security limits: the endpoint counts **qualified upstream image requests, not un
 
 ### Owner-only GitHub OAuth pilot / 仅所有者 OAuth 试运行
 
-A dedicated **manual-only, staging-only** GitHub OAuth workflow is prepared. It requires explicit confirmation and validates the GitHub account ID before creating any session. See the [bilingual pilot guide](worker/OAUTH_PILOT.md). This workflow **has not been executed as part of the code merge**; ordinary Pages builds remain preview-only.
+The verified numeric-account GitHub OAuth staging pilot is deployed for **one authorized repository owner only**, with controlled automatic redeployment after successful main-branch CI. Other users should test the standalone offline editor. See the [pilot guide](worker/OAUTH_PILOT.md) for the deployment and rollback policy.
 
-已准备 [GitHub OAuth 受限试运行操作说明](worker/OAUTH_PILOT.md)，七项机密由仓库所有者独立配置。只有经 GitHub 验证的测试账户能发布，普通网页部署仍默认关闭登录。**合并代码不等于已经启动云端 OAuth 试运行。**
+[GitHub OAuth 受限试运行](worker/OAUTH_PILOT.md)已在独立 Cloudflare staging 启用，但只允许仓库所有者的 GitHub 数字身份发布。公众试用者请使用免费离线编辑器；不向普通用户提供云端发布名额。
 
 ### Verified-main automatic staging deployment / CI 通过后自动部署
 
@@ -95,9 +101,10 @@ npm install
 npm run dev
 npm test
 npm run build
+npm run build:offline
 ~~~
 
-The app builds to the GitHub Pages project path. Pages deployment runs automatically on merges into `main`.
+`npm run build:offline` creates `dist/Workshop-Studio-Offline.html` — a downloadable self-contained HTML file with no Node.js or internet required **after** it is built. Pages deployment only happens through the project's existing reviewed release channels; the owner-only cloud pilot remains protected.
 
 ## 简体中文
 
@@ -105,7 +112,13 @@ The app builds to the GitHub Pages project path. Pages deployment runs automatic
 
 **[立即打开在线编辑器](https://guitar0788.github.io/workshop-Visitor-Terminal/)**
 
-> **当前为 v0.5 开发测试版。** GitHub OAuth 安全登录、用户归属校验、在线发布与 README 嵌入代码正在验收，**公开发布开关仍然关闭**。独立的 Cloudflare Worker + D1 staging 已通过真实云端测试，但在线编辑器仍使用演示数字，不代表真实访问统计。
+> **v0.6 已开源，可免费离线试用。** 推荐下载单文件 HTML 在自己的电脑运行；不消耗维护者的 Cloudflare 配额。GitHub OAuth 与动态计数托管目前仍只允许指定账户在 staging 内测，其他用户尚不能申请公共托管。
+
+### 公开离线版（推荐试用）
+
+**无需安装软件，也不需要 Cloudflare 账户。** 打开[在线编辑器](https://guitar0788.github.io/workshop-Visitor-Terminal/)，在「导出」面板点击 **「下载离线 HTML」**，保存 `Workshop-Studio-Offline.html` 后双击打开。之后即使断网，也能完成设计、预览、SVG 导出及 JSON 备份。**本地编辑不会消耗维护者的 Cloudflare Worker/D1 请求额度。**
+
+需要注意：离线版展示的是示例次数，不会记录 GitHub 真实访客。若要让 README 中的计数器长期动态更新，需要用户自行托管可公开访问的后端，不必使用本项目维护者的 Cloudflare 账户。详细见 [完整离线使用说明](docs/OFFLINE.md)。
 
 ### 已实现的功能
 
@@ -153,7 +166,10 @@ npm install
 npm run dev
 npm test
 npm run build
+npm run build:offline
 ~~~
+
+`npm run build:offline` 可生成 `dist/Workshop-Studio-Offline.html`，普通试用者不必执行此命令，直接从编辑器下载即可。
 
 ## Roadmap / 开发计划
 
@@ -164,9 +180,10 @@ npm run build
 | 3 | GitHub Pages editor / 在线编辑器 | Complete / 已上线 |
 | 3.1 | English + Simplified Chinese / 中英双语界面 | Complete / 已完成 |
 | 3.2 | Mobile Studio with undo/redo / 手机工作台、撤销与重做 | v0.3 |
+| 3.3 | Offline single-file Studio / 可双击运行的离线 HTML | Implemented / 已实现 |
 | 4 | Cloudflare Worker + D1 counter prototype / 计数后端原型 | Complete / 已完成 |
 | 4.1 | Cloudflare staging D1 deployment and persistence / 云端隔离测试与持久化 | Verified / 已验收 |
-| 5 | OAuth login, verified ownership, hosted designs / OAuth 登录、用户归属与在线设计 | Code ready; launch gated / 代码已开发，暂未开放 |
+| 5 | OAuth login, verified ownership, hosted designs / OAuth 登录、用户归属与在线设计 | Owner-only staging deployed / 单账户内测已部署 |
 | 6 | README embed workflow and verified legacy migration / README 嵌入与可信历史迁移 | Embed code implemented; migration remains restricted / 已开发嵌入代码，旧数据迁移仍受限 |
 
 **Counting disclaimer / 统计说明：** GitHub caches and proxies images in READMEs. A future counting endpoint will count requests that reach the service, not guaranteed unique human visitors or every profile view. GitHub 会缓存及代理 README 图片，因此未来的统计服务只能计算真正到达后端的请求，不能保证每次打开页面都会被统计，也不能将其视为精确的独立访客数量。
