@@ -16,6 +16,7 @@ export function validateUsage(data) {
     data.maxDailyAdmitted !== 20_000 ||
     !Number.isSafeInteger(data.admitted) || data.admitted < 0 ||
     data.admitted > 20_000 || data.remaining !== 20_000 - data.admitted ||
+    data.edgeRateLimitsEnabled !== true ||
     data.edgeLimitPerMinutePerCounter !== 60 ||
     data.edgeLimitPerMinutePerLocation !== 120) {
     throw Error("Unexpected staging rate-budget policy or malformed usage response");
