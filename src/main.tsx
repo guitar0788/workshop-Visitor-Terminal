@@ -14,7 +14,8 @@ import {
 } from "./history";
 import {
   PUBLISH_UI_ENABLED, PUBLISH_PILOT_MODE, beginGitHubLogin, exchangeGitHubReturn, logoutPublishing,
-  deletePublishedCounter, markdownEmbed, myCounters, publishDesign, readOAuthReturn, savePublished,
+  deletePublishedCounter, exportPublishedAccount, markdownEmbed, myCounters, publishDesign,
+  readOAuthReturn, revokeAllPublishedSessions, savePublished,
   type PublishedCounter, type PublishSession
 } from "./publish-client";
 import "./style.css";
@@ -49,6 +50,7 @@ function App() {
   const [publishNotice, setPublishNotice] = useState("");
   const [deleteTargetSlug, setDeleteTargetSlug] = useState<string | null>(null);
   const [deleteConfirmation, setDeleteConfirmation] = useState("");
+  const [signOutEverywhereOpen, setSignOutEverywhereOpen] = useState(false);
   const handledAuth = useRef(false);
   const nextId = useRef(1);
   const stageRef = useRef<HTMLDivElement>(null);
@@ -198,6 +200,47 @@ function App() {
     }
   }
 
+  async function downloadPublishedAccount() {
+    if (!publishSession || publishingBusy) return;
+    setPublishingBusy(true);
+    try {
+      const data = await exportPublishedAccount(
+        publishSession.accessToken, publishSession.user
+      );
+      // The backup is written on this device only and never uploaded or saved
+      // by the Worker. It contains SVG designs, GitHub ID and visit totals.
+      downloadFile(JSON.stringify(data, null, 2),
+        "workshop-counter-account-" + publishSession.user.id + ".json",
+        "application/json;charset=utf-8");
+      setPublishNotice(t.publishAccountExportSuccess);
+    } catch {
+      setPublishNotice(t.publishAccountExportError);
+    } finally {
+      setPublishingBusy(false);
+    }
+  }
+
+  async function signOutEverywhere() {
+    if (!publishSession || publishingBusy || !signOutEverywhereOpen) return;
+    setPublishingBusy(true);
+    try {
+      await revokeAllPublishedSessions(publishSession.accessToken);
+      // Clear *all* personal browser state only after server revocation.
+      setPublishSession(null);
+      setPublishedCounters([]);
+      setPublishedSlug(null);
+      setDeleteTargetSlug(null);
+      setDeleteConfirmation("");
+      setSignOutEverywhereOpen(false);
+      setPublishNotice(t.publishSignOutEverywhereSuccess);
+    } catch {
+      // A failed remote revocation is NOT a successful all-device logout.
+      setPublishNotice(t.publishSignOutEverywhereError);
+    } finally {
+      setPublishingBusy(false);
+    }
+  }
+
   async function signOutPublishing() {
     if (!publishSession || publishingBusy) return;
     const token = publishSession.accessToken;
@@ -207,6 +250,7 @@ function App() {
     setPublishedSlug(null);
     setDeleteTargetSlug(null);
     setDeleteConfirmation("");
+    setSignOutEverywhereOpen(false);
     setPublishNotice(t.publishSignedOut);
     try { await logoutPublishing(token); } catch {
       // The in-memory token is discarded regardless; the server token expires
@@ -248,6 +292,37 @@ function App() {
                 onClick={() => void signOutPublishing()}>{t.publishSignOut}</button>
             </div>
             <p className="publish-hint">{t.publishQuota}</p>
+            <div className="publish-account-tools">
+              <button type="button" className="secondary"
+                disabled={publishingBusy}
+                onClick={() => void downloadPublishedAccount()}>
+                {t.publishAccountExport}
+              </button>
+              <button type="button" className="secondary"
+                disabled={publishingBusy}
+                aria-expanded={signOutEverywhereOpen}
+                onClick={() => setSignOutEverywhereOpen(value => !value)}>
+                {t.publishSignOutEverywhere}
+              </button>
+            </div>
+            {signOutEverywhereOpen && (
+              <div className="publish-session-confirm" role="group"
+                aria-label={t.publishSignOutEverywhere}>
+                <p>{t.publishSignOutEverywhereWarning}</p>
+                <div className="publish-session-confirm-actions">
+                  <button type="button" className="publish-revoke-confirm"
+                    disabled={publishingBusy}
+                    onClick={() => void signOutEverywhere()}>
+                    {publishingBusy ? t.publishBusy : t.publishSignOutEverywhereConfirm}
+                  </button>
+                  <button type="button" className="secondary"
+                    disabled={publishingBusy}
+                    onClick={() => setSignOutEverywhereOpen(false)}>
+                    {t.publishDeleteCancel}
+                  </button>
+                </div>
+              </div>
+            )}
             <div className="publish-actions">
               <button type="button" className="publish-primary"
                 disabled={publishingBusy || publishedCounters.length >= 3}
