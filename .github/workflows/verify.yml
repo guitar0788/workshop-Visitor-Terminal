@@ -24,6 +24,8 @@ jobs:
         run: node --test worker/*.test.mjs
       - run: npm test
       - run: npm run build
+      - name: Build a single-file offline editor with OAuth and network disabled
+        run: npm run build:offline
       - name: Exercise real local Worker and persistent D1 across restart
         run: node worker/local-smoke.mjs
       - name: Export and restore only the disposable local D1 database
