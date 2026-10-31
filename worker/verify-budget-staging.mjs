@@ -48,6 +48,24 @@ export async function fetchStagingUsage({ origin, token, fetchImpl = fetch }) {
   return validateUsage(await response.json());
 }
 
+export async function checkStagingSvgLimiter({ origin, fetchImpl = fetch }) {
+  if (validateStagingOrigin(origin) !== APPROVED_STAGING) {
+    throw Error("SVG edge protection preflight is scoped to the approved staging Worker");
+  }
+  // HEAD cannot create or increment a visit receipt, even if the slug exists.
+  // A valid but highly improbable slug avoids modifying any real counter.
+  const response = await fetchImpl(
+    APPROVED_STAGING + "/v1/counters/v000000000000000000000000.svg",
+    { method: "HEAD", redirect: "manual", cache: "no-store",
+      signal: AbortSignal.timeout(12000) }
+  );
+  if (![200, 404, 429].includes(response.status) ||
+      (response.status === 429 && response.headers.get("Retry-After") !== "60")) {
+    throw Error("SVG rate limiter binding unavailable or unexpected HTTP " + response.status);
+  }
+  return response.status;
+}
+
 async function main() {
   const info = await fetchStagingUsage({
     origin: process.env.STAGING_ORIGIN,
@@ -60,6 +78,8 @@ async function main() {
   if (info.left === 0) {
     console.log("WARNING: today's admitted visit budget exhausted; SVG images remain readable.");
   }
+  const status = await checkStagingSvgLimiter({ origin: process.env.STAGING_ORIGIN });
+  console.log("PASS: read-only SVG rate-limiter probe returned HTTP " + status + ".");
 }
 
 if (process.argv[1] && /[/\\]verify-budget-staging\.mjs$/.test(process.argv[1])) {
