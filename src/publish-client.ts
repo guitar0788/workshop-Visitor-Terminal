@@ -33,6 +33,14 @@ export interface PublishedCounter {
 }
 export interface CounterList { counters: PublishedCounter[]; maxCounters: number }
 export interface PublishedResult { slug: string; imageUrl: string; markdown: string }
+/** A local download snapshot, not a server-side archive or automatic restore. */
+export interface PublishedAccountExport {
+  formatVersion: 1;
+  exportedAt: string;
+  account: { githubId: number; githubLogin: string };
+  maxCounters: number;
+  counters: PublishedCounter[];
+}
 
 export function markdownEmbed(imageUrl: string): string {
   if (!PUBLIC_API_ORIGIN || !imageUrl.startsWith(PUBLIC_API_ORIGIN + "/v1/counters/") ||
@@ -139,6 +147,53 @@ export async function deletePublishedCounter(token: string, slug: string): Promi
   );
   if (result.deleted !== true || result.slug !== slug) {
     throw Error("Counter deletion could not be confirmed");
+  }
+}
+
+/** Reject a wrong-account, malformed or off-origin export before saving it. */
+export function verifyPublishedAccountExport(
+  response: unknown, expectedUser: PublishUser,
+  expectedOrigin = PUBLIC_API_ORIGIN
+): PublishedAccountExport {
+  if (!response || typeof response !== "object" || !("formatVersion" in response) ||
+      response.formatVersion !== 1 || !("account" in response) ||
+      !response.account || typeof response.account !== "object" ||
+      !("githubId" in response.account) ||
+      response.account.githubId !== expectedUser.id ||
+      !("githubLogin" in response.account) ||
+      response.account.githubLogin !== expectedUser.login ||
+      !("counters" in response) || !Array.isArray(response.counters) ||
+      response.counters.length > 3 ||
+      !response.counters.every(value => {
+        if (!value || typeof value !== "object" ||
+            !("slug" in value) || typeof value.slug !== "string" ||
+            !/^v[a-f0-9]{24}$/.test(value.slug) ||
+            !("imageUrl" in value) || typeof value.imageUrl !== "string" ||
+            value.imageUrl !== expectedOrigin + "/v1/counters/" + value.slug + ".svg" ||
+            !("design" in value) || !value.design ||
+            typeof value.design !== "object" ||
+            !("schemaVersion" in value.design) || value.design.schemaVersion !== 1) return false;
+        return true;
+      })) {
+    throw Error("Unexpected account export response");
+  }
+  return response as PublishedAccountExport;
+}
+
+export async function exportPublishedAccount(
+  token: string, expectedUser: PublishUser
+): Promise<PublishedAccountExport> {
+  const response: unknown = await api("/v1/my/export", "GET", undefined, token);
+  return verifyPublishedAccountExport(response, expectedUser);
+}
+
+/** Permanently revoke all live sessions, but never delete published counters. */
+export async function revokeAllPublishedSessions(token: string): Promise<void> {
+  const response = await api<{signedOutEverywhere: boolean}>(
+    "/v1/auth/logout-all", "POST", { confirm: "LOGOUT_ALL" }, token
+  );
+  if (response.signedOutEverywhere !== true) {
+    throw Error("Account sessions could not be revoked");
   }
 }
 

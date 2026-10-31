@@ -58,6 +58,12 @@ The owner-only OAuth pilot now has an **automatic deployment workflow**: a succe
 
 现在可在代码合并到 `main` 且 **Verify 检查成功后自动部署 Cloudflare staging 与受限内测网页**，不必每次手工填写确认词。自动流程会严格核对最新提交、`pilot` 发布通道、D1 身份与原有 OAuth 保护；仅改文档、CI 失败或未授权分支不会自动部署。详细规则与暂停步骤见 [OAuth Pilot 文档](worker/OAUTH_PILOT.md)。
 
+### v0.6 — personal account export and account-wide session revocation
+
+Signed-in beta users can [download a JSON snapshot of their own published designs and counters, and revoke all Workshop Studio sessions across devices](worker/V06_ACCOUNT_CONTROLS.md). Exports never include bearer tokens, visitor fingerprints or other GitHub accounts. Account-wide logout preserves hosted SVG URLs and visit history. The pilot is **still restricted to the approved GitHub user**, and account-data removal and secure cloud backups are separate future release gates.
+
+v0.6 新增 [账户发布数据 JSON 导出与退出所有设备](worker/V06_ACCOUNT_CONTROLS.md)。导出只包含本人计数器、设计和累计访问量，不包含访客指纹或会话令牌。所有设备退出不会删除现有作品；仍保持单账户受限内测。
+
 ### v0.6 — local D1 disaster-recovery drill and multi-account isolation
 
 [Recovery and tenant safety plan / D1 恢复与账户隔离方案](worker/V06_RECOVERY_AND_TENANTS.md) adds a CI-verified, **local-only** D1 SQL export → clean isolated import → integrity and ownership comparison → source-preservation test. Actual Cloudflare D1 restore remains manual and explicitly disallowed in automatic deployment; **no real staging data is exported**. Verified numeric GitHub ID cross-owner tests cover data listings, edits, deletion, independent quotas, and old-session invalidation without opening the owner-only public signup gate.

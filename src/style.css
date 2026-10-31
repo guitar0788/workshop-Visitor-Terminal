@@ -404,6 +404,32 @@ button, a, input, select { -webkit-tap-highlight-color: transparent; }
   align-items: center; flex-wrap: wrap; margin-top: 14px;
   font-size: 13px; overflow-wrap: anywhere;
 }
+/* v0.6 account portability and global session revocation.
+   Deliberately separate these controls from permanent counter deletion. */
+.publish-account-tools { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 8px; }
+.publish-account-tools button, .publish-session-confirm-actions button {
+  min-height: 44px; padding: 10px 12px; border-radius: 8px;
+  background: #23353d; border: 1px solid #47636c;
+  color: #e9f2f4; font-size: 12px; font-weight: 700;
+}
+.publish-account-tools button:disabled, .publish-session-confirm-actions button:disabled {
+  opacity: .45; cursor: not-allowed;
+}
+.publish-session-confirm {
+  border: 1px solid #73869a; border-radius: 10px;
+  background: #1b2b3a; padding: 12px;
+  color: #dce9f6; line-height: 1.65; font-size: 12px;
+}
+.publish-session-confirm p { margin: 0 0 11px; }
+.publish-session-confirm-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.publish-session-confirm-actions .publish-revoke-confirm {
+  background: #315271; border-color: #759cbe;
+}
+@media (max-width: 500px) {
+  .publish-account-tools button { flex: 1 1 100%; }
+  .publish-session-confirm-actions button { flex: 1 1 100%; }
+}
+
 .publish-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0; }
 .publish-primary, .publish-actions .secondary {
   border-radius: 9px; border: 1px solid #4f8f64; padding: 11px 12px;

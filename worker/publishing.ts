@@ -54,6 +54,14 @@ function fail(message: string, status: number): Response { return respond({ erro
 function noMethods(methods: string): Response {
   return new Response(null, { status: 405, headers: { ...JSON_HEADERS, Allow: methods } });
 }
+/** Headers is iterable but has no enumerable own properties: spreading it into
+ * a plain object silently removes Content-Type, no-store, Allow, etc.
+ */
+function withStudioCors(response: Response, cors: Record<string, string>): Response {
+  const headers = new Headers(response.headers);
+  for (const [key, value] of Object.entries(cors)) headers.set(key, value);
+  return new Response(response.body, { status: response.status, headers });
+}
 function object(input: unknown): input is Record<string, unknown> {
   return input !== null && typeof input === "object" && !Array.isArray(input);
 }
@@ -309,15 +317,35 @@ async function exchangeTicket(request: Request, env: PublishEnv, now: number): P
   });
 }
 
-async function listMine(env: PublishEnv, user: PublishSession): Promise<Response> {
+async function ownCounters(env: PublishEnv, user: PublishSession): Promise<CounterRecord[]> {
   const list = await env.DB.prepare(
     "SELECT slug, hits, design_json, created_at FROM counters " +
     "WHERE owner_user_id = ? ORDER BY created_at DESC LIMIT 4"
   ).bind(user.github_user_id).all<CounterRecord>();
   if (!list.success) throw new Error("List own counters failed");
+  return list.results;
+}
+
+async function listMine(env: PublishEnv, user: PublishSession): Promise<Response> {
+  const list = await ownCounters(env, user);
   return respond({
-    counters: list.results.map(row => asList(row, env)),
+    counters: list.map(row => asList(row, env)),
     maxCounters: MAX_COUNTERS_PER_USER
+  });
+}
+
+/** A portable snapshot of only this verified account's published counters.
+ * Never expose session hashes, OAuth states, private receipt fingerprints or
+ * any other account's counters. No server-side export file is persisted.
+ */
+async function exportMine(env: PublishEnv, user: PublishSession, now: number): Promise<Response> {
+  const rows = await ownCounters(env, user);
+  return respond({
+    formatVersion: 1,
+    exportedAt: new Date(now).toISOString(),
+    account: { githubId: user.github_user_id, githubLogin: user.github_login },
+    maxCounters: MAX_COUNTERS_PER_USER,
+    counters: rows.map(row => asList(row, env))
   });
 }
 async function createMine(request: Request, env: PublishEnv, user: PublishSession, now: number): Promise<Response> {
@@ -387,6 +415,21 @@ async function deleteMine(
   return respond({ slug, deleted: true });
 }
 
+/** Revoke every active session belonging to this verified numeric GitHub ID.
+ * This does not delete counters, OAuth app credentials or account data.
+ */
+async function logoutAll(request: Request, env: PublishEnv, user: PublishSession): Promise<Response> {
+  const confirmation = await jsonBody(request);
+  if (!object(confirmation) || confirmation.confirm !== "LOGOUT_ALL") {
+    return fail("Confirm signing out of all devices", 400);
+  }
+  const deleted = await env.DB.prepare(
+    "DELETE FROM publish_sessions WHERE github_user_id = ?"
+  ).bind(user.github_user_id).run();
+  if (!deleted.success) throw Error("Revoke all sessions failed");
+  return respond({ signedOutEverywhere: true });
+}
+
 async function logout(request: Request, env: PublishEnv): Promise<Response> {
   if (request.method !== "POST") return noMethods("POST");
   const header = request.headers.get("Authorization");
@@ -410,7 +453,7 @@ export async function handlePublishingRequest(
   }
   if (!publishingReady(env)) {
     const response = fail("Publishing is not enabled", 503);
-    return new Response(response.body, { status: response.status, headers: { ...response.headers, ...cors } });
+    return withStudioCors(response, cors);
   }
   if (path === "/v1/auth/github/callback") {
     try {
@@ -438,6 +481,12 @@ export async function handlePublishingRequest(
           ? respond({ user: { id: user.github_user_id, login: user.github_login },
             expiresAt: new Date(user.expires_at).toISOString() })
           : noMethods("GET");
+      } else if (path === "/v1/auth/logout-all") {
+        result = request.method === "POST"
+          ? await logoutAll(request, env, user) : noMethods("POST");
+      } else if (path === "/v1/my/export") {
+        result = request.method === "GET"
+          ? await exportMine(env, user, now) : noMethods("GET");
       } else if (path === "/v1/my/counters") {
         result = request.method === "GET"
           ? await listMine(env, user)
@@ -463,9 +512,7 @@ export async function handlePublishingRequest(
       result = fail("Publishing temporarily unavailable", 503);
     }
   }
-  return new Response(result.body, {
-    status: result.status, headers: { ...result.headers, ...cors }
-  });
+  return withStudioCors(result, cors);
 }
 
 /** Called by existing scheduled maintenance. No user data/counts are deleted. */

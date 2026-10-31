@@ -96,6 +96,12 @@ class MockD1 implements PublishDatabase {
           if (row && row.owner_user_id === args[1]) {
             db.counters.delete(String(args[0])); changes = 1;
           }
+        } else if (sql.startsWith("DELETE FROM publish_sessions WHERE github_user_id = ?")) {
+          for (const [hash, row] of db.sessions) {
+            if (row.github_user_id === args[0]) {
+              db.sessions.delete(hash); changes++;
+            }
+          }
         } else if (sql.startsWith("DELETE FROM publish_sessions")) {
           changes = db.sessions.delete(String(args[0])) ? 1 : 0;
         } else {
@@ -590,6 +596,158 @@ describe("v0.5 securely gated GitHub OAuth publishing", () => {
     expect((await handlePublishingRequest(req("/v1/my/counters", "GET",
       undefined, logged.accessToken), env, now + 3300)).status).toBe(200);
     expect(env.DB.counters.size).toBe(5); // 3 owned + legacy + another user
+  });
+
+  it("preserves publishing security and HTTP Allow headers after Studio CORS", async () => {
+    const env = createEnv();
+    const signedIn = await completeLogin(env);
+    const wrongMethod = await handlePublishingRequest(req("/v1/my/export",
+      "POST", {}, signedIn.accessToken), env, now + 1_500);
+    expect(wrongMethod.status).toBe(405);
+    expect(wrongMethod.headers.get("Allow")).toBe("GET");
+    expect(wrongMethod.headers.get("Cache-Control")).toBe("no-store");
+    expect(wrongMethod.headers.get("X-Content-Type-Options")).toBe("nosniff");
+    const unsigned = await handlePublishingRequest(req("/v1/my/export"),
+      env, now + 1_501);
+    expect(unsigned.status).toBe(401);
+    expect(unsigned.headers.get("Cache-Control")).toBe("no-store");
+    expect(unsigned.headers.get("Content-Type")).toContain("application/json");
+    env.PUBLISHING_ENABLED = "false";
+    const disabled = await handlePublishingRequest(req("/v1/my/export"),
+      env, now + 1_502);
+    expect(disabled.status).toBe(503);
+    expect(disabled.headers.get("Cache-Control")).toBe("no-store");
+    expect(disabled.headers.get("Content-Type")).toContain("application/json");
+  });
+
+  it("exports only the signed-in verified account's designs without OAuth or visitor credentials", async () => {
+    const env = createEnv();
+    const logged = await completeLogin(env);
+    const ownedSlugs: string[] = [];
+    for (let i = 0; i < 2; i++) {
+      const created = await handlePublishingRequest(
+        req("/v1/my/counters", "POST", { design: clonePreset("pixel") },
+          logged.accessToken), env, now + 2_000 + i);
+      expect(created.status).toBe(201);
+      ownedSlugs.push((await created.json() as { slug:string }).slug);
+    }
+    env.DB.counters.get(ownedSlugs[0])!.hits = 138;
+    const foreignSlug = "v999999999999999999999999";
+    env.DB.counters.set(foreignSlug, {
+      slug: foreignSlug, owner: "guitar0788", owner_user_id: 717,
+      hits: 888, created_at: "2026-01-01", design_json: JSON.stringify(clonePreset("cyber"))
+    });
+    const legacySlug = "v888888888888888888888888";
+    env.DB.counters.set(legacySlug, {
+      slug: legacySlug, owner: "guitar0788", owner_user_id: null,
+      hits: 444, created_at: "2026-01-01", design_json: JSON.stringify(clonePreset("minimal"))
+    });
+    expect((await handlePublishingRequest(
+      req("/v1/my/export", "GET"), env, now + 3_000
+    )).status).toBe(401);
+    expect((await handlePublishingRequest(
+      req("/v1/my/export", "GET", undefined, logged.accessToken, "https://evil.example"),
+      env, now + 3_100
+    )).status).toBe(403);
+    expect((await handlePublishingRequest(
+      req("/v1/my/export", "POST", {}, logged.accessToken),
+      env, now + 3_150
+    )).status).toBe(405);
+    const response = await handlePublishingRequest(
+      req("/v1/my/export", "GET", undefined, logged.accessToken),
+      env, now + 3_200
+    );
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
+    expect(response.headers.get("Content-Type")).toContain("application/json");
+    expect(response.headers.get("X-Content-Type-Options")).toBe("nosniff");
+    expect(response.headers.get("Access-Control-Allow-Origin")).toBe(origin);
+    const exported = await response.json() as {
+      formatVersion: number; exportedAt: string;
+      account: { githubId:number;githubLogin:string };
+      maxCounters: number;
+      counters: Array<{slug:string;hits:number;createdAt:string;imageUrl:string;design:unknown}>
+    };
+    expect(exported.formatVersion).toBe(1);
+    expect(exported.exportedAt).toBe(new Date(now + 3_200).toISOString());
+    expect(exported.account).toEqual({githubId:124379632,githubLogin:"guitar0788"});
+    expect(exported.maxCounters).toBe(3);
+    expect(exported.counters.map(c => c.slug).sort()).toEqual([...ownedSlugs].sort());
+    expect(exported.counters.find(c => c.slug === ownedSlugs[0])?.hits).toBe(138);
+    expect(exported.counters.every(c => c.imageUrl.endsWith("/" + c.slug + ".svg")))
+      .toBe(true);
+    expect(exported.counters[0].design).toEqual(clonePreset("pixel"));
+    const json = JSON.stringify(exported);
+    for (const forbidden of [
+      logged.accessToken, logged.ticket, logged.state, "session_hash",
+      "publish_sessions", "source_hash", "fingerprint", foreignSlug, legacySlug
+    ]) expect(json).not.toContain(forbidden);
+    expect(env.DB.counters.get(ownedSlugs[0])?.hits).toBe(138);
+    expect(env.DB.sessions.size).toBe(1);
+  });
+
+  it("revokes all sessions for one numeric GitHub account without deleting counters or other accounts", async () => {
+    const env = createEnv();
+    const one = await completeLogin(env);
+    const two = await completeLogin(env);
+    const counter = await handlePublishingRequest(
+      req("/v1/my/counters", "POST", { design: clonePreset("pixel") },
+        one.accessToken), env, now + 2_000);
+    expect(counter.status).toBe(201);
+    const { slug } = await counter.json() as { slug:string };
+    const otherToken = "f".repeat(64);
+    const hash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(otherToken));
+    const otherHash = Array.from(new Uint8Array(hash),
+      value => value.toString(16).padStart(2, "0")).join("");
+    env.DB.sessions.set(otherHash, {
+      github_user_id: 9002001, github_login: "guitar0788",
+      expires_at: now + 60 * 60_000
+    });
+    expect(env.DB.sessions.size).toBe(3);
+    const endpoint = "/v1/auth/logout-all";
+    expect((await handlePublishingRequest(req(endpoint, "POST", {confirm:"LOGOUT_ALL"}),
+      env, now + 3_000)).status).toBe(401);
+    expect((await handlePublishingRequest(req(endpoint, "POST", {confirm:"NO"}),
+      env, now + 3_000)).status).toBe(401);
+    expect((await handlePublishingRequest(
+      req(endpoint, "POST", {confirm:"NO"}, one.accessToken),
+      env, now + 3_000
+    )).status).toBe(400);
+    expect((await handlePublishingRequest(
+      req(endpoint, "POST", {confirm:"LOGOUT_ALL"}, one.accessToken,
+        "https://forged.example"), env, now + 3_000
+    )).status).toBe(403);
+    expect((await handlePublishingRequest(
+      req(endpoint, "GET", undefined, one.accessToken),
+      env, now + 3_000
+    )).status).toBe(405);
+    expect(env.DB.sessions.size).toBe(3);
+    const result = await handlePublishingRequest(
+      req(endpoint, "POST", {confirm:"LOGOUT_ALL"}, two.accessToken),
+      env, now + 4_000
+    );
+    expect(result.status).toBe(200);
+    expect(await result.json()).toEqual({signedOutEverywhere:true});
+    expect(env.DB.sessions.size).toBe(1);
+    expect(env.DB.sessions.has(otherHash)).toBe(true);
+    expect((await handlePublishingRequest(req("/v1/me", "GET",
+      undefined, one.accessToken), env, now + 4_100)).status).toBe(401);
+    expect((await handlePublishingRequest(req("/v1/me", "GET",
+      undefined, two.accessToken), env, now + 4_100)).status).toBe(401);
+    expect((await handlePublishingRequest(req("/v1/my/export", "GET",
+      undefined, one.accessToken), env, now + 4_200)).status).toBe(401);
+    expect(env.DB.counters.get(slug)?.owner_user_id).toBe(124379632);
+    // A future independently approved account must remain signed in.
+    env.PILOT_GITHUB_USER_ID = "9002001";
+    expect((await handlePublishingRequest(req("/v1/me", "GET",
+      undefined, otherToken), env, now + 4_300)).status).toBe(200);
+    // Owner can sign back in and recover the same published counter and hits.
+    env.PILOT_GITHUB_USER_ID = "124379632";
+    const restored = await completeLogin(env);
+    const list = await handlePublishingRequest(req("/v1/my/counters", "GET",
+      undefined, restored.accessToken), env, now + 5_000);
+    expect((await list.json() as {counters:Array<{slug:string}>}).counters
+      .some(c => c.slug === slug)).toBe(true);
   });
 
   it("does not assign legacy counters to matching GitHub usernames", async () => {
