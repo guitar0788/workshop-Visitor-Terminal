@@ -432,6 +432,48 @@ button, a, input, select { -webkit-tap-highlight-color: transparent; }
   border: 1px solid #465e56; background: #284036; font-size: 11px;
   text-decoration: none; font-weight: 650;
 }
+/* v0.6: irreversible deletion is behind a typed, per-counter confirmation. */
+.published-controls .publish-delete-trigger {
+  background: transparent; border-color: #a36b6b; color: #f6c6bf;
+  margin-left: auto; cursor: pointer;
+}
+.published-controls .publish-delete-trigger:disabled { opacity: .45; cursor: not-allowed; }
+.publish-delete-confirm {
+  margin-top: 12px; border: 1px solid #995c5c; border-radius: 10px;
+  background: #301f24; padding: 13px; color: #ffe9e5;
+  font-size: 12px; overflow-wrap: anywhere;
+}
+.publish-delete-confirm strong { color: #fff4ef; font-size: 13px; }
+.publish-delete-confirm p { margin: 8px 0; line-height: 1.65; }
+.publish-delete-slug {
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  overflow-wrap: anywhere; color: #f6d0b8; user-select: all;
+}
+.publish-delete-confirm label { display: block; margin-top: 10px; }
+.publish-delete-confirm input {
+  display: block; width: 100%; max-width: 100%; min-height: 44px;
+  padding: 10px; margin-top: 6px; border-radius: 7px;
+  border: 1px solid #bc8a84; background: #15191e; color: #fff8f5;
+  font-size: 13px; font-family: ui-monospace, Menlo, Consolas, monospace;
+}
+.publish-delete-confirm input:focus-visible,
+.publish-delete-buttons button:focus-visible,
+.published-controls .publish-delete-trigger:focus-visible {
+  outline: 2px solid #ffbeac; outline-offset: 2px;
+}
+.publish-delete-buttons { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.publish-delete-buttons button {
+  min-height: 44px; border: 1px solid #a17070; border-radius: 7px;
+  padding: 10px 12px; font-weight: 700; cursor: pointer; font-size: 12px;
+}
+.publish-delete-buttons .publish-delete-danger { background: #8e3039; color: #fff7f5; }
+.publish-delete-buttons .secondary { background: #293239; color: #f7f6f4; }
+.publish-delete-buttons button:disabled { opacity: .42; cursor: not-allowed; }
+@media (max-width: 500px) {
+  .published-controls .publish-delete-trigger { margin-left: 0; }
+  .publish-delete-buttons button { flex: 1 1 100%; }
+}
+
 .publish-markdown { margin: 12px 0 0; }
 .publish-markdown textarea {
   display: block; width: 100%; max-width: 100%; resize: vertical;
