@@ -38,13 +38,14 @@ class MemoryD1 implements D1Binding {
         } else if (query.startsWith("INSERT OR IGNORE INTO request_windows")) {
           const [slug, hash, bucket] = args;
           const key = [slug, hash, bucket].join("|");
-          if (!db.windows.has(key) && db.counters.has(String(slug))) {
+          const row = db.counters.get(String(slug));
+          if (!db.windows.has(key) && row) {
             db.windows.add(key);
+            // Mirrors the AFTER INSERT trigger in migration 0002. The receipt
+            // and the increment are one atomic D1 transaction.
+            if (row.hits < 999_999_999_999) row.hits++;
             changes = 1;
           }
-        } else if (query.startsWith("UPDATE counters SET hits = hits + 1")) {
-          const row = db.counters.get(String(args[0]));
-          if (row && row.hits < Number(args[1])) { row.hits++; changes = 1; }
         } else if (query.startsWith("UPDATE counters SET design_json")) {
           const row = db.counters.get(String(args[1]));
           if (row) { row.design_json = String(args[0]); changes = 1; }
@@ -140,6 +141,18 @@ describe("Cloudflare D1 counter Worker", () => {
     expect(await future.text()).toContain(">3</text>");
     expect(env.DB.windows.size).toBe(3);
     expect((await fingerprint("203.0.113.1", "demo", HASH)).length).toBe(64);
+  });
+
+  it("never double-increments concurrent requests with the same receipt", async () => {
+    const env = setup();
+    await register(env);
+    const path = "/v1/counters/demo.svg";
+    const requests = Array.from({ length: 20 }, () =>
+      handleRequest(publicRequest(path, "203.0.113.9"), env, NOW));
+    const responses = await Promise.all(requests);
+    expect(responses.every(r => r.status === 200)).toBe(true);
+    expect(env.DB.counters.get("demo")?.hits).toBe(1);
+    expect(env.DB.windows.size).toBe(1);
   });
 
   it("does not increment for HEAD, unknown IP or non-existent counter", async () => {

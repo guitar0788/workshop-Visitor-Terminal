@@ -22,3 +22,5 @@ jobs:
           npx wrangler d1 execute workshop-visitor-terminal --local --config wrangler.toml --command "SELECT COUNT(*) AS total FROM counters;"
       - run: npm test
       - run: npm run build
+      - name: Exercise real local Worker and persistent D1 across restart
+        run: node worker/local-smoke.mjs

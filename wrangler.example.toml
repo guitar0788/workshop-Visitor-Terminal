@@ -2,7 +2,8 @@
 # Do NOT commit a production token, API key, or real database credentials.
 name = "workshop-visitor-terminal-api"
 main = "worker/index.ts"
-compatibility_date = "2026-10-31"
+# Pin to a date supported by the current workerd runtime; update after testing.
+compatibility_date = "2026-10-30"
 workers_dev = true
 
 [[d1_databases]]

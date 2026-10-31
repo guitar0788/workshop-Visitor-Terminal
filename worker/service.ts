@@ -108,15 +108,13 @@ async function image(request: Request, env: WorkerEnv, slug: string, now: number
         "INSERT OR IGNORE INTO request_windows (slug, fingerprint, bucket) VALUES (?, ?, ?)"
       ).bind(slug, hashed, bucket).run();
       if (!receipt.success) throw new Error("D1 receipt failed");
-      if ((receipt.meta?.changes ?? 0) > 0) {
-        const update = await env.DB.prepare(
-          "UPDATE counters SET hits = hits + 1 WHERE slug = ? AND hits < ?"
-        ).bind(slug, MAX_HITS).run();
-        if (!update.success) throw new Error("D1 increment failed");
-        const current = await getCounter(env.DB, slug);
-        if (!current) throw new Error("Counter disappeared");
-        hits = current.hits;
-      }
+      // Migration 0002 installs an AFTER INSERT trigger. Receipt creation and
+      // increment now happen in a single SQLite transaction (including when
+      // concurrent requests race to insert the same receipt).
+      // Re-read on both insert and duplicate to avoid stale SVG counts.
+      const current = await getCounter(env.DB, slug);
+      if (!current) throw new Error("Counter disappeared");
+      hits = current.hits;
     }
   }
   const svg = renderSvg(JSON.parse(row.design_json) as unknown, hits);

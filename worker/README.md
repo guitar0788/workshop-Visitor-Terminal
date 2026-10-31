@@ -1,6 +1,6 @@
 # v0.4 Cloudflare Worker + D1 counter prototype
 
-**Stage: verified source / local tests, NOT deployed.** Workshop Studio on GitHub Pages remains a static editor; its preview values are examples.
+**Stage: local Wrangler integration tests, NOT deployed.** Workshop Studio on GitHub Pages remains a static editor; its preview values are examples.
 
 ## Endpoints
 
@@ -26,7 +26,7 @@ A hit is a qualifying **upstream image request** reaching this Worker, not a hum
 - HEAD requests do not increment. Counter totals survive Workers redeployments because they live in D1.
 - The five-minute window data is pruned by an hourly scheduled Worker.
 - HMAC and rate windows reduce accidental abuse; **this is not a complete anti-bot solution**. Public launch needs Cloudflare rate limits/WAF, monitoring and quota alerts before open enrollment.
-- A GET may fail between writing a deduplication receipt and incrementing the count. In that case, the request can be undercounted; there is no invented fallback value.
+- **Atomic counting:** migration `0002_atomic_increment.sql` installs an SQLite `AFTER INSERT` trigger. Each accepted request receipt and its count increment happen in one D1 transaction; duplicate inserts do not run the trigger.
 - Returning Cache-Control: max-age=60 does not override GitHub's image caching policy.
 
 ## Local preparation
@@ -43,6 +43,7 @@ Use Node.js 20 or later.
    VISIT_HASH_SECRET=...
 6. Run npx wrangler dev to test the Worker with local D1.
 7. Run npm test and npm run build from repository root; offline service tests run without Cloudflare credentials.
+8. Run `node worker/local-smoke.mjs` after applying migrations. This launches Wrangler locally, tests actual HTTP requests against D1, stops and restarts the Worker, and verifies counts survive. The script generates disposable secrets and removes its `.dev.vars` file; **do not run it in a directory containing your own `.dev.vars`**.
 
 ## Deploy — requires a separate authorization decision
 
@@ -78,7 +79,7 @@ These counts are **illustrative**, not an actual user's history. Save evidence o
 
 ### Operational details
 
-- SQLite migrations are in worker/migrations. Never edit already-applied migrations.
+- SQLite migrations are in worker/migrations. Never edit already-applied migrations. `0002` depends on `0001` and is required before running this Worker version.
 - D1 database_ID is specific to your account. The template ID intentionally is not deployable.
 - Request-deduplication rows expire and are pruned, but total hits persist.
 - The Worker refuses to serve counts if its required secrets are missing.
