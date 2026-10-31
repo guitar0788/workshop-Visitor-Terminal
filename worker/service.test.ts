@@ -13,11 +13,16 @@ const NOW = Date.parse("2026-10-31T12:00:00Z");
 class MemoryD1 implements D1Binding {
   counters = new Map<string, CounterRow>();
   windows = new Set<string>();
+  budgets = new Map<number, number>();
   prepare(query: string): D1Statement {
     let args: Array<string | number | null> = [];
     const statement: D1Statement = {
       bind(...values) { args = values; return statement; },
       async first<T>() {
+        if (query.startsWith("SELECT accepted FROM visit_day_budget")) {
+          return (db.budgets.get(Number(args[0])) === undefined
+            ? null : { accepted: db.budgets.get(Number(args[0])) }) as T | null;
+        }
         if (query.startsWith("SELECT ")) {
           return (db.counters.get(String(args[0])) ?? null) as T | null;
         }
@@ -102,6 +107,28 @@ async function register(env: WorkerEnv, slug = "demo"): Promise<Response> {
 }
 
 describe("Cloudflare D1 counter Worker", () => {
+  it("reports today's bounded quota only to the authorized administrator", async () => {
+    const env = setup();
+    const path = "/v1/admin/usage";
+    const utcDay = Math.floor(NOW / (24 * 60 * 60_000));
+    env.DB.budgets.set(utcDay, 19_999);
+    expect((await handleRequest(publicRequest(path), env, NOW)).status).toBe(401);
+    expect((await handleRequest(adminRequest(path, undefined, "invalid", "GET"),
+      env, NOW)).status).toBe(401);
+    expect((await handleRequest(adminRequest(path, {}, TOKEN, "POST"),
+      env, NOW)).status).toBe(405);
+    const response = await handleRequest(adminRequest(path, undefined, TOKEN, "GET"),
+      env, NOW);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      admitted: 19_999, remaining: 1,
+      maxDailyAdmitted: 20_000,
+      edgeLimitPerMinutePerCounter: 60,
+      edgeLimitPerMinutePerLocation: 120
+    });
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
+  });
+
   it("responds to health without secrets or a database", async () => {
     const response = await handleRequest(publicRequest("/health"), {} as WorkerEnv, NOW);
     expect(response.status).toBe(200);
