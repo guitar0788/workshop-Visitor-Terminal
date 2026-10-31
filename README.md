@@ -1,76 +1,99 @@
-# Workshop Visitor Terminal
+# Workshop Visitor Terminal / 工坊访客终端
 
-A customizable visitor-counter SVG studio for GitHub profile READMEs.
+**English | [简体中文](#简体中文)**
 
-> **Status: Editor alpha.** The counter shown in the editor uses example data. The hosted counter API and visit tracking are not implemented yet.
+A free, open-source visual studio for creating SVG visitor counters for GitHub profile READMEs. Build your own design without writing SVG or CSS.
 
-## Online editor (GitHub Pages)
+**[Open Workshop Studio / 打开在线编辑器](https://guitar0788.github.io/workshop-Visitor-Terminal/)**
 
-The studio is designed to be published at:
+> **Alpha · v0.2 — This is a static visual editor, not a live visit-counting service.** All numbers shown are examples; hosted counting, persistent storage and dynamic README embed links are future milestones.
 
-**https://guitar0788.github.io/workshop-Visitor-Terminal/**
+## English
 
-The repository includes a GitHub Actions workflow that runs tests, builds the Vite app, and publishes its static assets. **The URL is only active after Pages is enabled and the deployment succeeds.**
+### Features
 
-Repository owner setup (one time):
+- **Simplified Chinese / English interface**, auto-detected from the browser with a manual language switch.
+- Remembers the selected language in the current browser (when storage is available).
+- Language switching changes **UI labels only**, never the content or arrangement of an existing design.
+- Three starter designs: Pixel Terminal, Cyber HUD and Minimal. New templates use stock text in the selected language.
+- Move, resize, hide, reorder, add and delete text, counter, light and panel layers.
+- Real-time SVG preview, mobile-friendly nudge controls and keyboard navigation.
+- Download a static SVG or save/load designs locally as JSON.
 
-1. Open **Settings → Pages** for this repository.
-2. Set **Build and deployment → Source** to **GitHub Actions**.
-3. Run **Publish Workshop Studio** in the Actions tab, or merge an update to `main`.
-4. Verify the green deployment result before sharing the URL.
+### Getting started
 
-The editor runs entirely in the browser. Your work stays local until you export it; no login or server-side design storage is required for this alpha. GitHub Pages is a static host and **does not implement live visit counting**.
+1. Open the [online editor](https://guitar0788.github.io/workshop-Visitor-Terminal/).
+2. Select **English** or **简体中文** in the header.
+3. Pick a template and customize your layers.
+4. Download the SVG. Upload it into your GitHub repository and reference the file in the profile README.
 
-## Workshop Studio
+The downloaded SVG is **static**; it does not update visitor counts yet.
 
-The visual editor is designed for people who want to customize a GitHub counter without writing SVG or CSS. It includes:
+### Local development
 
-- **Pixel Terminal**, **Cyber HUD**, and **Minimal** starter templates
-- Live SVG preview with drag-to-move layers
-- Add, select, hide, delete, and reorder text, counter, status light, and panel layers
-- Numerical position and size controls, editable text, colors, and font sizes
-- Keyboard-accessible adjustments: focus a layer and use arrow keys (hold Shift for 10-pixel moves)
-- Save/load a design JSON file locally, or export SVG artwork
-- Mobile-first preview placement, tap-friendly move controls, and direct jump to selected-layer properties
-- Mobile-friendly editor layout and basic renderer tests
-
-The editor is intentionally usable without accounts or a database in this first milestone.
-
-## Run locally
-
-Node.js 20 or newer is required.
+Node.js 20 or newer:
 
 ~~~sh
 npm install
 npm run dev
-~~~
-
-Open the local URL printed by Vite.
-
-Run the checks:
-
-~~~sh
 npm test
 npm run build
 ~~~
 
-To try a design in your own profile now, export the SVG, upload it to a repository, and reference that file in your README. **That SVG is static** and will not automatically count visitors.
+The app builds to the GitHub Pages project path. Pages deployment runs automatically on merges into `main`.
 
-## Development plan
+## 简体中文
 
-| Stage | Goal | Status |
+**Workshop Visitor Terminal（工坊访客终端）** 是面向 GitHub 个人主页的免费开源 SVG 访客计数器可视化编辑器。不需要了解 HTML、CSS 或 SVG，就能自由制作计数器外观。
+
+**[立即打开在线编辑器](https://guitar0788.github.io/workshop-Visitor-Terminal/)**
+
+> **当前为 v0.2 测试版。** 网站已支持设计与导出，但显示的访问数字属于演示数据。真实计数服务、用户设计的在线托管以及动态 README 图片链接仍在规划中。
+
+### 已实现的功能
+
+- **简体中文与英文切换**：初次打开时按浏览器首选语言显示，也可在页面右上角随时手动切换。
+- **记住语言选择**：浏览器允许本地存储时，下次打开沿用上一次选择。
+- **保护设计内容**：切换界面语言不会翻译、移动、覆盖或清空已有图层。
+- **三个初始模板**：像素终端、赛博仪表盘、极简风格；新建模板使用当前界面的默认语言。
+- **可视化图层编辑**：支持拖动位置、调整尺寸、更改文字及颜色、控制可见性和顺序。
+- **适配手机操作**：提供触屏方向按钮与键盘精确移动。
+- **本地设计导入与导出**：支持 SVG 图片下载和 JSON 设计文件备份。
+
+### 如何使用
+
+1. 打开[在线编辑器](https://guitar0788.github.io/workshop-Visitor-Terminal/)。
+2. 在页面顶部选择「简体中文」或「English」。
+3. 选择一个模板，编辑自己想要的访客终端。
+4. 下载 SVG 图片，上传到 GitHub 仓库后，在个人主页的 README 中引用该文件。
+
+**注意：** 目前导出的 SVG 仅用于静态展示，**不会自动增加访问次数**。不要把示例数字当作真实访客数据。
+
+### 本地开发
+
+需要 Node.js 20 或更新版本：
+
+~~~sh
+npm install
+npm run dev
+npm test
+npm run build
+~~~
+
+## Roadmap / 开发计划
+
+| Stage / 阶段 | Goal / 目标 | Status / 状态 |
 | --- | --- | --- |
-| 1 | Working SVG preview and templates | Complete |
-| 2 | Visual layer editing, keyboard controls, JSON save/load | Complete |
-| 3 | Free static editor on GitHub Pages | Deployment pending Pages configuration |
-| 4 | Secure server-rendered SVG and hosted designs | Planned |
-| 5 | Cloudflare Workers + D1 request counting and abuse controls | Planned |
-| 6 | README embed link generator, legacy-count migration | Planned |
+| 1 | SVG preview and templates / SVG 预览与模板 | Complete / 已完成 |
+| 2 | Visual layer editing / 图层可视化编辑 | Complete / 已完成 |
+| 3 | GitHub Pages editor / 在线编辑器 | Complete / 已上线 |
+| 3.1 | English + Simplified Chinese / 中英双语界面 | v0.2 |
+| 4 | Secure server-side designs / 安全的服务端设计托管 | Planned / 规划中 |
+| 5 | Cloudflare Workers + D1 counting / 真实访问统计 | Planned / 规划中 |
+| 6 | README embed links + legacy migration / 嵌入链接与旧计数迁移 | Planned / 规划中 |
 
-**Counting limitation:** GitHub caches and proxies README images. A self-hosted SVG endpoint will count requests reaching its service, not guaranteed unique visitors or every profile open. Our eventual UI will label this clearly. Legacy migration will only seed a verified count, with the source and capture time recorded; it cannot recover historical visits not exposed by the old provider.
+**Counting disclaimer / 统计说明：** GitHub caches and proxies images in READMEs. A future counting endpoint will count requests that reach the service, not guaranteed unique human visitors or every profile view. GitHub 会缓存及代理 README 图片，因此未来的统计服务只能计算真正到达后端的请求，不能保证每次打开页面都会被统计，也不能将其视为精确的独立访客数量。
 
-No Cloudflare resources, secrets, accounts, or paid infrastructure are needed to run this editor alpha.
+## License / 许可证
 
-## License
-
-MIT. See [LICENSE](LICENSE).
+[MIT](LICENSE).
