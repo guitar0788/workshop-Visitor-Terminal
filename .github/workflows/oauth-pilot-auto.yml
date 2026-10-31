@@ -116,6 +116,11 @@ jobs:
           STAGING_ORIGIN: "https://workshop-visitor-terminal-staging.fangcui2007.workers.dev"
           GITHUB_CLIENT_ID: ${{ secrets.CLIENT_ID }}
         run: node worker/oauth-pilot-preflight.mjs
+      - name: Verify staging global visit budget without modifying counters
+        env:
+          STAGING_ORIGIN: "https://workshop-visitor-terminal-staging.fangcui2007.workers.dev"
+          STAGING_ADMIN_TOKEN: ${{ secrets.STAGING_ADMIN_TOKEN }}
+        run: node worker/verify-budget-staging.mjs
       - name: Delete temporary OAuth credentials
         if: always()
         run: |
