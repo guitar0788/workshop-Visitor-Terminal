@@ -54,6 +54,14 @@ function fail(message: string, status: number): Response { return respond({ erro
 function noMethods(methods: string): Response {
   return new Response(null, { status: 405, headers: { ...JSON_HEADERS, Allow: methods } });
 }
+/** Headers is iterable but has no enumerable own properties: spreading it into
+ * a plain object silently removes Content-Type, no-store, Allow, etc.
+ */
+function withStudioCors(response: Response, cors: Record<string, string>): Response {
+  const headers = new Headers(response.headers);
+  for (const [key, value] of Object.entries(cors)) headers.set(key, value);
+  return new Response(response.body, { status: response.status, headers });
+}
 function object(input: unknown): input is Record<string, unknown> {
   return input !== null && typeof input === "object" && !Array.isArray(input);
 }
@@ -445,7 +453,7 @@ export async function handlePublishingRequest(
   }
   if (!publishingReady(env)) {
     const response = fail("Publishing is not enabled", 503);
-    return new Response(response.body, { status: response.status, headers: { ...response.headers, ...cors } });
+    return withStudioCors(response, cors);
   }
   if (path === "/v1/auth/github/callback") {
     try {
@@ -504,9 +512,7 @@ export async function handlePublishingRequest(
       result = fail("Publishing temporarily unavailable", 503);
     }
   }
-  return new Response(result.body, {
-    status: result.status, headers: { ...result.headers, ...cors }
-  });
+  return withStudioCors(result, cors);
 }
 
 /** Called by existing scheduled maintenance. No user data/counts are deleted. */
