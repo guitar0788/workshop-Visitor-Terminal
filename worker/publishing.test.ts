@@ -385,6 +385,44 @@ describe("v0.5 securely gated GitHub OAuth publishing", () => {
       undefined, logged.accessToken), env, now + 3000)).status).toBe(401);
   });
 
+  it("revokes previously issued sessions as soon as the numeric pilot allowlist changes", async () => {
+    const env = createEnv();
+    const logged = await completeLogin(env);
+    const created = await handlePublishingRequest(
+      req("/v1/my/counters", "POST", { design: clonePreset("pixel") },
+        logged.accessToken), env, now + 2_000
+    );
+    expect(created.status).toBe(201);
+    const { slug } = await created.json() as { slug: string };
+    expect((await handlePublishingRequest(
+      req("/v1/me", "GET", undefined, logged.accessToken),
+      env, now + 3_000
+    )).status).toBe(200);
+
+    // Simulate emergency removal of the account, without changing D1 session
+    // records. A still-unexpired token must immediately lose all permissions.
+    env.PILOT_GITHUB_USER_ID = "999999";
+    expect(publishingReady(env)).toBe(true);
+    expect((await handlePublishingRequest(
+      req("/v1/me", "GET", undefined, logged.accessToken),
+      env, now + 3_100
+    )).status).toBe(401);
+    expect((await handlePublishingRequest(
+      req("/v1/my/counters", "GET", undefined, logged.accessToken),
+      env, now + 3_200
+    )).status).toBe(401);
+    expect((await handlePublishingRequest(
+      req("/v1/my/counters/" + slug + "/design", "PUT",
+        { design: clonePreset("cyber") }, logged.accessToken),
+      env, now + 3_300
+    )).status).toBe(401);
+    expect(env.DB.counters.get(slug)?.owner_user_id).toBe(124379632);
+    expect((await handlePublishingRequest(
+      req("/v1/auth/exchange", "POST", { ticket: logged.ticket, verifier: logged.verifier }),
+      env, now + 3_400
+    )).status).toBe(401);
+  });
+
   it("denies an unapproved GitHub numeric ID even when the login name matches", async () => {
     const env = createEnv();
     const verifier = "u".repeat(55);
