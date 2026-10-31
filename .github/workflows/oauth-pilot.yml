@@ -130,6 +130,8 @@ jobs:
           VITE_PUBLISH_PILOT: "true"
           VITE_PUBLISH_API_ORIGIN: "https://workshop-visitor-terminal-staging.fangcui2007.workers.dev"
         run: npm run build
+      - name: Add downloadable offline editor (no OAuth or Cloudflare)
+        run: npm run build:offline
       - name: Configure Pages
         uses: actions/configure-pages@v5
       - name: Upload validated Pages artifact
