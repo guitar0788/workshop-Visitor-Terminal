@@ -52,8 +52,8 @@ jobs:
           STAGING_D1_DATABASE_ID: ${{ secrets.STAGING_D1_DATABASE_ID }}
           STAGING_ADMIN_TOKEN: ${{ secrets.STAGING_ADMIN_TOKEN }}
           STAGING_VISIT_HASH_SECRET: ${{ secrets.STAGING_VISIT_HASH_SECRET }}
-          GITHUB_CLIENT_ID: ${{ secrets.GITHUB_CLIENT_ID }}
-          GITHUB_CLIENT_SECRET: ${{ secrets.GITHUB_CLIENT_SECRET }}
+          GITHUB_CLIENT_ID: ${{ secrets.CLIENT_ID }}
+          GITHUB_CLIENT_SECRET: ${{ secrets.CLIENT_SECRET }}
           PILOT_GITHUB_USER_ID: "124379632"
           STAGING_ORIGIN: ${{ inputs.staging_origin }}
         run: node worker/prepare-oauth-pilot.mjs
@@ -82,7 +82,7 @@ jobs:
       - name: Verify OAuth endpoints, denied origins and GitHub redirect
         env:
           STAGING_ORIGIN: ${{ inputs.staging_origin }}
-          GITHUB_CLIENT_ID: ${{ secrets.GITHUB_CLIENT_ID }}
+          GITHUB_CLIENT_ID: ${{ secrets.CLIENT_ID }}
         run: node worker/oauth-pilot-preflight.mjs
       - name: Delete temporary OAuth credentials
         if: always()
