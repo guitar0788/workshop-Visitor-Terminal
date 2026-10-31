@@ -10,10 +10,17 @@ export interface D1Statement {
   run(): Promise<D1Result>;
 }
 export interface D1Binding { prepare(query: string): D1Statement }
+export interface WorkerRateLimiter {
+  limit(input: { key: string }): Promise<{ success: boolean }>;
+}
 export interface WorkerEnv extends PublishEnv {
   DB: D1Binding;
   ADMIN_TOKEN: string;
   VISIT_HASH_SECRET: string;
+  /** Explicit owner-only pilot flag. Optional in older/local deployments. */
+  SVG_RATE_LIMIT_ENABLED?: string;
+  SVG_RATE_LIMITER?: WorkerRateLimiter;
+  SVG_GLOBAL_RATE_LIMITER?: WorkerRateLimiter;
 }
 export interface CounterRow {
   slug: string; owner: string; hits: number; design_json: string;
@@ -97,6 +104,28 @@ async function getCounter(db: D1Binding, slug: string): Promise<CounterRow | nul
 async function image(request: Request, env: WorkerEnv, slug: string, now: number): Promise<Response> {
   if (request.method !== "GET" && request.method !== "HEAD") return methodNotAllowed("GET, HEAD");
   if (!validSlug(slug)) return error("Invalid counter slug", 400);
+  // v0.6: block rapid requests BEFORE they read or write D1.
+  // The Cloudflare binding is approximate and scoped per data center; the
+  // SQLite global UTC-day budget is a separate atomic admission safeguard.
+  if (env.SVG_RATE_LIMIT_ENABLED === "true") {
+    if (!env.SVG_GLOBAL_RATE_LIMITER || !env.SVG_RATE_LIMITER) {
+      return error("Image protection temporarily unavailable", 503);
+    }
+    const global = await env.SVG_GLOBAL_RATE_LIMITER.limit({ key: "all-svg" });
+    if (!global.success) {
+      return new Response(JSON.stringify({ error: "Image request rate exceeded" }), {
+        status: 429,
+        headers: { ...NO_CACHE, "Content-Type": "application/json", "Retry-After": "60" }
+      });
+    }
+    const counter = await env.SVG_RATE_LIMITER.limit({ key: "slug:" + slug });
+    if (!counter.success) {
+      return new Response(JSON.stringify({ error: "Image request rate exceeded" }), {
+        status: 429,
+        headers: { ...NO_CACHE, "Content-Type": "application/json", "Retry-After": "60" }
+      });
+    }
+  }
   const row = await getCounter(env.DB, slug);
   if (!row) return error("Counter not found", 404);
   let hits = row.hits;
@@ -235,6 +264,10 @@ export async function handleRequest(
 export async function pruneReceipts(env: WorkerEnv, now = Date.now()): Promise<void> {
   await env.DB.prepare("DELETE FROM request_windows WHERE bucket < ?")
     .bind(Math.floor((now - DAY_MS) / WINDOW_MS)).run();
+  // The UTC-day budget is append-only within a day and bounded at 20k. Delete
+  // old budget metadata only; never reset today's limit or counter history.
+  await env.DB.prepare("DELETE FROM visit_day_budget WHERE utc_day < ?")
+    .bind(Math.floor(now / DAY_MS) - 2).run();
   // Separate OAuth state, ticket, and session cleanup never touches counters.
   await prunePublishAuth(env, now);
 }
