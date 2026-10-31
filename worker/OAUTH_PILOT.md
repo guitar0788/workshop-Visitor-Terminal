@@ -32,6 +32,14 @@ GitHub 环境机密中的 OAuth 名称必须使用 **`CLIENT_ID`** 和 **`CLIENT
 4. 载入自己的计数器，调整设计并保存。随后尝试无痕访问，确认未登录无法编辑。
 5. 再在手机端测试登录、导出、复制。不要把测试图片覆盖到现有个人主页计数器。
 
+### 内测期间的 GitHub Pages 发布保护
+
+仓库当前使用版本控制文件 `.github/pages-deploy-channel.txt`，内容为 `pilot`。因此，在 `main` 分支合并 PR、触发普通的 **Publish Workshop Studio** 自动工作流时，它会运行安全检查，但**不会覆盖已经成功发布的 OAuth 内测网页**。
+
+需要主动回到普通预览版时，依旧可以手动运行 **Publish Workshop Studio**（选择 `main`）。这属于明确的退出内测操作。之后如需重新启用内测，再手动运行 OAuth Pilot。不要通过清空 Cloudflare 数据库来处理网页版本。
+
+正式结束内测后，可在经过审查的单独 PR 中将 `.github/pages-deploy-channel.txt` 的内容改为 `preview`，恢复常规的 `main` 推送自动发布。
+
 ### 随时退出试运行
 
 1. 在 [Publish Workshop Studio](https://github.com/guitar0788/workshop-Visitor-Terminal/actions/workflows/publish-pages.yml) 手动运行 main 的默认发布，关闭网页登录入口。
@@ -45,6 +53,8 @@ This is a manually confirmed, staging-only, single-owner GitHub OAuth pilot. It 
 Verify GitHub OAuth App homepage and callback URL above, then run [OAuth Pilot workflow](https://github.com/guitar0788/workshop-Visitor-Terminal/actions/workflows/oauth-pilot.yml) on main with confirm_scope = OAUTH-PILOT-ONLY and the exact staging_origin above.
 
 Only GitHub-verified numeric user ID 124379632 can receive a session. The workflow tests security gates before deploying the Worker and enabling the Pages beta interface. Other accounts are not authorized to publish.
+
+The tracked `.github/pages-deploy-channel.txt` is currently `pilot`: ordinary `main` pushes **skip the default-preview Pages deployment** rather than silently hiding the active OAuth login. A manual Publish Workshop Studio run still deliberately deploys the preview as a rollback. Switch the tracked channel to `preview` in a reviewed PR after the pilot ends to restore automatic preview deployments.
 
 To roll back, manually run the default [GitHub Pages workflow](https://github.com/guitar0788/workshop-Visitor-Terminal/actions/workflows/publish-pages.yml) and then the default [Cloudflare staging workflow](https://github.com/guitar0788/workshop-Visitor-Terminal/actions/workflows/cloudflare-staging.yml). Both normally disable the OAuth pilot, retaining D1 data.
 
