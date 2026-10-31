@@ -27,7 +27,11 @@ test("staging template never substitutes production identifiers", () => {
   const config = buildStagingConfig(template, fixture().STAGING_D1_DATABASE_ID);
   assert.match(config, /3a52f952-852f-4b53-8cb0-8492d08d626c/);
   assert.throws(() => buildStagingConfig(template.replace(
-    "workshop-visitor-terminal-staging", "production-counter"), fixture().STAGING_D1_DATABASE_ID),
+    'name = "workshop-visitor-terminal-staging"', 'name = "production-counter"'),
+    fixture().STAGING_D1_DATABASE_ID), /safety markers/);
+  assert.throws(() => buildStagingConfig(template.replace(
+    'database_name = "workshop-visitor-terminal-staging"',
+    'database_name = "production-counter"'), fixture().STAGING_D1_DATABASE_ID),
     /safety markers/);
 });
 test("rejects non-staging, arbitrary or HTTP smoke target origins", () => {
