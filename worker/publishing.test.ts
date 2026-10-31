@@ -250,6 +250,115 @@ describe("v0.5 securely gated GitHub OAuth publishing", () => {
       { design }, logged.accessToken), env, now + 5000)).status).toBe(200);
   });
 
+  it("keeps published slug and historical hits when updating a live design", async () => {
+    const env = createEnv();
+    const signedIn = await completeLogin(env);
+    const original = clonePreset("pixel");
+    const publish = await handlePublishingRequest(
+      req("/v1/my/counters", "POST", { design: original }, signedIn.accessToken),
+      env, now + 2_000
+    );
+    expect(publish.status).toBe(201);
+    const initial = await publish.json() as {
+      slug: string; imageUrl: string; markdown: string
+    };
+    const stored = env.DB.counters.get(initial.slug);
+    expect(stored).toBeDefined();
+    if (!stored) throw Error("Newly created counter missing from mock D1");
+    // Simulate a counter that has already received qualifying upstream visits.
+    stored.hits = 37;
+    const updated = clonePreset("pixel");
+    const title = updated.layers.find(layer => layer.id === "heading");
+    expect(title).toBeDefined();
+    if (title) title.text = "V05-STAGING-DESIGN-UPDATED";
+    const changed = await handlePublishingRequest(
+      req("/v1/my/counters/" + initial.slug + "/design", "PUT",
+        { design: updated }, signedIn.accessToken), env, now + 3_000
+    );
+    expect(changed.status).toBe(200);
+    const result = await changed.json() as {
+      slug: string; saved: boolean; imageUrl: string; markdown: string
+    };
+    expect(result.saved).toBe(true);
+    expect(result.slug).toBe(initial.slug);
+    expect(result.imageUrl).toBe(initial.imageUrl);
+    expect(result.markdown).toBe(initial.markdown);
+    expect(stored.hits).toBe(37);
+    const list = await handlePublishingRequest(
+      req("/v1/my/counters", "GET", undefined, signedIn.accessToken),
+      env, now + 4_000
+    );
+    expect(list.status).toBe(200);
+    const entries = await list.json() as {
+      counters: Array<{slug:string;hits:number;imageUrl:string;design:{
+        layers: Array<{id:string;text:string}>
+      }}>
+    };
+    expect(entries.counters).toHaveLength(1);
+    expect(entries.counters[0].slug).toBe(initial.slug);
+    expect(entries.counters[0].imageUrl).toBe(initial.imageUrl);
+    expect(entries.counters[0].hits).toBe(37);
+    expect(entries.counters[0].design.layers.find(layer => layer.id === "heading")?.text)
+      .toBe("V05-STAGING-DESIGN-UPDATED");
+  });
+
+  it("denies anonymous reads and writes, foreign browser origins and revoked sessions", async () => {
+    const env = createEnv();
+    const logged = await completeLogin(env);
+    const design = clonePreset("pixel");
+    const created = await handlePublishingRequest(
+      req("/v1/my/counters", "POST", { design }, logged.accessToken),
+      env, now + 2_000
+    );
+    expect(created.status).toBe(201);
+    const { slug } = await created.json() as { slug: string };
+    const originalJson = env.DB.counters.get(slug)?.design_json;
+    const altered = clonePreset("pixel");
+    const alteredHeading = altered.layers.find(layer => layer.id === "heading");
+    if (alteredHeading) alteredHeading.text = "MUST-NOT-BE-WRITTEN";
+
+    expect((await handlePublishingRequest(
+      req("/v1/my/counters", "GET"), env, now + 3_000
+    )).status).toBe(401);
+    expect((await handlePublishingRequest(
+      req("/v1/my/counters/" + slug + "/design", "PUT", { design: altered }),
+      env, now + 3_100
+    )).status).toBe(401);
+    const foreign = await handlePublishingRequest(
+      req("/v1/my/counters/" + slug + "/design", "PUT",
+        { design: altered }, logged.accessToken, "https://attacker.example"),
+      env, now + 3_200
+    );
+    expect(foreign.status).toBe(403);
+    expect(foreign.headers.get("Access-Control-Allow-Origin")).toBeNull();
+    expect(env.DB.counters.get(slug)?.design_json).toBe(originalJson);
+
+    expect((await handlePublishingRequest(
+      req("/v1/auth/logout", "POST", undefined, logged.accessToken),
+      env, now + 4_000
+    )).status).toBe(200);
+    expect((await handlePublishingRequest(
+      req("/v1/my/counters", "GET", undefined, logged.accessToken),
+      env, now + 4_100
+    )).status).toBe(401);
+    expect((await handlePublishingRequest(
+      req("/v1/my/counters/" + slug + "/design", "PUT",
+        { design: altered }, logged.accessToken),
+      env, now + 4_200
+    )).status).toBe(401);
+    expect(env.DB.counters.get(slug)?.design_json).toBe(originalJson);
+
+    // A new verified sign-in recovers the same D1 counter, not a fresh one.
+    const signedInAgain = await completeLogin(env);
+    const mine = await handlePublishingRequest(
+      req("/v1/my/counters", "GET", undefined, signedInAgain.accessToken),
+      env, now + 5_000
+    );
+    expect(mine.status).toBe(200);
+    const records = await mine.json() as {counters:Array<{slug:string}>};
+    expect(records.counters.map(counter => counter.slug)).toContain(slug);
+  });
+
   it("does not assign legacy counters to matching GitHub usernames", async () => {
     const env = createEnv();
     env.DB.counters.set("legacy", {
