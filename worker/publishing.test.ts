@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { clonePreset } from "../src/model";
+import { handleRequest } from "./service";
 import {
   handlePublishingRequest, oauthCallback, pkceChallenge, publishingReady,
   type PublishDatabase, type PublishStatement, type PublishEnv
@@ -32,6 +33,8 @@ class MockD1 implements PublishDatabase {
         } else if (sql.startsWith("SELECT COUNT(*) AS total FROM counters")) {
           row = { total: [...db.counters.values()].filter(x =>
             x.owner_user_id === args[0]).length };
+        } else if (sql.startsWith("SELECT slug, owner, hits, design_json, created_at")) {
+          row = db.counters.get(String(args[0])) ?? null;
         } else { throw Error("Unexpected D1 first: " + sql); }
         return row as T | null;
       },
@@ -382,6 +385,10 @@ describe("v0.5 securely gated GitHub OAuth publishing", () => {
     const { slug } = await initial.json() as { slug: string };
     const endpoint = "/v1/my/counters/" + slug;
     env.DB.counters.get(slug)!.hits = 65;
+    const workerEnv = { ...env, ADMIN_TOKEN: "a".repeat(48) };
+    const imagePath = apiOrigin + "v1/counters/" + slug + ".svg";
+    expect((await handleRequest(new Request(imagePath, { method: "HEAD" }),
+      workerEnv, now + 2500)).status).toBe(200);
     for (const bad of [
       undefined, {}, { confirm: "DELETE", confirmSlug: "wrong" },
       { confirm: "delete", confirmSlug: slug },
@@ -409,6 +416,8 @@ describe("v0.5 securely gated GitHub OAuth publishing", () => {
     expect(removed.status).toBe(200);
     expect(await removed.json()).toEqual({ slug, deleted: true });
     expect(env.DB.counters.has(slug)).toBe(false);
+    expect((await handleRequest(new Request(imagePath, { method: "HEAD" }),
+      workerEnv, now + 5001)).status).toBe(404);
     expect((await handlePublishingRequest(
       req(endpoint, "DELETE", confirmation, logged.accessToken), env, now + 5001
     )).status).toBe(404);
