@@ -58,6 +58,12 @@ The owner-only OAuth pilot now has an **automatic deployment workflow**: a succe
 
 现在可在代码合并到 `main` 且 **Verify 检查成功后自动部署 Cloudflare staging 与受限内测网页**，不必每次手工填写确认词。自动流程会严格核对最新提交、`pilot` 发布通道、D1 身份与原有 OAuth 保护；仅改文档、CI 失败或未授权分支不会自动部署。详细规则与暂停步骤见 [OAuth Pilot 文档](worker/OAUTH_PILOT.md)。
 
+### v0.6 — guarded SVG traffic and D1 daily write budget
+
+The staging pilot now adds [a two-layer abuse and cost guard](worker/V06_ABUSE_LIMITS.md): approximate per-location Cloudflare rate limits before D1 access, plus a database-enforced UTC-day cap of 20,000 new visit receipts shared by all published counters. SVG images remain readable when the daily write budget is reached; the counters pause until the next UTC day. This does **not** guarantee zero Cloudflare charges or enable public multiuser registration.
+
+v0.6 新增 [SVG 防刷访问与 D1 每日写入保护](worker/V06_ABUSE_LIMITS.md)，通过 Cloudflare 机房速率限制减少请求洪泛，通过数据库原子额度限制全球每日新访客收据。超过写入上限后图片仍能显示，只暂停新增访问次数。正式公开用户注册仍未启用。
+
 ### v0.6 — owner-controlled deletion (pilot gated)
 
 The authenticated Studio adds [typed-confirmation deletion for owned published counters](worker/V06_DATA_LIFECYCLE.md). The Worker requires a valid GitHub session, exact Studio Origin, matching typed counter slug, and immutable verified owner ID. Removing one counter permanently invalidates its published SVG URL after caches expire and frees one of three publication slots. Existing counters are **never deleted automatically**. This does not yet enable public account registration or Cloudflare production deployment.

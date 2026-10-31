@@ -42,8 +42,22 @@ export function prepareOAuthPilot(environment, template) {
     'PUBLISHING_ENABLED = "true"\n' +
     'STUDIO_ORIGIN = "' + APPROVED_STUDIO + '"\n' +
     'PUBLIC_API_ORIGIN = "' + APPROVED_ORIGIN + '/"\n' +
-    'PILOT_GITHUB_USER_ID = "' + APPROVED_GITHUB_USER_ID + '"'
-  );
+    'PILOT_GITHUB_USER_ID = "' + APPROVED_GITHUB_USER_ID + '"\n' +
+    'SVG_RATE_LIMIT_ENABLED = "true"'
+  ) + '\n\n' +
+    '# v0.6: edge burst limiter, per Cloudflare location (approximate).\n' +
+    '[[ratelimits]]\n' +
+    'name = "SVG_RATE_LIMITER"\n' +
+    'namespace_id = "260601004"\n' +
+    '[ratelimits.simple]\n' +
+    'limit = 60\n' +
+    'period = 60\n\n' +
+    '[[ratelimits]]\n' +
+    'name = "SVG_GLOBAL_RATE_LIMITER"\n' +
+    'namespace_id = "260601005"\n' +
+    '[ratelimits.simple]\n' +
+    'limit = 120\n' +
+    'period = 60\n';
   return {
     config,
     workerSecrets: {

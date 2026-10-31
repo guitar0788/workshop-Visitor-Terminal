@@ -5,7 +5,7 @@
  * randomly generated test-only secrets stored in ignored .dev.vars.
  */
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
+import { spawn, execFileSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { writeFile, rm } from "node:fs/promises";
 import { setTimeout as sleep } from "node:timers/promises";
@@ -173,8 +173,46 @@ async function main() {
     assert.equal(migrated.baselineSource, legacyPayload.source);
 
     assert.equal((await api("/v1/counters/nonexistent.svg")).status, 404);
+
+    // v0.6 strict daily quota: use ONLY the disposable local D1 database.
+    // Stop workerd before editing its local SQLite store through Wrangler.
+    await shutdown();
+    const utcDay = Math.floor(Date.now() / (24 * 60 * 60_000));
+    execFileSync(wranglerExecutable, [
+      "d1", "execute", "workshop-visitor-terminal", "--local",
+      "--config", "wrangler.toml", "--command",
+      "INSERT INTO visit_day_budget (utc_day, accepted) VALUES (" +
+        utcDay + ", 20000) ON CONFLICT(utc_day) DO UPDATE SET accepted = 20000;"
+    ], { stdio: "pipe", timeout: 30_000 });
+    await boot();
+    const beforeExhausted = (await checkedJson(await requestAdmin(adminPath), 200)).hits;
+    const exhaustedImage = await api(imagePath, {
+      headers: { "CF-Connecting-IP": "203.0.113.111" }
+    });
+    assert.equal(exhaustedImage.status, 200,
+      "Reaching the D1 write budget must not break a publicly embedded SVG");
+    assert.match(await exhaustedImage.text(), /<svg\b/);
+    assert.equal((await checkedJson(await requestAdmin(adminPath), 200)).hits,
+      beforeExhausted,
+      "No new visit receipt is admitted after the global UTC-day budget is exhausted");
+
+    // The next UTC day must admit a new receipt instead of permanently
+    // freezing all counters. This is a SQL-only test on the disposable DB.
+    await shutdown();
+    const nextBucket = (utcDay + 1) * 288;
+    const nextFingerprint = "b".repeat(64);
+    execFileSync(wranglerExecutable, [
+      "d1", "execute", "workshop-visitor-terminal", "--local",
+      "--config", "wrangler.toml", "--command",
+      "INSERT OR IGNORE INTO request_windows (slug, fingerprint, bucket) " +
+        "VALUES ('" + slug + "', '" + nextFingerprint + "', " + nextBucket + ");"
+    ], { stdio: "pipe", timeout: 30_000 });
+    await boot();
+    assert.equal((await checkedJson(await requestAdmin(adminPath), 200)).hits,
+      beforeExhausted + 1, "New UTC day must have a fresh capacity budget");
+
     console.log("PASS: local D1 migration, authenticated CRUD, atomic dedupe, " +
-      "legacy guard, SVG escaping, HEAD and restart persistence.");
+      "strict daily write cap, rollover, SVG fail-open rendering and restart persistence.");
   } finally {
     await shutdown();
     await rm(".dev.vars", { force: true });
