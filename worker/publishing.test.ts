@@ -598,6 +598,28 @@ describe("v0.5 securely gated GitHub OAuth publishing", () => {
     expect(env.DB.counters.size).toBe(5); // 3 owned + legacy + another user
   });
 
+  it("preserves publishing security and HTTP Allow headers after Studio CORS", async () => {
+    const env = createEnv();
+    const signedIn = await completeLogin(env);
+    const wrongMethod = await handlePublishingRequest(req("/v1/my/export",
+      "POST", {}, signedIn.accessToken), env, now + 1_500);
+    expect(wrongMethod.status).toBe(405);
+    expect(wrongMethod.headers.get("Allow")).toBe("GET");
+    expect(wrongMethod.headers.get("Cache-Control")).toBe("no-store");
+    expect(wrongMethod.headers.get("X-Content-Type-Options")).toBe("nosniff");
+    const unsigned = await handlePublishingRequest(req("/v1/my/export"),
+      env, now + 1_501);
+    expect(unsigned.status).toBe(401);
+    expect(unsigned.headers.get("Cache-Control")).toBe("no-store");
+    expect(unsigned.headers.get("Content-Type")).toContain("application/json");
+    env.PUBLISHING_ENABLED = "false";
+    const disabled = await handlePublishingRequest(req("/v1/my/export"),
+      env, now + 1_502);
+    expect(disabled.status).toBe(503);
+    expect(disabled.headers.get("Cache-Control")).toBe("no-store");
+    expect(disabled.headers.get("Content-Type")).toContain("application/json");
+  });
+
   it("exports only the signed-in verified account's designs without OAuth or visitor credentials", async () => {
     const env = createEnv();
     const logged = await completeLogin(env);
@@ -637,6 +659,8 @@ describe("v0.5 securely gated GitHub OAuth publishing", () => {
     );
     expect(response.status).toBe(200);
     expect(response.headers.get("Cache-Control")).toBe("no-store");
+    expect(response.headers.get("Content-Type")).toContain("application/json");
+    expect(response.headers.get("X-Content-Type-Options")).toBe("nosniff");
     expect(response.headers.get("Access-Control-Allow-Origin")).toBe(origin);
     const exported = await response.json() as {
       formatVersion: number; exportedAt: string;
