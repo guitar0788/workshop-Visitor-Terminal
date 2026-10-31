@@ -43,6 +43,16 @@ test("bundles React JS and CSS into one local HTML file with a deny-network CSP"
   assert(!result.includes("workers.dev"));
 });
 
+test("does not mistake HTML-looking React JS strings for genuine remote asset tags", () => {
+  const source = javascript + 'const fake = "<script src=\\\"https://fake.example\\\"></script>";' +
+    'const sample = "<link href=\\\"https://fake.example/style.css\\\">";';
+  const result = inlineOfflineBundle(html, source, stylesheet);
+  assert.match(result, /connect-src 'none'/);
+  assert.match(result, /<script type="module">/);
+  assert.doesNotMatch(result.replace(/<script type="module">[\\s\\S]*?<\\/script>/,
+    "<script></script>"), /<script[^>]+src=/);
+});
+
 test("rejects external script, unexpected asset paths or multiple bundles", () => {
   const candidates = [
     html.replace('./assets/index-abc123.js', 'https://cdn.example/bundle.js'),
