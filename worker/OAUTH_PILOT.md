@@ -2,7 +2,9 @@
 
 ## 简体中文
 
-当前七项 GitHub 环境机密已由仓库所有者配置。此试运行专用于 Cloudflare staging，**不会自动部署，也不会修改 GitHub 个人主页或旧访问量**。
+当前七项 GitHub 环境机密已由仓库所有者配置。
+
+GitHub 环境机密中的 OAuth 名称必须使用 **`CLIENT_ID`** 和 **`CLIENT_SECRET`**（GitHub 不允许创建 `GITHUB_` 前缀的自定义机密）。部署工作流会把这两项映射到 Worker 内部变量 `GITHUB_CLIENT_ID` 与 `GITHUB_CLIENT_SECRET`，无需重新创建密钥。此试运行专用于 Cloudflare staging，**不会自动部署，也不会修改 GitHub 个人主页或旧访问量**。
 
 ### 请先确认 GitHub OAuth 应用设置
 
