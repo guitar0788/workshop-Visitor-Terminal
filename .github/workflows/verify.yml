@@ -21,7 +21,7 @@ jobs:
           npx wrangler d1 migrations apply workshop-visitor-terminal --local --config wrangler.toml
           npx wrangler d1 execute workshop-visitor-terminal --local --config wrangler.toml --command "SELECT COUNT(*) AS total FROM counters;"
       - name: Validate staging-only configuration safety offline
-        run: node --test worker/staging-prepare.test.mjs worker/verify-staging-d1.test.mjs
+        run: node --test worker/*.test.mjs
       - run: npm test
       - run: npm run build
       - name: Exercise real local Worker and persistent D1 across restart
