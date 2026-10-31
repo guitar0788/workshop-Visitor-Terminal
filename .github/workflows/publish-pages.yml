@@ -11,12 +11,31 @@ permissions:
   id-token: write
 
 concurrency:
+  # Never cancel an in-flight OAuth Pilot Pages publication.
   group: github-pages
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
+  release_gate:
+    name: Check pilot/preview Pages release channel
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      publish_preview: ${{ steps.channel.outputs.publish_preview }}
+    steps:
+      - name: Checkout release channel
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Decide whether ordinary preview may deploy
+        id: channel
+        run: node worker/decide-pages-deploy.mjs
+
   deploy:
     name: Build and publish editor
+    needs: release_gate
+    if: needs.release_gate.outputs.publish_preview == 'true'
     runs-on: ubuntu-latest
     environment:
       name: github-pages
