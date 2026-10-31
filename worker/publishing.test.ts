@@ -88,6 +88,11 @@ class MockD1 implements PublishDatabase {
           if (row && row.owner_user_id === args[2]) {
             row.design_json = args[0]; changes = 1;
           }
+        } else if (sql.startsWith("DELETE FROM counters WHERE slug = ? AND owner_user_id = ?")) {
+          const row = db.counters.get(String(args[0]));
+          if (row && row.owner_user_id === args[1]) {
+            db.counters.delete(String(args[0])); changes = 1;
+          }
         } else if (sql.startsWith("DELETE FROM publish_sessions")) {
           changes = db.sessions.delete(String(args[0])) ? 1 : 0;
         } else {
@@ -364,6 +369,121 @@ describe("v0.5 securely gated GitHub OAuth publishing", () => {
     expect(mine.status).toBe(200);
     const records = await mine.json() as {counters:Array<{slug:string}>};
     expect(records.counters.map(counter => counter.slug)).toContain(slug);
+  });
+
+  it("requires exact typed confirmation and owner session before deleting a counter", async () => {
+    const env = createEnv();
+    const logged = await completeLogin(env);
+    const initial = await handlePublishingRequest(
+      req("/v1/my/counters", "POST", { design: clonePreset("pixel") },
+        logged.accessToken), env, now + 2000
+    );
+    expect(initial.status).toBe(201);
+    const { slug } = await initial.json() as { slug: string };
+    const endpoint = "/v1/my/counters/" + slug;
+    env.DB.counters.get(slug)!.hits = 65;
+    for (const bad of [
+      undefined, {}, { confirm: "DELETE", confirmSlug: "wrong" },
+      { confirm: "delete", confirmSlug: slug },
+      { confirm: "DELETE", confirmSlug: slug.toUpperCase() }
+    ]) {
+      const response = await handlePublishingRequest(
+        req(endpoint, "DELETE", bad, logged.accessToken), env, now + 3000
+      );
+      expect(response.status).toBe(400);
+      expect(env.DB.counters.get(slug)?.hits).toBe(65);
+    }
+    const confirmation = { confirm: "DELETE", confirmSlug: slug };
+    expect((await handlePublishingRequest(
+      req(endpoint, "DELETE", confirmation), env, now + 4000
+    )).status).toBe(401);
+    expect((await handlePublishingRequest(
+      req(endpoint, "DELETE", confirmation, logged.accessToken, "https://foreign.example"),
+      env, now + 4001
+    )).status).toBe(403);
+    expect(env.DB.counters.get(slug)?.hits).toBe(65);
+
+    const removed = await handlePublishingRequest(
+      req(endpoint, "DELETE", confirmation, logged.accessToken), env, now + 5000
+    );
+    expect(removed.status).toBe(200);
+    expect(await removed.json()).toEqual({ slug, deleted: true });
+    expect(env.DB.counters.has(slug)).toBe(false);
+    expect((await handlePublishingRequest(
+      req(endpoint, "DELETE", confirmation, logged.accessToken), env, now + 5001
+    )).status).toBe(404);
+    expect((await handlePublishingRequest(
+      req(endpoint + "/design", "PUT", { design: clonePreset("cyber") },
+        logged.accessToken), env, now + 5002
+    )).status).toBe(404);
+    const list = await handlePublishingRequest(
+      req("/v1/my/counters", "GET", undefined, logged.accessToken),
+      env, now + 6000
+    );
+    expect((await list.json() as {counters:unknown[]}).counters).toHaveLength(0);
+  });
+
+  it("never deletes another account's or legacy/admin counters and frees only owned quota", async () => {
+    const env = createEnv();
+    const logged = await completeLogin(env);
+    const own: string[] = [];
+    for (let i = 0; i < 3; i++) {
+      const response = await handlePublishingRequest(
+        req("/v1/my/counters", "POST", { design: clonePreset("pixel") },
+          logged.accessToken), env, now + 1000 + i
+      );
+      expect(response.status).toBe(201);
+      own.push((await response.json() as { slug:string }).slug);
+    }
+    expect((await handlePublishingRequest(
+      req("/v1/my/counters", "POST", { design: clonePreset("pixel") },
+        logged.accessToken), env, now + 2000
+    )).status).toBe(409);
+    env.DB.counters.set("legacy", {
+      slug: "legacy", owner: "guitar0788", owner_user_id: null,
+      hits: 300, created_at: "2026-01-01T00:00:00Z",
+      design_json: JSON.stringify(clonePreset("pixel"))
+    });
+    const target = "/v1/my/counters/legacy";
+    expect((await handlePublishingRequest(req(target, "DELETE",
+      { confirm: "DELETE", confirmSlug: "legacy" }, logged.accessToken),
+      env, now + 3000)).status).toBe(404);
+    expect(env.DB.counters.get("legacy")?.hits).toBe(300);
+
+    env.DB.counters.set("v111111111111111111111111", {
+      slug: "v111111111111111111111111", owner: "another",
+      owner_user_id: 989898, hits: 50, created_at: "2026-01-01T00:00:00Z",
+      design_json: JSON.stringify(clonePreset("minimal"))
+    });
+    expect((await handlePublishingRequest(req(
+      "/v1/my/counters/v111111111111111111111111", "DELETE",
+      { confirm: "DELETE", confirmSlug: "v111111111111111111111111" },
+      logged.accessToken), env, now + 3001)).status).toBe(404);
+    expect(env.DB.counters.get("v111111111111111111111111")?.hits).toBe(50);
+
+    const slug = own[1];
+    expect((await handlePublishingRequest(
+      req("/v1/my/counters/" + slug, "GET", undefined, logged.accessToken),
+      env, now + 3002
+    )).status).toBe(405);
+    const removed = await handlePublishingRequest(
+      req("/v1/my/counters/" + slug, "DELETE",
+        { confirm: "DELETE", confirmSlug: slug }, logged.accessToken),
+      env, now + 3100
+    );
+    expect(removed.status).toBe(200);
+    expect(env.DB.counters.has(own[0])).toBe(true);
+    expect(env.DB.counters.has(own[2])).toBe(true);
+    const replacement = await handlePublishingRequest(
+      req("/v1/my/counters", "POST", { design: clonePreset("cyber") },
+        logged.accessToken), env, now + 3200
+    );
+    expect(replacement.status).toBe(201);
+    const newSlug = (await replacement.json() as {slug:string}).slug;
+    expect(newSlug).not.toBe(slug);
+    expect((await handlePublishingRequest(req("/v1/my/counters", "GET",
+      undefined, logged.accessToken), env, now + 3300)).status).toBe(200);
+    expect(env.DB.counters.size).toBe(5); // 3 owned + legacy + another user
   });
 
   it("does not assign legacy counters to matching GitHub usernames", async () => {
