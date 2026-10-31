@@ -13,7 +13,7 @@ import {
   type EditHistory
 } from "./history";
 import {
-  PUBLISH_UI_ENABLED, beginGitHubLogin, exchangeGitHubReturn, logoutPublishing,
+  PUBLISH_UI_ENABLED, PUBLISH_PILOT_MODE, beginGitHubLogin, exchangeGitHubReturn, logoutPublishing,
   markdownEmbed, myCounters, publishDesign, readOAuthReturn, savePublished,
   type PublishedCounter, type PublishSession
 } from "./publish-client";
@@ -186,6 +186,9 @@ function App() {
             {PUBLISH_UI_ENABLED ? "BETA" : "PREVIEW"}
           </span>
         </div>
+        {PUBLISH_UI_ENABLED && PUBLISH_PILOT_MODE && (
+          <p className="publish-hint" role="note">{t.publishPilotNotice}</p>
+        )}
         {!PUBLISH_UI_ENABLED ? (
           <>
             <p className="publish-copy">{t.publishUnavailable}</p>
