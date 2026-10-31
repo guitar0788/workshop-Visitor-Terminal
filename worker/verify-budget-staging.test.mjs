@@ -7,6 +7,7 @@ import {
 const secret = "admin-" + "s".repeat(48);
 const allowed = { utcDay: "2026-11-01", admitted: 102,
   maxDailyAdmitted: 20_000, remaining: 19_898,
+  edgeRateLimitsEnabled: true,
   edgeLimitPerMinutePerCounter: 60, edgeLimitPerMinutePerLocation: 120 };
 
 test("validates global budget, policy, exact remaining number and date", () => {
@@ -14,6 +15,7 @@ test("validates global budget, policy, exact remaining number and date", () => {
   for (const bad of [
     { admitted: -1 }, { admitted: 20_001 }, { remaining: 7 },
     { utcDay: "yesterday" }, { maxDailyAdmitted: 100_000 },
+    { edgeRateLimitsEnabled: false },
     { edgeLimitPerMinutePerLocation: 900 }, { edgeLimitPerMinutePerCounter: 900 }
   ]) assert.throws(() => validateUsage({ ...allowed, ...bad }));
 });
