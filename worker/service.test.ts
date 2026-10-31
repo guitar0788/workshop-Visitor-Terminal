@@ -23,6 +23,9 @@ class MemoryD1 implements D1Binding {
         }
         throw Error("Unrecognized SELECT: " + query);
       },
+      async all<T>() {
+        return { results: [] as T[], success: true };
+      },
       async run() {
         let changes = 0;
         if (query.startsWith("INSERT OR IGNORE INTO counters")) {
@@ -59,6 +62,8 @@ class MemoryD1 implements D1Binding {
             row.baseline_applied_at = String(args[4]);
             changes = 1;
           }
+        } else if (query.startsWith("DELETE FROM publish_")) {
+          changes = 0; // v0.5 empty auth tables in v0.4 compatibility tests
         } else if (query.startsWith("DELETE FROM request_windows")) {
           const oldest = Number(args[0]);
           for (const item of db.windows) {
