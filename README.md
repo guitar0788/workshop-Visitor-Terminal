@@ -46,6 +46,12 @@ A separate Cloudflare Worker + D1 service is available in [worker/](worker/READM
 
 Security limits: the endpoint counts **qualified upstream image requests, not unique visitors**. GitHub's proxy cache can suppress origin requests. v0.5 adds GitHub user authorization and ownership enforcement behind a default-off feature flag; the public onboarding and abuse controls still require review.
 
+### Owner-only GitHub OAuth pilot / 仅所有者 OAuth 试运行
+
+A dedicated **manual-only, staging-only** GitHub OAuth workflow is prepared. It requires explicit confirmation and validates the GitHub account ID before creating any session. See the [bilingual pilot guide](worker/OAUTH_PILOT.md). This workflow **has not been executed as part of the code merge**; ordinary Pages builds remain preview-only.
+
+已准备 [GitHub OAuth 受限试运行操作说明](worker/OAUTH_PILOT.md)，七项机密由仓库所有者独立配置。只有经 GitHub 验证的测试账户能发布，普通网页部署仍默认关闭登录。**合并代码不等于已经启动云端 OAuth 试运行。**
+
 ### v0.5 user-owned publishing (gated beta)
 
 [GitHub OAuth sign-in, verified ownership, D1-backed publishing, design updates, and README Markdown generation](worker/PUBLISHING.md) have been implemented behind an explicit server/browser launch gate. The export panel explains its current preview-only status. An isolated OAuth app and separate authorization are required before enabling sign-in; **never store GitHub OAuth secrets in Vite frontend variables**.

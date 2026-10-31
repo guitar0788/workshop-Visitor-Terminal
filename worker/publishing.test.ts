@@ -104,6 +104,7 @@ const createEnv = (): PublishEnv & { DB: MockD1 } => ({
   PUBLISHING_ENABLED: "true",
   GITHUB_CLIENT_ID: "GithubClientId_123",
   GITHUB_CLIENT_SECRET: "secret-12345678901234567890",
+  PILOT_GITHUB_USER_ID: "124379632",
   STUDIO_ORIGIN: "https://guitar0788.github.io/workshop-Visitor-Terminal/",
   PUBLIC_API_ORIGIN: apiOrigin,
   VISIT_HASH_SECRET: adminSecret
@@ -163,6 +164,9 @@ describe("v0.5 securely gated GitHub OAuth publishing", () => {
     expect((await handlePublishingRequest(req("/v1/me"), env, now)).status).toBe(503);
     env.PUBLISHING_ENABLED = "true";
     env.GITHUB_CLIENT_SECRET = "";
+    expect(publishingReady(env)).toBe(false);
+    env.GITHUB_CLIENT_SECRET = "secret-12345678901234567890";
+    env.PILOT_GITHUB_USER_ID = undefined;
     expect(publishingReady(env)).toBe(false);
   });
 
@@ -270,6 +274,26 @@ describe("v0.5 securely gated GitHub OAuth publishing", () => {
       undefined, logged.accessToken), env, now + 2000)).status).toBe(200);
     expect((await handlePublishingRequest(req("/v1/me", "GET",
       undefined, logged.accessToken), env, now + 3000)).status).toBe(401);
+  });
+
+  it("denies an unapproved GitHub numeric ID even when the login name matches", async () => {
+    const env = createEnv();
+    const verifier = "u".repeat(55);
+    const challenge = await pkceChallenge(verifier);
+    const begin = await handlePublishingRequest(
+      req("/v1/auth/github/start", "POST", { challenge }), env, now);
+    expect(begin.status).toBe(200);
+    const data = await begin.json() as { state: string };
+    const wrongIdentity: typeof fetch = async (url) =>
+      String(url).includes("access_token")
+        ? Response.json({ access_token: "gho_test_0123456789" })
+        : Response.json({ id: 999999, login: "guitar0788" });
+    const callback = await oauthCallback(new Request(apiOrigin +
+      "v1/auth/github/callback?code=test-code&state=" + data.state),
+      env, now + 1000, wrongIdentity);
+    expect(callback.status).toBe(403);
+    expect(env.DB.tickets.size).toBe(0);
+    expect(env.DB.sessions.size).toBe(0);
   });
 
   it("rejects callback state replays", async () => {

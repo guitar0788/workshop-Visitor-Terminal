@@ -21,6 +21,8 @@ export interface PublishEnv {
   GITHUB_CLIENT_SECRET?: string;
   STUDIO_ORIGIN?: string;
   PUBLIC_API_ORIGIN?: string;
+  /** Pilot allowlist: verified numeric GitHub user ID; required for enabled auth. */
+  PILOT_GITHUB_USER_ID?: string;
   VISIT_HASH_SECRET: string;
 }
 export interface PublishSession {
@@ -107,7 +109,10 @@ export function publishingReady(env: PublishEnv): boolean {
     typeof env.GITHUB_CLIENT_SECRET === "string" && env.GITHUB_CLIENT_SECRET.length >= 16 &&
     typeof env.VISIT_HASH_SECRET === "string" && env.VISIT_HASH_SECRET.length >= 32 &&
     Boolean(env.DB) && Boolean(validateOrigin(env.PUBLIC_API_ORIGIN, false)) &&
-    Boolean(validateOrigin(env.STUDIO_ORIGIN, true));
+    Boolean(validateOrigin(env.STUDIO_ORIGIN, true)) &&
+    typeof env.PILOT_GITHUB_USER_ID === "string" &&
+    /^[1-9][0-9]{0,15}$/.test(env.PILOT_GITHUB_USER_ID) &&
+    Number.isSafeInteger(Number(env.PILOT_GITHUB_USER_ID));
 }
 
 export function studioCors(request: Request, env: PublishEnv): Record<string, string> {
@@ -248,6 +253,12 @@ export async function oauthCallback(
       typeof profile.id !== "number" || !Number.isSafeInteger(profile.id) || profile.id <= 0 ||
       typeof profile.login !== "string" || !LOGIN.test(profile.login)) {
     return fail("Invalid verified GitHub identity", 502);
+  }
+  // The beta is a single-account OAuth pilot. The verified immutable GitHub
+  // numeric ID is compared after the GitHub API call; a matching login string
+  // or a forged browser header can never bypass this server-side check.
+  if (profile.id !== Number(env.PILOT_GITHUB_USER_ID)) {
+    return fail("This beta is restricted to the approved test account", 403);
   }
   const ticket = secureBytes(32);
   const issued = await env.DB.prepare(
