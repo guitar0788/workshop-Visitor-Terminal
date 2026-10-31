@@ -265,6 +265,102 @@ describe("v0.5 securely gated GitHub OAuth publishing", () => {
       { design }, logged.accessToken), env, now + 5200)).status).toBe(200);
   });
 
+  it("isolates two verified numeric accounts across OAuth, listing, quota, design and deletion", async () => {
+    // Simulate a controlled future migration in which the pilot allowlist
+    // switches between real, separately GitHub-verified numeric identities.
+    // This never removes or relaxes the single-owner production pilot gate.
+    const env = createEnv();
+    const first = await completeLogin(env);
+    const firstSlugs: string[] = [];
+    for (let index = 0; index < 2; index++) {
+      const response = await handlePublishingRequest(req("/v1/my/counters", "POST",
+        { design: clonePreset("pixel") }, first.accessToken), env, now + 2000 + index);
+      expect(response.status).toBe(201);
+      firstSlugs.push((await response.json() as {slug:string}).slug);
+    }
+    env.DB.counters.get(firstSlugs[0])!.hits = 75;
+    const originalDesign = env.DB.counters.get(firstSlugs[0])!.design_json;
+
+    // A later login using the identical display name must not inherit
+    // ownership. GitHub's numeric user ID is the only trusted key.
+    env.PILOT_GITHUB_USER_ID = "9002001";
+    expect((await handlePublishingRequest(req("/v1/my/counters", "GET",
+      undefined, first.accessToken), env, now + 3000)).status).toBe(401);
+    const verifier = "second-account-verifier-" + "q".repeat(56);
+    const begun = await handlePublishingRequest(req("/v1/auth/github/start", "POST",
+      { challenge: await pkceChallenge(verifier) }), env, now + 3100);
+    expect(begun.status).toBe(200);
+    const { state } = await begun.json() as {state:string};
+    const trustedSecond: typeof fetch = async (input) =>
+      String(input).includes("login/oauth/access_token")
+        ? Response.json({ access_token: "gho_second_owner" })
+        : Response.json({ id: 9002001, login: "guitar0788" });
+    const callback = await oauthCallback(new Request(apiOrigin +
+      "v1/auth/github/callback?code=second-code&state=" + state),
+      env, now + 3200, trustedSecond);
+    expect(callback.status).toBe(302);
+    const secondTicket = new URL(callback.headers.get("Location")!)
+      .searchParams.get("auth_ticket");
+    const redeemed = await handlePublishingRequest(req("/v1/auth/exchange", "POST",
+      { ticket: secondTicket, verifier }), env, now + 3300);
+    expect(redeemed.status).toBe(200);
+    const second = await redeemed.json() as {
+      user:{id:number;login:string};accessToken:string
+    };
+    expect(second.user).toEqual({id:9002001,login:"guitar0788"});
+    const listSecond = await handlePublishingRequest(req("/v1/my/counters", "GET",
+      undefined, second.accessToken), env, now + 3400);
+    expect((await listSecond.json() as {counters:unknown[]}).counters).toEqual([]);
+
+    const secondSlugs: string[] = [];
+    for (let index = 0; index < 3; index++) {
+      const created = await handlePublishingRequest(req("/v1/my/counters", "POST",
+        { design: clonePreset("cyber") }, second.accessToken),
+        env, now + 4000 + index);
+      expect(created.status).toBe(201);
+      secondSlugs.push((await created.json() as {slug:string}).slug);
+    }
+    expect((await handlePublishingRequest(req("/v1/my/counters", "POST",
+      { design: clonePreset("cyber") }, second.accessToken),
+      env, now + 4300)).status).toBe(409);
+    const forbiddenDesign = req("/v1/my/counters/" + firstSlugs[0] + "/design",
+      "PUT", { design: clonePreset("cyber") }, second.accessToken);
+    expect((await handlePublishingRequest(forbiddenDesign, env, now + 4400)).status).toBe(404);
+    expect((await handlePublishingRequest(req(
+      "/v1/my/counters/" + firstSlugs[0], "DELETE",
+      { confirm: "DELETE", confirmSlug: firstSlugs[0] }, second.accessToken),
+      env, now + 4450)).status).toBe(404);
+    expect(env.DB.counters.get(firstSlugs[0])?.hits).toBe(75);
+    expect(env.DB.counters.get(firstSlugs[0])?.design_json).toBe(originalDesign);
+
+    env.PILOT_GITHUB_USER_ID = "124379632";
+    expect((await handlePublishingRequest(req("/v1/my/counters", "GET",
+      undefined, second.accessToken), env, now + 4500)).status).toBe(401);
+    const firstList = await handlePublishingRequest(req("/v1/my/counters", "GET",
+      undefined, first.accessToken), env, now + 4600);
+    const own = (await firstList.json() as {counters:Array<{slug:string;hits:number}>}).counters;
+    expect(own.map(row => row.slug).sort()).toEqual([...firstSlugs].sort());
+    expect(own.find(row => row.slug === firstSlugs[0])?.hits).toBe(75);
+
+    expect((await handlePublishingRequest(req(
+      "/v1/my/counters/" + secondSlugs[0] + "/design", "PUT",
+      { design: clonePreset("minimal") }, first.accessToken),
+      env, now + 4700)).status).toBe(404);
+    expect((await handlePublishingRequest(req(
+      "/v1/my/counters/" + secondSlugs[0], "DELETE",
+      { confirm: "DELETE", confirmSlug: secondSlugs[0] }, first.accessToken),
+      env, now + 4750)).status).toBe(404);
+    expect((await handlePublishingRequest(req("/v1/my/counters", "POST",
+      { design: clonePreset("pixel") }, first.accessToken),
+      env, now + 4800)).status).toBe(201);
+    expect((await handlePublishingRequest(req("/v1/my/counters", "POST",
+      { design: clonePreset("pixel") }, first.accessToken),
+      env, now + 4900)).status).toBe(409);
+    expect(secondSlugs.every(slug => env.DB.counters.get(slug)?.owner_user_id === 9002001))
+      .toBe(true);
+    expect(env.DB.counters.size).toBe(6);
+  });
+
   it("keeps published slug and historical hits when updating a live design", async () => {
     const env = createEnv();
     const signedIn = await completeLogin(env);
