@@ -220,6 +220,7 @@ async function admin(request: Request, env: WorkerEnv, path: string, now: number
       admitted, maxDailyAdmitted: 20_000,
       remaining: Math.max(0, 20_000 - admitted),
       /** Rate limits apply in each Cloudflare location, not globally. */
+      edgeRateLimitsEnabled: env.SVG_RATE_LIMIT_ENABLED === "true",
       edgeLimitPerMinutePerCounter: 60,
       edgeLimitPerMinutePerLocation: 120
     });
