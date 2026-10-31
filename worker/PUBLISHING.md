@@ -39,7 +39,7 @@ To perform an authorized isolated OAuth pilot, the repository owner must explici
 2. Suggested application name: \`Workshop Visitor Terminal Staging\`.
 3. Homepage URL: \`https://guitar0788.github.io/workshop-Visitor-Terminal/\`
 4. Authorization callback URL: \`https://workshop-visitor-terminal-staging.fangcui2007.workers.dev/v1/auth/github/callback\`
-5. Configure \`GITHUB_CLIENT_ID\` and \`GITHUB_CLIENT_SECRET\` as private **cloudflare-staging Environment secrets** only after an explicit pilot authorization. Never send the client secret via chat, issues, screenshots or commit.
+5. Configure GitHub Environment secrets named **`CLIENT_ID`** and **`CLIENT_SECRET`** under **cloudflare-staging** (the `GITHUB_` prefix is reserved). The workflow maps them to the Worker's internal `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET` bindings. Never send the client secret via chat, issues, screenshots or commit.
 6. Before enabling the Worker, configure environment-specific values:
    - \`PUBLISHING_ENABLED=true\` **only** after credential and security validation.
    - \`STUDIO_ORIGIN=https://guitar0788.github.io/workshop-Visitor-Terminal/\`
@@ -86,7 +86,7 @@ v0.5 已增加 GitHub OAuth 登录、专用数据库表、用户身份与计数�
 2. 应用名称填写 \`Workshop Visitor Terminal Staging\`。
 3. **主页 URL**：\`https://guitar0788.github.io/workshop-Visitor-Terminal/\`
 4. **授权回调 URL**：\`https://workshop-visitor-terminal-staging.fangcui2007.workers.dev/v1/auth/github/callback\`
-5. 将新应用的 Client ID 和 Client Secret 存入 GitHub 环境 \`cloudflare-staging\` 的加密机密。不要把 Secret 发到聊天。
+5. 将新应用的 Client ID 和 Client Secret 分别存入 GitHub 环境 `cloudflare-staging` 的机密 `CLIENT_ID` 与 `CLIENT_SECRET`；GitHub 不允许创建 `GITHUB_` 前缀的自定义机密。工作流负责转为 Worker 内部变量，无需用户重新命名。不要把 Secret 发到聊天。
 6. 之后我们再经过审查，单独开启 Worker 与 GitHub Pages 的发布功能开关，并完成真实手机、跨用户和访问限制测试。
 
 ### 暂不进行的操作
