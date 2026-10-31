@@ -88,9 +88,9 @@ class MemoryD1 implements D1Binding {
   }
 }
 
-const setup = () => {
+const setup = (): WorkerEnv & { DB: MemoryD1 } => {
   const DB = new MemoryD1();
-  return { DB, ADMIN_TOKEN: TOKEN, VISIT_HASH_SECRET: HASH } satisfies WorkerEnv;
+  return { DB, ADMIN_TOKEN: TOKEN, VISIT_HASH_SECRET: HASH };
 };
 const adminRequest = (path: string, body?: unknown, token = TOKEN, method = "POST") =>
   new Request(BASE_URL + path, {
