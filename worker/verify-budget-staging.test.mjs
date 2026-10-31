@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  APPROVED_STAGING, validateUsage, fetchStagingUsage
+  APPROVED_STAGING, validateUsage, fetchStagingUsage, checkStagingSvgLimiter
 } from "./verify-budget-staging.mjs";
 
 const secret = "admin-" + "s".repeat(48);
@@ -57,4 +57,34 @@ test("fails closed on error pages without reading or printing their bodies", asy
       status: 503, headers: { "Content-Type": "text/html" }
     })
   }), /HTTP 503/);
+});
+ 
+test("checks SVG rate bindings with HEAD only and no live counter writes", async () => {
+  for (const status of [200, 404, 429]) {
+    const seen = [];
+    const obtained = await checkStagingSvgLimiter({
+      origin: APPROVED_STAGING,
+      fetchImpl: async (input, init) => {
+        seen.push({ input: String(input), method: init.method, redirect: init.redirect });
+        return new Response(null, {
+          status, headers: status === 429 ? { "Retry-After": "60" } : {}
+        });
+      }
+    });
+    assert.equal(obtained, status);
+    assert.deepEqual(seen, [{
+      input: APPROVED_STAGING + "/v1/counters/v000000000000000000000000.svg",
+      method: "HEAD", redirect: "manual"
+    }]);
+  }
+  for (const status of [301, 401, 403, 500, 503]) {
+    await assert.rejects(checkStagingSvgLimiter({
+      origin: APPROVED_STAGING,
+      fetchImpl: async () => new Response(null, { status })
+    }));
+  }
+  await assert.rejects(checkStagingSvgLimiter({
+    origin: "https://wrong.example",
+    fetchImpl: async () => { throw Error("Should not send any request"); }
+  }));
 });
