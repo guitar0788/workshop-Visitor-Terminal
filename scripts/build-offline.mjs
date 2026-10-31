@@ -93,12 +93,14 @@ export function inlineOfflineBundle(html, scriptJs, stylesCss) {
 
 async function build() {
   const temp = await mkdtemp(join(tmpdir(), "wvt-standalone-"));
+  let stage = "vite-build";
   try {
     const viteBin = join(ROOT, "node_modules", "vite", "bin", "vite.js");
     execFileSync(process.execPath, [viteBin, "build", "--base=./", "--outDir", temp], {
       cwd: ROOT, env: offlineEnvironment(),
       stdio: ["ignore", "pipe", "pipe"], timeout: 90000
     });
+    stage = "locate-static-assets";
     const html = await readFile(join(temp, "index.html"), "utf8");
     const scripts = [...html.matchAll(/<script\b[^>]*\bsrc="([^"]+)"[^>]*><\/script>/g)];
     const links = [...html.matchAll(/<link\b[^>]*\brel="stylesheet"[^>]*>/g)];
@@ -113,10 +115,12 @@ async function build() {
       !assets.includes(cssFile.split("/").at(-1))) {
       throw Error("Unexpected secondary asset would prevent complete offline usage");
     }
+    stage = "read-static-assets";
     const [js, css] = await Promise.all([
       readFile(join(temp, jsFile), "utf8"),
       readFile(join(temp, cssFile), "utf8")
     ]);
+    stage = "inline-and-validate";
     const selfContainedHtml = inlineOfflineBundle(html, js, css);
     const target = join(ROOT, "dist", OUT_NAME);
     await mkdir(dirname(target), { recursive: true });
@@ -130,8 +134,13 @@ async function build() {
     console.log("Output: dist/" + OUT_NAME);
   } catch (err) {
     // Avoid printing subprocess output or build-time environment secrets.
-    console.error("Offline edition build failed (no artifact has been published).");
-    throw Error(err instanceof Error ? err.message : "Unexpected offline build error");
+    // A fixed-stage name is safe to expose; never print tool stderr or env.
+    const reason = err instanceof Error ? err.message : "";
+    const safeReason = /^(?:Unexpected|Expected|Incomplete|Offline HTML|Standalone HTML)/.test(reason)
+      ? ": " + reason : "";
+    console.error("Offline edition build failed at " + stage + safeReason +
+      " (no artifact has been published).");
+    process.exitCode = 1;
   } finally {
     await rm(temp, { recursive: true, force: true });
   }
