@@ -4,7 +4,7 @@
 
 当前七项 GitHub 环境机密已由仓库所有者配置。
 
-GitHub 环境机密中的 OAuth 名称必须使用 **`CLIENT_ID`** 和 **`CLIENT_SECRET`**（GitHub 不允许创建 `GITHUB_` 前缀的自定义机密）。部署工作流会把这两项映射到 Worker 内部变量 `GITHUB_CLIENT_ID` 与 `GITHUB_CLIENT_SECRET`，无需重新创建密钥。此试运行专用于 Cloudflare staging，**不会自动部署，也不会修改 GitHub 个人主页或旧访问量**。
+GitHub 环境机密中的 OAuth 名称必须使用 **`CLIENT_ID`** 和 **`CLIENT_SECRET`**（GitHub 不允许创建 `GITHUB_` 前缀的自定义机密）。部署工作流会把这两项映射到 Worker 内部变量 `GITHUB_CLIENT_ID` 与 `GITHUB_CLIENT_SECRET`，无需重新创建密钥。此试运行专用于 Cloudflare staging；**已通过 CI 验收的 main 代码变更可自动部署**。不会修改 GitHub 个人主页或旧访问量。
 
 ### 请先确认 GitHub OAuth 应用设置
 
@@ -12,7 +12,17 @@ GitHub 环境机密中的 OAuth 名称必须使用 **`CLIENT_ID`** 和 **`CLIENT
 - 主页 URL：https://guitar0788.github.io/workshop-Visitor-Terminal/
 - 授权回调 URL：https://workshop-visitor-terminal-staging.fangcui2007.workers.dev/v1/auth/github/callback
 
-### 手动运行
+### 自动部署（v0.6 起）
+
+1. 开发人员提交 PR；GitHub Actions 的 **Verify** 必须全部通过才能合并。
+2. 合并到 `main` 后，新的 [OAuth Pilot Auto (verified main only)](https://github.com/guitar0788/workshop-Visitor-Terminal/actions/workflows/oauth-pilot-auto.yml) 等待该提交的 **Verify** 成功。**不需要填写确认词或手动点击运行。**
+3. 自动安全关卡要求：来源为本仓库 `main` 推送、验证状态成功、已验证提交仍为最新 `main`、`.github/pages-deploy-channel.txt` 仍为 `pilot`，而且提交包含 Worker、网页代码或相关构建文件修改。只有全满足才会读取 `cloudflare-staging` 的机密并启动部署。
+4. 自动部署沿用原有的 D1 身份保护、增量迁移、Cloudflare Worker 健康检查、OAuth 拒绝未授权来源等验证；只有 Worker 成功，才发布 GitHub Pages 内测界面。
+5. 仅修改文档、测试文件或 PR 评论不会启动 Cloudflare 部署。`Verify` 失败、来自 PR 或 fork、旧版提交、非内测发布通道都会拒绝自动部署。
+
+**可暂停自动部署：** 在审查过的 PR 中将 `.github/pages-deploy-channel.txt` 改为 `preview`。这样下一次 `main` 验收后，内测自动部署将停用，普通 Pages 预览自动发布恢复。切换通道不会自动关闭已部署的 Worker；若需完整回退，再依照本文「退出试运行」步骤操作。
+
+### 手动运行（仅用于主动重试或恢复）
 
 1. 打开 [OAuth Pilot (manual — owner only)](https://github.com/guitar0788/workshop-Visitor-Terminal/actions/workflows/oauth-pilot.yml)。
 2. 点击「运行工作流」，分支选择 main。
@@ -34,7 +44,7 @@ GitHub 环境机密中的 OAuth 名称必须使用 **`CLIENT_ID`** 和 **`CLIENT
 
 ### 内测期间的 GitHub Pages 发布保护
 
-仓库当前使用版本控制文件 `.github/pages-deploy-channel.txt`，内容为 `pilot`。因此，在 `main` 分支合并 PR、触发普通的 **Publish Workshop Studio** 自动工作流时，它会运行安全检查，但**不会覆盖已经成功发布的 OAuth 内测网页**。
+仓库当前使用版本控制文件 `.github/pages-deploy-channel.txt`，内容为 `pilot`。因此，在 `main` 分支合并 PR、触发普通的 **Publish Workshop Studio** 自动工作流时，它会运行安全检查，但**不会覆盖已经成功发布的 OAuth 内测网页**。符合条件的代码改动改由专门的 **OAuth Pilot Auto** 工作流部署内测版本。
 
 需要主动回到普通预览版时，依旧可以手动运行 **Publish Workshop Studio**（选择 `main`）。这属于明确的退出内测操作。之后如需重新启用内测，再手动运行 OAuth Pilot。不要通过清空 Cloudflare 数据库来处理网页版本。
 
@@ -48,13 +58,13 @@ GitHub 环境机密中的 OAuth 名称必须使用 **`CLIENT_ID`** 和 **`CLIENT
 
 ## English
 
-This is a manually confirmed, staging-only, single-owner GitHub OAuth pilot. It never changes the GitHub profile README or existing visitor counter.
+This is an owner-only GitHub OAuth staging pilot. Beginning with v0.6, successful **Verify** runs from current `main` runtime changes automatically deploy through `oauth-pilot-auto.yml`; the manual OAuth workflow remains available for explicit retries. It never changes the GitHub profile README or existing visitor counter.
 
 Verify GitHub OAuth App homepage and callback URL above, then run [OAuth Pilot workflow](https://github.com/guitar0788/workshop-Visitor-Terminal/actions/workflows/oauth-pilot.yml) on main with confirm_scope = OAUTH-PILOT-ONLY and the exact staging_origin above.
 
 Only GitHub-verified numeric user ID 124379632 can receive a session. The workflow tests security gates before deploying the Worker and enabling the Pages beta interface. Other accounts are not authorized to publish.
 
-The tracked `.github/pages-deploy-channel.txt` is currently `pilot`: ordinary `main` pushes **skip the default-preview Pages deployment** rather than silently hiding the active OAuth login. A manual Publish Workshop Studio run still deliberately deploys the preview as a rollback. Switch the tracked channel to `preview` in a reviewed PR after the pilot ends to restore automatic preview deployments.
+The tracked `.github/pages-deploy-channel.txt` is currently `pilot`: ordinary `main` pushes **skip the default-preview Pages deployment** and, after successful `Verify`, the separate verified-main OAuth automation publishes the updated pilot instead of hiding login. A manual Publish Workshop Studio run still deliberately deploys the preview as a rollback. Switch the tracked channel to `preview` in a reviewed PR after the pilot ends to restore automatic preview deployments.
 
 To roll back, manually run the default [GitHub Pages workflow](https://github.com/guitar0788/workshop-Visitor-Terminal/actions/workflows/publish-pages.yml) and then the default [Cloudflare staging workflow](https://github.com/guitar0788/workshop-Visitor-Terminal/actions/workflows/cloudflare-staging.yml). Both normally disable the OAuth pilot, retaining D1 data.
 
