@@ -122,7 +122,7 @@ export function studioCors(request: Request, env: PublishEnv): Record<string, st
   return {
     "Access-Control-Allow-Origin": origin,
     "Access-Control-Allow-Headers": "Authorization, Content-Type",
-    "Access-Control-Allow-Methods": "GET, POST, PUT, OPTIONS",
+    "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
     "Access-Control-Max-Age": "600",
     "Vary": "Origin"
   };
@@ -364,6 +364,29 @@ async function editMine(
     markdown: "![Visitor counter](" + imageUrl(env, slug) + ")"
   });
 }
+/**
+ * Permanent removal. Require both an authenticated owner and an explicit
+ * typed slug in a JSON DELETE request. The D1 foreign-key constraint on
+ * request_windows cascades request receipts; published URLs cannot be reused.
+ * This operation deliberately does not touch any other counter or session.
+ */
+async function deleteMine(
+  request: Request, env: PublishEnv, user: PublishSession, slug: string
+): Promise<Response> {
+  if (!SLUG.test(slug)) return fail("Counter not found", 404);
+  const payload = await jsonBody(request);
+  if (!object(payload) || payload.confirmSlug !== slug ||
+      payload.confirm !== "DELETE") {
+    return fail("Confirm deletion with the exact counter ID and DELETE", 400);
+  }
+  const removed = await env.DB.prepare(
+    "DELETE FROM counters WHERE slug = ? AND owner_user_id = ?"
+  ).bind(slug, user.github_user_id).run();
+  if (!removed.success) throw new Error("Counter deletion failed");
+  if ((removed.meta?.changes ?? 0) !== 1) return fail("Counter not found", 404);
+  return respond({ slug, deleted: true });
+}
+
 async function logout(request: Request, env: PublishEnv): Promise<Response> {
   if (request.method !== "POST") return noMethods("POST");
   const header = request.headers.get("Authorization");
@@ -421,11 +444,15 @@ export async function handlePublishingRequest(
           : request.method === "POST"
             ? await createMine(request, env, user, now) : noMethods("GET, POST");
       } else {
-        const match = path.match(/^\/v1\/my\/counters\/([^/]+)\/design$/);
-        result = match
+        const designMatch = path.match(/^\/v1\/my\/counters\/([^/]+)\/design$/);
+        const counterMatch = path.match(/^\/v1\/my\/counters\/([^/]+)$/);
+        result = designMatch
           ? (request.method === "PUT"
-            ? await editMine(request, env, user, match[1]) : noMethods("PUT"))
-          : fail("Not found", 404);
+            ? await editMine(request, env, user, designMatch[1]) : noMethods("PUT"))
+          : counterMatch
+            ? (request.method === "DELETE"
+              ? await deleteMine(request, env, user, counterMatch[1]) : noMethods("DELETE"))
+            : fail("Not found", 404);
       }
     }
   } catch (cause) {

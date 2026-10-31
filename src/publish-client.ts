@@ -53,7 +53,7 @@ async function pkce(verifier: string): Promise<string> {
   return btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
 }
 
-async function api<T>(path: string, method: "GET" | "POST" | "PUT", body?: unknown,
+async function api<T>(path: string, method: "GET" | "POST" | "PUT" | "DELETE", body?: unknown,
   accessToken?: string): Promise<T> {
   if (!PUBLISH_UI_ENABLED) throw Error("Publishing is not available.");
   const response = await fetch(PUBLIC_API_ORIGIN + path, {
@@ -132,6 +132,16 @@ export async function savePublished(token: string, slug: string, design: Termina
   if (!/^v[a-f0-9]{24}$/.test(slug)) throw Error("Invalid counter identifier");
   return api<PublishedResult>("/v1/my/counters/" + slug + "/design", "PUT", { design }, token);
 }
+export async function deletePublishedCounter(token: string, slug: string): Promise<void> {
+  if (!/^v[a-f0-9]{24}$/.test(slug)) throw Error("Invalid counter identifier");
+  const result = await api<{ slug: string; deleted: boolean }>(
+    "/v1/my/counters/" + slug, "DELETE", { confirm: "DELETE", confirmSlug: slug }, token
+  );
+  if (result.deleted !== true || result.slug !== slug) {
+    throw Error("Counter deletion could not be confirmed");
+  }
+}
+
 export async function logoutPublishing(token: string): Promise<void> {
   await api("/v1/auth/logout", "POST", undefined, token);
 }

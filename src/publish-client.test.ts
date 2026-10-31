@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { PUBLISH_UI_ENABLED, markdownEmbed, readOAuthReturn } from "./publish-client";
+import { PUBLISH_UI_ENABLED, deletePublishedCounter, markdownEmbed, readOAuthReturn } from "./publish-client";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -10,6 +10,13 @@ describe("v0.5 browser publishing safety", () => {
   it("refuses arbitrary images as published README embed links", () => {
     expect(() => markdownEmbed("https://malicious.example/counter.svg")).toThrow();
     expect(() => markdownEmbed("javascript:alert(1)")).toThrow();
+  });
+  it("refuses invalid deletion IDs before any browser request", async () => {
+    for (const invalid of ["", "legacy", "v123", "v" + "g".repeat(24),
+      "v" + "a".repeat(24) + "/design", "../admin"]) {
+      await expect(deletePublishedCounter("session", invalid))
+        .rejects.toThrow("Invalid counter identifier");
+    }
   });
   it("removes one-use OAuth ticket and state from URL before exchanging them", () => {
     const ticket = "a".repeat(64), state = "b".repeat(64);

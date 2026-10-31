@@ -52,6 +52,12 @@ A dedicated **manual-only, staging-only** GitHub OAuth workflow is prepared. It 
 
 已准备 [GitHub OAuth 受限试运行操作说明](worker/OAUTH_PILOT.md)，七项机密由仓库所有者独立配置。只有经 GitHub 验证的测试账户能发布，普通网页部署仍默认关闭登录。**合并代码不等于已经启动云端 OAuth 试运行。**
 
+### v0.6 — owner-controlled deletion (pilot gated)
+
+The authenticated Studio adds [typed-confirmation deletion for owned published counters](worker/V06_DATA_LIFECYCLE.md). The Worker requires a valid GitHub session, exact Studio Origin, matching typed counter slug, and immutable verified owner ID. Removing one counter permanently invalidates its published SVG URL after caches expire and frees one of three publication slots. Existing counters are **never deleted automatically**. This does not yet enable public account registration or Cloudflare production deployment.
+
+v0.6 新增 [已发布计数器的安全删除与名额释放](worker/V06_DATA_LIFECYCLE.md)：需先登录 GitHub，输入完整计数器 ID 二次确认。删除后旧 SVG 地址失效，操作不可恢复；不会自动清空现有计数器或历史记录。此阶段仍限制为 staging 内测，不代表面向所有用户正式开放。
+
 ### v0.5 user-owned publishing (gated beta)
 
 [GitHub OAuth sign-in, verified ownership, D1-backed publishing, design updates, and README Markdown generation](worker/PUBLISHING.md) have been implemented behind an explicit server/browser launch gate. The export panel explains its current preview-only status. An isolated OAuth app and separate authorization are required before enabling sign-in; **never store GitHub OAuth secrets in Vite frontend variables**.
