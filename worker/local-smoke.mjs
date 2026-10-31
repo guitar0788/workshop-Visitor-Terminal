@@ -141,16 +141,22 @@ async function main() {
       ]
     };
     await checkedJson(await requestAdmin(adminPath + "/design", "POST", { design }), 200);
-    const updatedImage = await (await api(imagePath)).text();
+    const updatedImage = await (await api(imagePath, {
+      headers: { "CF-Connecting-IP": "203.0.113.16" }
+    })).text();
     assert.match(updatedImage, /本地计数测试 &lt;svg&gt;/,
       "Worker must render custom Chinese labels with escaped SVG markup");
 
+    // Record the observed total before reboot; restarting must not reset it.
+    const totalBeforeRestart = (await checkedJson(await requestAdmin(adminPath), 200)).hits;
+    assert.equal(totalBeforeRestart, 1,
+      "Refreshing the SVG from the same source must not create a second receipt");
     // Restart the actual runtime, using the SAME .wrangler/state D1 database.
     await shutdown();
     await sleep(800);
     await boot();
     const afterRestart = await checkedJson(await requestAdmin(adminPath), 200);
-    assert.equal(afterRestart.hits, 1,
+    assert.equal(afterRestart.hits, totalBeforeRestart,
       "Counter must survive a local Wrangler Worker restart");
     const migrated = await checkedJson(await requestAdmin(legacyAdmin), 200);
     assert.equal(migrated.hits, 47,
