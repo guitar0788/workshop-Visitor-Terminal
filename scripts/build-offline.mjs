@@ -85,13 +85,18 @@ export function inlineOfflineBundle(html, scriptJs, stylesCss) {
   const shell = result
     .replace(/<script type="module">[\s\S]*?<\/script>/, "<script></script>")
     .replace(/<style>[\s\S]*?<\/style>/, "<style></style>");
-  if (!result.includes(TAG) || !result.includes("connect-src 'none'") ||
-    /<script\b[^>]*\bsrc=/.test(shell) ||
-    /<link\b[^>]*\bhref=/.test(shell) ||
-    /<img\b[^>]*\bsrc=/.test(shell) ||
-    !result.includes('<script type="module">') ||
-    !result.includes("<style>")) {
-    throw Error("Offline HTML is not self-contained or lacks the deny-network policy");
+  const violations = [
+    ...(!result.includes(TAG) ? ["missing-mode-marker"] : []),
+    ...(!result.includes("connect-src 'none'") ? ["missing-network-deny"] : []),
+    ...(/<script\b[^>]*\bsrc=/.test(shell) ? ["external-script-tag"] : []),
+    ...(/<link\b[^>]*\bhref=/.test(shell) ? ["external-link-tag"] : []),
+    ...(/<img\b[^>]*\bsrc=/.test(shell) ? ["external-image-tag"] : []),
+    ...(!result.includes('<script type="module">') ? ["missing-inline-script"] : []),
+    ...(!result.includes("<style>") ? ["missing-inline-style"] : [])
+  ];
+  if (violations.length) {
+    // Diagnostic identifiers only; never output the bundled source.
+    throw Error("Offline HTML is not self-contained: " + violations.join(","));
   }
   return result;
 }
