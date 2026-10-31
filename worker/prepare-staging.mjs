@@ -49,9 +49,11 @@ export function buildStagingConfig(template, databaseId) {
   if (!UUID.test(databaseId) || !template.includes(PLACEHOLDER)) {
     throw Error("Invalid staging template or database ID");
   }
-  if (!template.includes('name = "workshop-visitor-terminal-staging"') ||
-      !template.includes('database_name = "workshop-visitor-terminal-staging"') ||
-      !template.includes('workers_dev = true')) {
+  // Anchor complete TOML assignments. A substring search for "name ="
+  // would incorrectly match a database_name assignment.
+  if (!/^name\s*=\s*"workshop-visitor-terminal-staging"\s*$/m.test(template) ||
+      !/^database_name\s*=\s*"workshop-visitor-terminal-staging"\s*$/m.test(template) ||
+      !/^workers_dev\s*=\s*true\s*$/m.test(template)) {
     throw Error("Staging template safety markers are missing");
   }
   return template.replace(PLACEHOLDER, databaseId);
