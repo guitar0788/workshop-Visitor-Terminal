@@ -136,7 +136,7 @@ export function renderSvg(input: unknown, visits: number): string {
         ')" x="', String(layer.x), '" y="', String(layer.y + 2),
         '" dominant-baseline="hanging" fill="', layer.color,
         '" font-size="', String(layer.fontSize),
-        '" font-family="ui-monospace, Menlo, Consolas, monospace" font-weight="',
+        '" font-family="ui-monospace, Menlo, Consolas, PingFang SC, Microsoft YaHei, Noto Sans CJK SC, monospace" font-weight="',
         layer.kind === "count" ? "700" : "600",
         '">', escapeXml(content), '</text>');
     }
