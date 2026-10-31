@@ -12,5 +12,13 @@ jobs:
         with:
           node-version: "22"
       - run: npm install
+      - name: Audit runtime dependencies
+        run: npm audit --omit=dev --audit-level=high
+      - name: Apply D1 migrations to a disposable local database
+        run: |
+          cp wrangler.example.toml wrangler.toml
+          sed -i 's/REPLACE_WITH_REAL_D1_DATABASE_ID/00000000-0000-0000-0000-000000000000/' wrangler.toml
+          npx wrangler d1 migrations apply workshop-visitor-terminal --local --config wrangler.toml
+          npx wrangler d1 execute workshop-visitor-terminal --local --config wrangler.toml --command "SELECT COUNT(*) AS total FROM counters;"
       - run: npm test
       - run: npm run build

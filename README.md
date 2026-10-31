@@ -6,7 +6,7 @@ A free, open-source visual studio for creating SVG visitor counters for GitHub p
 
 **[Open Workshop Studio / 打开在线编辑器](https://guitar0788.github.io/workshop-Visitor-Terminal/)**
 
-> **Alpha · v0.3 — This is a static visual editor, not a live visit-counting service.** All numbers shown are examples; hosted counting, persistent storage and dynamic README embed links are future milestones.
+> **Alpha · v0.4 — The online studio still exports static SVG. A separate Cloudflare Worker + D1 backend has been added for local/isolated testing; it has NOT been deployed to production.** All numbers shown are examples; hosted counting, persistent storage and dynamic README embed links are future milestones.
 
 ## English
 
@@ -34,6 +34,12 @@ A free, open-source visual studio for creating SVG visitor counters for GitHub p
 
 The downloaded SVG is **static**; it does not update visitor counts yet.
 
+### Backend prototype (v0.4)
+
+A separate Cloudflare Worker + D1 service is available in [worker/](worker/README.md), including a real persistent counting data model, image endpoint, restricted admin API, request deduplication and a guarded one-time legacy baseline. **Not publicly deployed; this GitHub Pages site does not count real visits yet.** No Cloudflare account or secret is included in this repository.
+
+Security limits: the endpoint counts **qualified upstream image requests, not unique visitors**. GitHub's proxy cache can suppress origin requests. Public enrollment and user-owned counters are deferred until stronger abuse protection and account authorization are implemented.
+
 ### Local development
 
 Node.js 20 or newer:
@@ -53,7 +59,7 @@ The app builds to the GitHub Pages project path. Pages deployment runs automatic
 
 **[立即打开在线编辑器](https://guitar0788.github.io/workshop-Visitor-Terminal/)**
 
-> **当前为 v0.3 测试版。** 网站已支持设计与导出，但显示的访问数字属于演示数据。真实计数服务、用户设计的在线托管以及动态 README 图片链接仍在规划中。
+> **当前为 v0.4 测试版。** 在线编辑器仍然只能导出静态 SVG；独立的 Cloudflare Worker + D1 计数后端已进入离线及隔离测试阶段，尚未部署生产环境。 网站已支持设计与导出，但显示的访问数字属于演示数据。真实计数服务、用户设计的在线托管以及动态 README 图片链接仍在规划中。
 
 ### 已实现的功能
 
@@ -80,6 +86,14 @@ The app builds to the GitHub Pages project path. Pages deployment runs automatic
 
 **注意：** 目前导出的 SVG 仅用于静态展示，**不会自动增加访问次数**。不要把示例数字当作真实访客数据。
 
+### v0.4 计数服务原型
+
+已新增 [Cloudflare Worker + D1 计数后端](worker/README.md)：包含持久化数据库表、动态 SVG 图片接口、管理员验证、短时间重复请求限制及一次性的历史计数迁移保护。
+
+**后端尚未部署，线上 GitHub Pages 编辑器仍然显示演示访问次数。** 此阶段不会修改你的 GitHub 个人主页，不会读取或覆盖旧计数服务的历史数据，也不会在 GitHub 仓库中保存 Cloudflare 密钥。
+
+请注意：GitHub 会通过图片代理和缓存加载 README 图片，因此后端只能统计实际到达服务的有效图片请求，不能保证每次打开主页都增加一次，更不能宣称是独立访客人数。公共用户注册与托管功能需要单独完成身份验证、防滥用与用量审查。
+
 ### 本地开发
 
 需要 Node.js 20 或更新版本：
@@ -100,9 +114,9 @@ npm run build
 | 3 | GitHub Pages editor / 在线编辑器 | Complete / 已上线 |
 | 3.1 | English + Simplified Chinese / 中英双语界面 | Complete / 已完成 |
 | 3.2 | Mobile Studio with undo/redo / 手机工作台、撤销与重做 | v0.3 |
-| 4 | Secure server-side designs / 安全的服务端设计托管 | Planned / 规划中 |
-| 5 | Cloudflare Workers + D1 counting / 真实访问统计 | Planned / 规划中 |
-| 6 | README embed links + legacy migration / 嵌入链接与旧计数迁移 | Planned / 规划中 |
+| 4 | Cloudflare Worker + D1 counter prototype / 计数后端原型 | In technical review / 技术审查中 |\n| 4.1 | Isolated deployment, abuse mitigation, and security checks / 隔离部署与安全验收 | Not authorized / 未授权 |
+| 5 | Hosted design publishing and public counter management / 在线设计发布及多用户管理 | Planned / 规划中 |
+| 6 | README dynamic image embed + verified legacy migration / 动态链接与可验证迁移 | Planned / 规划中 |
 
 **Counting disclaimer / 统计说明：** GitHub caches and proxies images in READMEs. A future counting endpoint will count requests that reach the service, not guaranteed unique human visitors or every profile view. GitHub 会缓存及代理 README 图片，因此未来的统计服务只能计算真正到达后端的请求，不能保证每次打开页面都会被统计，也不能将其视为精确的独立访客数量。
 
