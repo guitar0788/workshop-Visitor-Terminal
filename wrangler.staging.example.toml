@@ -1,0 +1,15 @@
+# STAGING ONLY. Generated wrangler.staging.toml is ignored by git.
+# Never connect this file to a production or personal GitHub counter database.
+name = "workshop-visitor-terminal-staging"
+main = "worker/index.ts"
+compatibility_date = "2026-10-30"
+workers_dev = true
+
+[[d1_databases]]
+binding = "DB"
+database_name = "workshop-visitor-terminal-staging"
+database_id = "STAGING_D1_ID_PLACEHOLDER"
+migrations_dir = "worker/migrations"
+
+[triggers]
+crons = ["17 * * * *"]
