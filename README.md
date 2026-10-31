@@ -62,7 +62,8 @@ To try a design in your own profile now, export the SVG, upload it to a reposito
 | --- | --- | --- |
 | 1 | Working SVG preview and templates | Complete |
 | 2 | Visual layer editing, keyboard controls, JSON save/load | Complete |
-| 3 | Free static editor on GitHub Pages | Deployment pending Pages configuration |\n| 4 | Secure server-rendered SVG and hosted designs | Planned |
+| 3 | Free static editor on GitHub Pages | Deployment pending Pages configuration |
+| 4 | Secure server-rendered SVG and hosted designs | Planned |
 | 5 | Cloudflare Workers + D1 request counting and abuse controls | Planned |
 | 6 | README embed link generator, legacy-count migration | Planned |
 
