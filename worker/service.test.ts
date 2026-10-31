@@ -109,6 +109,7 @@ async function register(env: WorkerEnv, slug = "demo"): Promise<Response> {
 describe("Cloudflare D1 counter Worker", () => {
   it("reports today's bounded quota only to the authorized administrator", async () => {
     const env = setup();
+    env.SVG_RATE_LIMIT_ENABLED = "true";
     const path = "/v1/admin/usage";
     const utcDay = Math.floor(NOW / (24 * 60 * 60_000));
     env.DB.budgets.set(utcDay, 19_999);
@@ -123,6 +124,7 @@ describe("Cloudflare D1 counter Worker", () => {
     expect(await response.json()).toMatchObject({
       admitted: 19_999, remaining: 1,
       maxDailyAdmitted: 20_000,
+      edgeRateLimitsEnabled: true,
       edgeLimitPerMinutePerCounter: 60,
       edgeLimitPerMinutePerLocation: 120
     });
