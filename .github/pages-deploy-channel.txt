@@ -1,0 +1,6 @@
+# Authorized deployment channel for ordinary pushes to main.
+# The first non-comment line must be pilot or preview.
+# pilot: GitHub Pages is managed by the explicit OAuth Pilot workflow;
+#        normal main pushes must NOT overwrite the live pilot login UI.
+# preview: normal main pushes automatically deploy the default preview editor.
+pilot
