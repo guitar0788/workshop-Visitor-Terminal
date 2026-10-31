@@ -26,3 +26,5 @@ jobs:
       - run: npm run build
       - name: Exercise real local Worker and persistent D1 across restart
         run: node worker/local-smoke.mjs
+      - name: Export and restore only the disposable local D1 database
+        run: node worker/backup-restore-drill.mjs

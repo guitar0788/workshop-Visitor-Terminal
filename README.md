@@ -58,6 +58,12 @@ The owner-only OAuth pilot now has an **automatic deployment workflow**: a succe
 
 现在可在代码合并到 `main` 且 **Verify 检查成功后自动部署 Cloudflare staging 与受限内测网页**，不必每次手工填写确认词。自动流程会严格核对最新提交、`pilot` 发布通道、D1 身份与原有 OAuth 保护；仅改文档、CI 失败或未授权分支不会自动部署。详细规则与暂停步骤见 [OAuth Pilot 文档](worker/OAUTH_PILOT.md)。
 
+### v0.6 — local D1 disaster-recovery drill and multi-account isolation
+
+[Recovery and tenant safety plan / D1 恢复与账户隔离方案](worker/V06_RECOVERY_AND_TENANTS.md) adds a CI-verified, **local-only** D1 SQL export → clean isolated import → integrity and ownership comparison → source-preservation test. Actual Cloudflare D1 restore remains manual and explicitly disallowed in automatic deployment; **no real staging data is exported**. Verified numeric GitHub ID cross-owner tests cover data listings, edits, deletion, independent quotas, and old-session invalidation without opening the owner-only public signup gate.
+
+新增 **本地 D1 恢复演练和双账户隔离回归测试**。CI 只处理临时的假数据库，不导出真实 Cloudflare 数据，不自动执行可能覆盖现有计数器的 Time Travel 恢复。正式多账户注册仍未开放。
+
 ### v0.6 — guarded SVG traffic and D1 daily write budget
 
 The staging pilot now adds [a two-layer abuse and cost guard](worker/V06_ABUSE_LIMITS.md): approximate per-location Cloudflare rate limits before D1 access, plus a database-enforced UTC-day cap of 20,000 new visit receipts shared by all published counters. SVG images remain readable when the daily write budget is reached; the counters pause until the next UTC day. This does **not** guarantee zero Cloudflare charges or enable public multiuser registration.
