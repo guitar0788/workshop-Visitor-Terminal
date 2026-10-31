@@ -49,8 +49,20 @@ function wrangler(args) {
     });
   } catch (cause) {
     // Wrangler errors can include SQL/export contents; redact all output.
-    throw new Error("Disposable Wrangler backup/restore drill failed (" +
-      (cause?.status ?? "unknown") + "), with no remote D1 operation");
+    // Only report the subcommand and a fixed table label, never SQL rows,
+    // an exported file, raw Wrangler stderr, or environment contents.
+    const phase = args[1] === "export" ? "local-export"
+      : args.includes("--file") ? "isolated-local-import"
+      : args.includes("--persist-to") ? "restored-local-query"
+      : "source-local-query";
+    const table = args.includes("--command")
+      ? args[args.indexOf("--command") + 1]?.match(
+          /(?:FROM|INTO|UPDATE)\s+(counters|request_windows|visit_day_budget|publish_oauth_states|publish_login_tickets|publish_sessions|sqlite_master)/i
+        )?.[1] ?? "metadata"
+      : "n/a";
+    throw new Error("Disposable D1 recovery " + phase + " failed (table=" +
+      table + ", exit=" + (cause?.status ?? "unknown") +
+      "); no remote D1 operation was attempted");
   }
 }
 
