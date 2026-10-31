@@ -208,6 +208,22 @@ async function seedLegacy(request: Request, env: WorkerEnv, slug: string, now: n
 
 async function admin(request: Request, env: WorkerEnv, path: string, now: number): Promise<Response> {
   if (!authorized(request, env)) return error("Unauthorized", 401);
+  if (path === "/v1/admin/usage") {
+    if (request.method !== "GET") return methodNotAllowed("GET");
+    const utcDay = Math.floor(now / DAY_MS);
+    const status = await env.DB.prepare(
+      "SELECT accepted FROM visit_day_budget WHERE utc_day = ?"
+    ).bind(utcDay).first<{ accepted: number }>();
+    const admitted = status?.accepted ?? 0;
+    return json({
+      utcDay: new Date(utcDay * DAY_MS).toISOString().slice(0, 10),
+      admitted, maxDailyAdmitted: 20_000,
+      remaining: Math.max(0, 20_000 - admitted),
+      /** Rate limits apply in each Cloudflare location, not globally. */
+      edgeLimitPerMinutePerCounter: 60,
+      edgeLimitPerMinutePerLocation: 120
+    });
+  }
   if (path === "/v1/admin/counters") {
     return request.method === "POST" ? createCounter(request, env, now) :
       methodNotAllowed("POST");
