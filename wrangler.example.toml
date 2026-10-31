@@ -1,0 +1,15 @@
+# Copy to wrangler.toml after creating a real Cloudflare D1 database.
+# Do NOT commit a production token, API key, or real database credentials.
+name = "workshop-visitor-terminal-api"
+main = "worker/index.ts"
+compatibility_date = "2026-10-31"
+workers_dev = true
+
+[[d1_databases]]
+binding = "DB"
+database_name = "workshop-visitor-terminal"
+database_id = "REPLACE_WITH_REAL_D1_DATABASE_ID"
+migrations_dir = "worker/migrations"
+
+[triggers]
+crons = ["17 * * * *"]
