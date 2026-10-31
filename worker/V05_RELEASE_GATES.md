@@ -13,7 +13,7 @@ Status: **Owner-only staging pilot GO; public-user launch NO-GO.**
 
 ## 未批准公开运营 / Public Release Blockers
 
-1. **Deployment channel interference — high.** Any normal push to `main` triggers `.github/workflows/publish-pages.yml`, which publishes the public editor with `VITE_PUBLISH_ENABLED` and `VITE_PUBLISH_PILOT` absent. It would hide the current OAuth pilot login UI despite the staging Worker still allowing OAuth. Do not merge PR #13 or other code while the pilot must stay accessible. A reviewed deployment-mode guard or explicit release-channel policy is required before resuming main pushes.
+1. **Deployment channel interference — mitigated for the pilot.** [PR #14](https://github.com/guitar0788/workshop-Visitor-Terminal/pull/14) introduced the tracked `.github/pages-deploy-channel.txt` marker (`pilot`) and safe Pages gate. The successful [push workflow #41226792363](https://github.com/guitar0788/workshop-Visitor-Terminal/actions/runs/41226792363) confirmed ordinary main merges now skip the default-preview Pages deploy. Before opening a public service, a reviewed release-channel transition and production rollout/rollback policy are still required.
 2. **User-controlled data lifecycle — high.** There is no authenticated counter deletion, reset, retention notice, or export/delete-account management. Never ask users to consume all three allowed counter slots for repeated tests.
 3. **Public abuse and cost controls — high.** OAuth start has a small per-IP rate gate, but hosted SVG requests still incur Worker/D1 cost. Need real edge-level rate controls, observation, quotas, alerting, and documented failure behavior before admitting arbitrary public accounts.
 4. **Account expansion / authorization — high.** The pilot deliberately hard-codes GitHub's verified numeric user ID. Do not remove this restriction merely to enable public sign-up; conduct cross-account manual and automated tests and document who can own/create/change counters.
@@ -34,14 +34,14 @@ Status: **Owner-only staging pilot GO; public-user launch NO-GO.**
 | V05-S7 | Phone browser | Login, owned list and Markdown copy operate correctly |
 | V05-S8 | Counter session expiration after one hour | Re-login required; no unauthorized save |
 | V05-S9 | Upload/edit malformed designs and cross-account access | Rejected without changing saved artwork |
-| V05-S10 | Default-pages deployment during pilot | **BLOCKED BY PROCEDURE** pending reviewed release-channel guard |
+| V05-S10 | Default-pages deployment during pilot | **PASS:** PR #14 release gate skipped main-push preview publication |
 
 ## 版本状态与后续合并策略
 
 - **Current production user-facing editor remains a staging pilot** until a separate signed-off public release. Do not replace the user's personal GitHub README or existing counter.
-- Keep PR #13 open on its own branch while the approved pilot is live; PR CI runs safely without publishing GitHub Pages.
+- PR #13 may be merged **after** verifying the PR #14 deployment gate remains on `pilot`; its code merge will not redeploy Pages or Cloudflare automatically. The backend security change must be deployed later through a separate owner-approved manual OAuth Pilot run.
 - No Cloudflare/D1 migration, OAuth credential rotation, public registration or Pages deploy is authorized by this acceptance report.
-- Do **not** click GitHub Actions → Publish Workshop Studio, nor use the default Cloudflare Staging workflow while the pilot must remain enabled; these are explicit rollback workflows that turn the pilot off.
+- Do **not** manually click GitHub Actions → Publish Workshop Studio or the default Cloudflare Staging workflow while the pilot must remain enabled; these are explicit rollback workflows that turn the pilot off. A normal main push now safely skips preview publishing.
 - To intentionally disable the pilot, follow [OAUTH_PILOT.md](OAUTH_PILOT.md) and verify both Pages and Worker state. D1 records are retained on rollback.
 
 ## 用户验证结果 / Manual result
