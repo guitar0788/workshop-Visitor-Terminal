@@ -53,6 +53,8 @@ jobs:
         run: npm test
       - name: Build production site
         run: npm run build
+      - name: Add downloadable, single-file offline editor
+        run: npm run build:offline
       - name: Configure Pages
         uses: actions/configure-pages@v5
       - name: Upload Pages artifact
