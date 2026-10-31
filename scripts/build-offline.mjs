@@ -80,22 +80,21 @@ export function inlineOfflineBundle(html, scriptJs, stylesCss) {
     .replace(links[0][0], "<style>" + safeCss + "</style>")
     .replace("<head>", "<head>\n    " + TAG + "\n    " + csp);
 
-  // Do not treat HTML-looking strings inside the bundled React JS/CSS as
-  // external HTML tags: inspect the true outer document shell instead.
-  const shell = result
-    .replace(/<script type="module">[\s\S]*?<\/script>/, "<script></script>")
-    .replace(/<style>[\s\S]*?<\/style>/, "<style></style>");
+  // Check the original outer document AFTER removing exactly the vetted
+  // Vite JS/CSS asset tags. The bundled React runtime may contain strings
+  // such as "<script src=...>"; examining the entire generated JS as if it
+  // were HTML produces false positives.
+  const originalShell = html.replace(scripts[0][0], "").replace(links[0][0], "");
   const violations = [
     ...(!result.includes(TAG) ? ["missing-mode-marker"] : []),
     ...(!result.includes("connect-src 'none'") ? ["missing-network-deny"] : []),
-    ...(/<script\b[^>]*\bsrc=/.test(shell) ? ["external-script-tag"] : []),
-    ...(/<link\b[^>]*\bhref=/.test(shell) ? ["external-link-tag"] : []),
-    ...(/<img\b[^>]*\bsrc=/.test(shell) ? ["external-image-tag"] : []),
+    ...(/<script\b[^>]*\bsrc=/.test(originalShell) ? ["external-script-tag"] : []),
+    ...(/<link\b[^>]*\bhref=/.test(originalShell) ? ["external-link-tag"] : []),
+    ...(/<img\b[^>]*\bsrc=/.test(originalShell) ? ["external-image-tag"] : []),
     ...(!result.includes('<script type="module">') ? ["missing-inline-script"] : []),
     ...(!result.includes("<style>") ? ["missing-inline-style"] : [])
   ];
   if (violations.length) {
-    // Diagnostic identifiers only; never output the bundled source.
     throw Error("Offline HTML is not self-contained: " + violations.join(","));
   }
   return result;
