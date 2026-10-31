@@ -399,6 +399,32 @@ button, a, input, select { -webkit-tap-highlight-color: transparent; }
 .publish-copy { margin: 13px 0 8px; }
 .publish-hint { color: #a0b6b2; margin: 9px 0; }
 .publish-notice { color: #b9ebc8; }
+/* Self-contained downloadable edition: served by GitHub Pages only for the
+   initial download; no server is involved once the file is opened locally. */
+.offline-distribution {
+  display: flex; align-items: center; justify-content: space-between;
+  flex-wrap: wrap; gap: 12px; margin: 14px 0 10px;
+  padding: 14px; border: 1px solid #416c6d; border-radius: 12px;
+  background: #172b31; color: #e0f2ef;
+}
+.offline-distribution strong { display: block; font-size: 13px; }
+.offline-distribution p {
+  font-size: 12px; line-height: 1.6; color: #b4d3ce;
+  margin: 6px 0 0; max-width: 530px;
+}
+.offline-distribution a {
+  flex: 0 0 auto; display: inline-flex; justify-content: center; align-items: center;
+  min-height: 44px; padding: 10px 14px; background: #2c7566;
+  border: 1px solid #75bda7; border-radius: 8px; color: #f6fffb;
+  font-size: 12px; font-weight: 750; text-decoration: none;
+}
+.offline-distribution a:focus-visible {
+  outline: 2px solid #9ef7cf; outline-offset: 3px;
+}
+@media (max-width: 560px) {
+  .offline-distribution a { flex: 1 1 100%; }
+}
+
 .publish-account {
   display: flex; gap: 12px; justify-content: space-between;
   align-items: center; flex-wrap: wrap; margin-top: 14px;
