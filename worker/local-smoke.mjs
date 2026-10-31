@@ -74,7 +74,7 @@ async function shutdown() {
 async function main() {
   await writeFile(".dev.vars",
     "ADMIN_TOKEN=" + secret + "\nVISIT_HASH_SECRET=" + hashSecret + "\n",
-    { mode: 0o600 });
+    { mode: 0o600, flag: "wx" }); // Refuse to overwrite an existing developer secret file.
 
   try {
     await boot();
