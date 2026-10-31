@@ -1,14 +1,16 @@
 import { clonePreset, renderSvg, sanitizeDesign } from "../src/model";
+import { handlePublishingRequest, prunePublishAuth, type PublishEnv } from "./publishing";
 
 // Structural subset of the Cloudflare D1 Worker binding for offline testing.
 export interface D1Result { success: boolean; meta?: { changes?: number } }
 export interface D1Statement {
   bind(...values: Array<string | number | null>): D1Statement;
   first<T = Record<string, unknown>>(): Promise<T | null>;
+  all<T = Record<string, unknown>>(): Promise<{ results: T[]; success: boolean }>;
   run(): Promise<D1Result>;
 }
 export interface D1Binding { prepare(query: string): D1Statement }
-export interface WorkerEnv {
+export interface WorkerEnv extends PublishEnv {
   DB: D1Binding;
   ADMIN_TOKEN: string;
   VISIT_HASH_SECRET: string;
@@ -209,6 +211,11 @@ export async function handleRequest(
         methodNotAllowed("GET");
     }
     if (!configured(env)) return error("Service configuration unavailable", 503);
+    // v0.5 user routes are separately gated and cannot use ADMIN_TOKEN.
+    if (path.startsWith("/v1/auth/") || path === "/v1/me" ||
+        path.startsWith("/v1/my/")) {
+      return await handlePublishingRequest(request, env, now);
+    }
     if (path.startsWith("/v1/admin/")) return await admin(request, env, path, now);
     const match = path.match(/^\/v1\/counters\/([^/]+)\.svg$/);
     return match ? await image(request, env, match[1], now) : error("Not found", 404);
@@ -228,4 +235,6 @@ export async function handleRequest(
 export async function pruneReceipts(env: WorkerEnv, now = Date.now()): Promise<void> {
   await env.DB.prepare("DELETE FROM request_windows WHERE bucket < ?")
     .bind(Math.floor((now - DAY_MS) / WINDOW_MS)).run();
+  // Separate OAuth state, ticket, and session cleanup never touches counters.
+  await prunePublishAuth(env, now);
 }
