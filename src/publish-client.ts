@@ -150,10 +150,11 @@ export async function deletePublishedCounter(token: string, slug: string): Promi
   }
 }
 
-export async function exportPublishedAccount(
-  token: string, expectedUser: PublishUser
-): Promise<PublishedAccountExport> {
-  const response: unknown = await api("/v1/my/export", "GET", undefined, token);
+/** Reject a wrong-account, malformed or off-origin export before saving it. */
+export function verifyPublishedAccountExport(
+  response: unknown, expectedUser: PublishUser,
+  expectedOrigin = PUBLIC_API_ORIGIN
+): PublishedAccountExport {
   if (!response || typeof response !== "object" || !("formatVersion" in response) ||
       response.formatVersion !== 1 || !("account" in response) ||
       !response.account || typeof response.account !== "object" ||
@@ -168,7 +169,7 @@ export async function exportPublishedAccount(
             !("slug" in value) || typeof value.slug !== "string" ||
             !/^v[a-f0-9]{24}$/.test(value.slug) ||
             !("imageUrl" in value) || typeof value.imageUrl !== "string" ||
-            !value.imageUrl.startsWith(PUBLIC_API_ORIGIN + "/v1/counters/") ||
+            value.imageUrl !== expectedOrigin + "/v1/counters/" + value.slug + ".svg" ||
             !("design" in value) || !value.design ||
             typeof value.design !== "object" ||
             !("schemaVersion" in value.design) || value.design.schemaVersion !== 1) return false;
@@ -177,6 +178,13 @@ export async function exportPublishedAccount(
     throw Error("Unexpected account export response");
   }
   return response as PublishedAccountExport;
+}
+
+export async function exportPublishedAccount(
+  token: string, expectedUser: PublishUser
+): Promise<PublishedAccountExport> {
+  const response: unknown = await api("/v1/my/export", "GET", undefined, token);
+  return verifyPublishedAccountExport(response, expectedUser);
 }
 
 /** Permanently revoke all live sessions, but never delete published counters. */
