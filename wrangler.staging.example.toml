@@ -13,3 +13,8 @@ migrations_dir = "worker/migrations"
 
 [triggers]
 crons = ["17 * * * *"]
+
+# v0.5 publishing is opt-in. OAuth is NOT configured or activated in v0.4 staging.
+# Never flip this without a separate security review and real GitHub OAuth app.
+[vars]
+PUBLISHING_ENABLED = "false"
