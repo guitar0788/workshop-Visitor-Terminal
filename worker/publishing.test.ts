@@ -244,10 +244,17 @@ describe("v0.5 securely gated GitHub OAuth publishing", () => {
     const hex = Array.from(new Uint8Array(hash), x => x.toString(16).padStart(2, "0")).join("");
     env.DB.sessions.set(hex, { github_user_id: 9, github_login: "someone",
       expires_at: now + 60 * 60_000 });
+    // The private pilot must refuse a non-allowlisted account before DB access.
     expect((await handlePublishingRequest(req("/v1/my/counters/" + slug + "/design", "PUT",
-      { design }, otherToken), env, now + 5000)).status).toBe(404);
+      { design }, otherToken), env, now + 5000)).status).toBe(401);
+    // Even if that account becomes the allowlisted pilot, SQL ownership still
+    // prevents it from editing a counter created by the previous account.
+    env.PILOT_GITHUB_USER_ID = "9";
     expect((await handlePublishingRequest(req("/v1/my/counters/" + slug + "/design", "PUT",
-      { design }, logged.accessToken), env, now + 5000)).status).toBe(200);
+      { design }, otherToken), env, now + 5100)).status).toBe(404);
+    env.PILOT_GITHUB_USER_ID = "124379632";
+    expect((await handlePublishingRequest(req("/v1/my/counters/" + slug + "/design", "PUT",
+      { design }, logged.accessToken), env, now + 5200)).status).toBe(200);
   });
 
   it("keeps published slug and historical hits when updating a live design", async () => {
