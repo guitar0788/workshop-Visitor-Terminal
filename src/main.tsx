@@ -13,7 +13,7 @@ import {
   type EditHistory
 } from "./history";
 import {
-  PUBLISH_UI_ENABLED, PUBLISH_PILOT_MODE, beginGitHubLogin, exchangeGitHubReturn, logoutPublishing,
+  OFFLINE_DEMO_MODE, PUBLISH_UI_ENABLED, PUBLISH_PILOT_MODE, beginGitHubLogin, exchangeGitHubReturn, logoutPublishing,
   deletePublishedCounter, exportPublishedAccount, markdownEmbed, myCounters, publishDesign,
   readOAuthReturn, revokeAllPublishedSessions, savePublished,
   type PublishedCounter, type PublishSession
@@ -265,7 +265,7 @@ function App() {
         <div className="publish-heading">
           <h3>{t.publishTitle}</h3>
           <span className={"publish-indicator" + (PUBLISH_UI_ENABLED ? " available" : "")}>
-            {PUBLISH_UI_ENABLED ? "BETA" : "PREVIEW"}
+            {OFFLINE_DEMO_MODE ? "OFFLINE" : PUBLISH_UI_ENABLED ? "BETA" : "PREVIEW"}
           </span>
         </div>
         {PUBLISH_UI_ENABLED && PUBLISH_PILOT_MODE && (
@@ -273,8 +273,12 @@ function App() {
         )}
         {!PUBLISH_UI_ENABLED ? (
           <>
-            <p className="publish-copy">{t.publishUnavailable}</p>
-            <p className="publish-hint">{t.publishPreviewWarning}</p>
+            <p className="publish-copy">
+              {OFFLINE_DEMO_MODE ? t.offlinePublishUnavailable : t.publishUnavailable}
+            </p>
+            <p className="publish-hint">
+              {OFFLINE_DEMO_MODE ? t.offlinePublishWarning : t.publishPreviewWarning}
+            </p>
           </>
         ) : !publishSession ? (
           <>
@@ -765,6 +769,18 @@ function App() {
             onClick={copySvg}>{t.copySvg}</button>
         </div>
         <p className="notice" role="status">{t[noticeKey]}</p>
+        {!OFFLINE_DEMO_MODE && (
+          <section className="offline-distribution" aria-label={t.offlineDownloadTitle}>
+            <div>
+              <strong>{t.offlineDownloadTitle}</strong>
+              <p>{t.offlineDownloadDescription}</p>
+            </div>
+            <a download="Workshop-Studio-Offline.html"
+              href={import.meta.env.BASE_URL + "Workshop-Studio-Offline.html"}>
+              {t.offlineDownloadAction}
+            </a>
+          </section>
+        )}
         {renderPublishing()}
         <div className="disclaimer">{t.disclosure}</div>
       </>
