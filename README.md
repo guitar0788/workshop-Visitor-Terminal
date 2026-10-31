@@ -40,7 +40,7 @@ npm test
 npm run build
 ~~~
 
-The app builds to the GitHub Pages project path. Pages deployment runs automatically on merges into \`main\`.
+The app builds to the GitHub Pages project path. Pages deployment runs automatically on merges into `main`.
 
 ## 简体中文
 
