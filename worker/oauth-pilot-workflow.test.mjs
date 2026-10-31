@@ -27,6 +27,18 @@ test("requires remote DB guard and OAuth readiness before exposing the Pages UI"
   assert.match(workflow, /VITE_PUBLISH_PILOT: "true"/);
 });
 
+test("GitHub OAuth uses allowed CLIENT_* secret names without changing Worker env names", () => {
+  const prefix = "$" + "{", suffix = "}";
+  const idLines = workflow.split("\n").filter(line =>
+    line.trim() === "GITHUB_CLIENT_ID: " + prefix + "{ secrets.CLIENT_ID " + suffix + suffix);
+  const secretLines = workflow.split("\n").filter(line =>
+    line.trim() === "GITHUB_CLIENT_SECRET: " + prefix + "{ secrets.CLIENT_SECRET " + suffix + suffix);
+  assert.equal(idLines.length, 2);
+  assert.equal(secretLines.length, 1);
+  assert.doesNotMatch(workflow, /secrets\.GITHUB_CLIENT_(?:ID|SECRET)/);
+  assert.doesNotMatch(normal, /secrets\.CLIENT_(?:ID|SECRET)/);
+});
+
 test("default workflows still disable the pilot when manually redeployed", () => {
   assert.doesNotMatch(normal, /GITHUB_CLIENT_SECRET|VITE_PUBLISH_ENABLED/);
   assert.doesNotMatch(pages, /VITE_PUBLISH_ENABLED|VITE_PUBLISH_PILOT/);
