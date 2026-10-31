@@ -191,7 +191,7 @@ async function main() {
     });
     assert.equal(exhaustedImage.status, 200,
       "Reaching the D1 write budget must not break a publicly embedded SVG");
-    assert.match(await exhaustedImage.text(), /<svg\\b/);
+    assert.match(await exhaustedImage.text(), /<svg\b/);
     assert.equal((await checkedJson(await requestAdmin(adminPath), 200)).hits,
       beforeExhausted,
       "No new visit receipt is admitted after the global UTC-day budget is exhausted");
