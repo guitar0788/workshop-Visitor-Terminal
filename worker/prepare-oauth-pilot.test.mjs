@@ -33,6 +33,14 @@ test("prepares strictly allowlisted staging OAuth configuration", () => {
   assert(result.config.includes('STUDIO_ORIGIN = "' + APPROVED_STUDIO + '"'));
   assert(result.config.includes('PUBLIC_API_ORIGIN = "' + APPROVED_ORIGIN + '/"'));
   assert(result.config.includes('PILOT_GITHUB_USER_ID = "' + APPROVED_GITHUB_USER_ID + '"'));
+  assert.match(result.config, /^SVG_RATE_LIMIT_ENABLED = "true"$/m);
+  assert.match(result.config, /name = "SVG_RATE_LIMITER"/);
+  assert.match(result.config, /name = "SVG_GLOBAL_RATE_LIMITER"/);
+  assert.match(result.config, /namespace_id = "260601004"/);
+  assert.match(result.config, /namespace_id = "260601005"/);
+  assert.equal((result.config.match(/period = 60/g) ?? []).length, 2);
+  assert.match(result.config, /limit = 60/);
+  assert.match(result.config, /limit = 120/);
   assert(!result.config.includes(fixture().GITHUB_CLIENT_SECRET));
   assert.equal(result.workerSecrets.GITHUB_CLIENT_ID, fixture().GITHUB_CLIENT_ID);
   assert.equal(result.workerSecrets.GITHUB_CLIENT_SECRET, fixture().GITHUB_CLIENT_SECRET);
