@@ -439,16 +439,17 @@ describe("v0.5 securely gated GitHub OAuth publishing", () => {
       req("/v1/my/counters", "POST", { design: clonePreset("pixel") },
         logged.accessToken), env, now + 2000
     )).status).toBe(409);
-    env.DB.counters.set("legacy", {
-      slug: "legacy", owner: "guitar0788", owner_user_id: null,
+    const legacySlug = "v222222222222222222222222";
+    env.DB.counters.set(legacySlug, {
+      slug: legacySlug, owner: "guitar0788", owner_user_id: null,
       hits: 300, created_at: "2026-01-01T00:00:00Z",
       design_json: JSON.stringify(clonePreset("pixel"))
     });
-    const target = "/v1/my/counters/legacy";
+    const target = "/v1/my/counters/" + legacySlug;
     expect((await handlePublishingRequest(req(target, "DELETE",
-      { confirm: "DELETE", confirmSlug: "legacy" }, logged.accessToken),
+      { confirm: "DELETE", confirmSlug: legacySlug }, logged.accessToken),
       env, now + 3000)).status).toBe(404);
-    expect(env.DB.counters.get("legacy")?.hits).toBe(300);
+    expect(env.DB.counters.get(legacySlug)?.hits).toBe(300);
 
     env.DB.counters.set("v111111111111111111111111", {
       slug: "v111111111111111111111111", owner: "another",
