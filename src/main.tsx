@@ -229,7 +229,7 @@ function App() {
                   key={item.slug}>
                   <div className="published-summary">
                     <strong>{item.slug}</strong>
-                    <span>{item.hits.toLocaleString()} {t.elements}</span>
+                    <span>{item.hits.toLocaleString()} {t.publishVisits}</span>
                   </div>
                   <div className="published-controls">
                     <button type="button" className="secondary small"
