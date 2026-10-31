@@ -244,10 +244,126 @@ describe("v0.5 securely gated GitHub OAuth publishing", () => {
     const hex = Array.from(new Uint8Array(hash), x => x.toString(16).padStart(2, "0")).join("");
     env.DB.sessions.set(hex, { github_user_id: 9, github_login: "someone",
       expires_at: now + 60 * 60_000 });
+    // The private pilot must refuse a non-allowlisted account before DB access.
     expect((await handlePublishingRequest(req("/v1/my/counters/" + slug + "/design", "PUT",
-      { design }, otherToken), env, now + 5000)).status).toBe(404);
+      { design }, otherToken), env, now + 5000)).status).toBe(401);
+    // Even if that account becomes the allowlisted pilot, SQL ownership still
+    // prevents it from editing a counter created by the previous account.
+    env.PILOT_GITHUB_USER_ID = "9";
     expect((await handlePublishingRequest(req("/v1/my/counters/" + slug + "/design", "PUT",
-      { design }, logged.accessToken), env, now + 5000)).status).toBe(200);
+      { design }, otherToken), env, now + 5100)).status).toBe(404);
+    env.PILOT_GITHUB_USER_ID = "124379632";
+    expect((await handlePublishingRequest(req("/v1/my/counters/" + slug + "/design", "PUT",
+      { design }, logged.accessToken), env, now + 5200)).status).toBe(200);
+  });
+
+  it("keeps published slug and historical hits when updating a live design", async () => {
+    const env = createEnv();
+    const signedIn = await completeLogin(env);
+    const original = clonePreset("pixel");
+    const publish = await handlePublishingRequest(
+      req("/v1/my/counters", "POST", { design: original }, signedIn.accessToken),
+      env, now + 2_000
+    );
+    expect(publish.status).toBe(201);
+    const initial = await publish.json() as {
+      slug: string; imageUrl: string; markdown: string
+    };
+    const stored = env.DB.counters.get(initial.slug);
+    expect(stored).toBeDefined();
+    if (!stored) throw Error("Newly created counter missing from mock D1");
+    // Simulate a counter that has already received qualifying upstream visits.
+    stored.hits = 37;
+    const updated = clonePreset("pixel");
+    const title = updated.layers.find(layer => layer.id === "heading");
+    expect(title).toBeDefined();
+    if (title) title.text = "V05-STAGING-DESIGN-UPDATED";
+    const changed = await handlePublishingRequest(
+      req("/v1/my/counters/" + initial.slug + "/design", "PUT",
+        { design: updated }, signedIn.accessToken), env, now + 3_000
+    );
+    expect(changed.status).toBe(200);
+    const result = await changed.json() as {
+      slug: string; saved: boolean; imageUrl: string; markdown: string
+    };
+    expect(result.saved).toBe(true);
+    expect(result.slug).toBe(initial.slug);
+    expect(result.imageUrl).toBe(initial.imageUrl);
+    expect(result.markdown).toBe(initial.markdown);
+    expect(stored.hits).toBe(37);
+    const list = await handlePublishingRequest(
+      req("/v1/my/counters", "GET", undefined, signedIn.accessToken),
+      env, now + 4_000
+    );
+    expect(list.status).toBe(200);
+    const entries = await list.json() as {
+      counters: Array<{slug:string;hits:number;imageUrl:string;design:{
+        layers: Array<{id:string;text:string}>
+      }}>
+    };
+    expect(entries.counters).toHaveLength(1);
+    expect(entries.counters[0].slug).toBe(initial.slug);
+    expect(entries.counters[0].imageUrl).toBe(initial.imageUrl);
+    expect(entries.counters[0].hits).toBe(37);
+    expect(entries.counters[0].design.layers.find(layer => layer.id === "heading")?.text)
+      .toBe("V05-STAGING-DESIGN-UPDATED");
+  });
+
+  it("denies anonymous reads and writes, foreign browser origins and revoked sessions", async () => {
+    const env = createEnv();
+    const logged = await completeLogin(env);
+    const design = clonePreset("pixel");
+    const created = await handlePublishingRequest(
+      req("/v1/my/counters", "POST", { design }, logged.accessToken),
+      env, now + 2_000
+    );
+    expect(created.status).toBe(201);
+    const { slug } = await created.json() as { slug: string };
+    const originalJson = env.DB.counters.get(slug)?.design_json;
+    const altered = clonePreset("pixel");
+    const alteredHeading = altered.layers.find(layer => layer.id === "heading");
+    if (alteredHeading) alteredHeading.text = "MUST-NOT-BE-WRITTEN";
+
+    expect((await handlePublishingRequest(
+      req("/v1/my/counters", "GET"), env, now + 3_000
+    )).status).toBe(401);
+    expect((await handlePublishingRequest(
+      req("/v1/my/counters/" + slug + "/design", "PUT", { design: altered }),
+      env, now + 3_100
+    )).status).toBe(401);
+    const foreign = await handlePublishingRequest(
+      req("/v1/my/counters/" + slug + "/design", "PUT",
+        { design: altered }, logged.accessToken, "https://attacker.example"),
+      env, now + 3_200
+    );
+    expect(foreign.status).toBe(403);
+    expect(foreign.headers.get("Access-Control-Allow-Origin")).toBeNull();
+    expect(env.DB.counters.get(slug)?.design_json).toBe(originalJson);
+
+    expect((await handlePublishingRequest(
+      req("/v1/auth/logout", "POST", undefined, logged.accessToken),
+      env, now + 4_000
+    )).status).toBe(200);
+    expect((await handlePublishingRequest(
+      req("/v1/my/counters", "GET", undefined, logged.accessToken),
+      env, now + 4_100
+    )).status).toBe(401);
+    expect((await handlePublishingRequest(
+      req("/v1/my/counters/" + slug + "/design", "PUT",
+        { design: altered }, logged.accessToken),
+      env, now + 4_200
+    )).status).toBe(401);
+    expect(env.DB.counters.get(slug)?.design_json).toBe(originalJson);
+
+    // A new verified sign-in recovers the same D1 counter, not a fresh one.
+    const signedInAgain = await completeLogin(env);
+    const mine = await handlePublishingRequest(
+      req("/v1/my/counters", "GET", undefined, signedInAgain.accessToken),
+      env, now + 5_000
+    );
+    expect(mine.status).toBe(200);
+    const records = await mine.json() as {counters:Array<{slug:string}>};
+    expect(records.counters.map(counter => counter.slug)).toContain(slug);
   });
 
   it("does not assign legacy counters to matching GitHub usernames", async () => {
@@ -274,6 +390,44 @@ describe("v0.5 securely gated GitHub OAuth publishing", () => {
       undefined, logged.accessToken), env, now + 2000)).status).toBe(200);
     expect((await handlePublishingRequest(req("/v1/me", "GET",
       undefined, logged.accessToken), env, now + 3000)).status).toBe(401);
+  });
+
+  it("revokes previously issued sessions as soon as the numeric pilot allowlist changes", async () => {
+    const env = createEnv();
+    const logged = await completeLogin(env);
+    const created = await handlePublishingRequest(
+      req("/v1/my/counters", "POST", { design: clonePreset("pixel") },
+        logged.accessToken), env, now + 2_000
+    );
+    expect(created.status).toBe(201);
+    const { slug } = await created.json() as { slug: string };
+    expect((await handlePublishingRequest(
+      req("/v1/me", "GET", undefined, logged.accessToken),
+      env, now + 3_000
+    )).status).toBe(200);
+
+    // Simulate emergency removal of the account, without changing D1 session
+    // records. A still-unexpired token must immediately lose all permissions.
+    env.PILOT_GITHUB_USER_ID = "999999";
+    expect(publishingReady(env)).toBe(true);
+    expect((await handlePublishingRequest(
+      req("/v1/me", "GET", undefined, logged.accessToken),
+      env, now + 3_100
+    )).status).toBe(401);
+    expect((await handlePublishingRequest(
+      req("/v1/my/counters", "GET", undefined, logged.accessToken),
+      env, now + 3_200
+    )).status).toBe(401);
+    expect((await handlePublishingRequest(
+      req("/v1/my/counters/" + slug + "/design", "PUT",
+        { design: clonePreset("cyber") }, logged.accessToken),
+      env, now + 3_300
+    )).status).toBe(401);
+    expect(env.DB.counters.get(slug)?.owner_user_id).toBe(124379632);
+    expect((await handlePublishingRequest(
+      req("/v1/auth/exchange", "POST", { ticket: logged.ticket, verifier: logged.verifier }),
+      env, now + 3_400
+    )).status).toBe(401);
   });
 
   it("denies an unapproved GitHub numeric ID even when the login name matches", async () => {

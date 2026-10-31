@@ -162,7 +162,10 @@ async function session(request: Request, env: PublishEnv, now: number): Promise<
   const row = await env.DB.prepare(
     "SELECT github_user_id, github_login, expires_at FROM publish_sessions WHERE session_hash = ?"
   ).bind(await digest(token)).first<PublishSession>();
-  if (!row || row.expires_at <= now) return null;
+  // A pilot allowlist change must revoke existing sessions immediately.
+  // Do not rely on the GitHub ID check performed only during OAuth login.
+  if (!row || row.expires_at <= now ||
+      row.github_user_id !== Number(env.PILOT_GITHUB_USER_ID)) return null;
   return row;
 }
 function noReferrerRedirect(url: string): Response {
