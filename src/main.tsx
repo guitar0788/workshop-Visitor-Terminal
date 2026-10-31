@@ -529,7 +529,7 @@ function App() {
               onClick={() => setMoveMode(value => !value)}>
               {moveMode ? t.moveModeOff : t.moveModeOn}
             </button>
-            <button type="button" className="mode-button mobile-only"
+            <button type="button" className="mode-button"
               aria-expanded={preciseOpen} disabled={!selected || cleanPreview}
               onClick={() => setPreciseOpen(value => !value)}>
               {preciseOpen ? t.hidePrecise : t.preciseTools}
@@ -541,7 +541,7 @@ function App() {
           </div>
 
           {preciseOpen && !cleanPreview && (
-            <div className="precision-panel mobile-only" aria-label={t.toolsLabel}>
+            <div className="precision-panel" aria-label={t.toolsLabel}>
               <div className="precision-caption">
                 <strong>{selected ? t.moving + " " + layerName(selected) : t.selectFirst}</strong>
                 <span>{t.tapArrows}</span>
