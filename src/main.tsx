@@ -181,7 +181,7 @@ function App() {
               </li>
             ))}
           </ol>
-          {selected && <section className="properties" aria-label="Selected layer properties">
+          {selected && <section id="layer-properties" className="properties" aria-label="Selected layer properties">
             <div className="section-title"><h3>Edit · {names[selected.kind]}</h3>
               <button type="button" className="danger small" onClick={removeSelected}>Delete</button>
             </div>
@@ -232,7 +232,7 @@ function App() {
             </label>
           </div>
         </aside>
-        <section className="panel preview-panel" aria-label="Live preview">
+        <section id="live-preview" className="panel preview-panel" aria-label="Live preview">
           <div className="panel-head">
             <h2>Live preview</h2>
             <span className="preview-status"><span className="online-dot" aria-hidden="true"/> SVG PREVIEW</span>
@@ -258,7 +258,25 @@ function App() {
               ))}
             </div>
           </div>
-          <div className="hint">✥ Drag layers on the preview · Arrow keys for precise positioning · Shift + arrows for 10px</div>
+          <div className="touch-tools" aria-label="Move the selected layer">
+            <div className="touch-tools-copy">
+              <strong>{selected ? "Moving: " + (selected.kind === "text" ? selected.text || "Text" : names[selected.kind]) : "Select a layer"}</strong>
+              <span>Tap arrows to position precisely · 5 px per tap</span>
+              <a href="#layer-properties" className={selected ? "edit-jump" : "edit-jump disabled"}
+                aria-disabled={!selected} onClick={event => { if (!selected) event.preventDefault(); }}>Edit layer properties ↓</a>
+            </div>
+            <div className="nudge-pad">
+              <button className="nudge-up" aria-label="Move selected layer up by 5 pixels" title="Up"
+                type="button" disabled={!selected} onClick={() => setDesign(current => moveLayer(current, selectedId!, 0, -5))}>↑</button>
+              <button className="nudge-left" aria-label="Move selected layer left by 5 pixels" title="Left"
+                type="button" disabled={!selected} onClick={() => setDesign(current => moveLayer(current, selectedId!, -5, 0))}>←</button>
+              <button className="nudge-down" aria-label="Move selected layer down by 5 pixels" title="Down"
+                type="button" disabled={!selected} onClick={() => setDesign(current => moveLayer(current, selectedId!, 0, 5))}>↓</button>
+              <button className="nudge-right" aria-label="Move selected layer right by 5 pixels" title="Right"
+                type="button" disabled={!selected} onClick={() => setDesign(current => moveLayer(current, selectedId!, 5, 0))}>→</button>
+            </div>
+          </div>
+          <div className="hint">✥ Drag or tap a layer in the preview · Use arrows to reposition · Keyboard arrow keys move 1 px (Shift + arrow = 10 px)</div>
           <div className="preview-footer">
             <label className="field demo-count">Example visit count
               <input type="number" min={0} max={999999999} value={demoCount} onChange={event =>
