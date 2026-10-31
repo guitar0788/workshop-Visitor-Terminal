@@ -19,7 +19,7 @@ v0.6 增加两级独立保护：
 
 `GET /v1/admin/usage` 只接受原有 `ADMIN_TOKEN`（以 `Authorization: Bearer` 传入），返回当天 UTC 日期、已接纳的收据数量、20,000 上限以及剩余额度；不返回具体访客信息、原始 IP 或账户令牌。
 
-GitHub Actions 的自动和手动 OAuth Pilot 在完成远端迁移、部署与 OAuth 安全检查后，通过**只读**请求验证此管理接口。日志只输出预算整数，不打印 ADMIN_TOKEN。
+GitHub Actions 的自动和手动 OAuth Pilot 在完成远端迁移、部署与 OAuth 安全检查后，通过**只读**请求验证此管理接口。另使用指向不可预测的空 SVG 标识符的 `HEAD` 请求检查限流绑定实际可用：即使该标识符存在，HEAD 也不会产生计数。日志只输出预算整数与 HTTP 状态，不打印 ADMIN_TOKEN。
 
 ### 已知限制与下一阶段
 
