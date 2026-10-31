@@ -43,8 +43,7 @@ export function markdownEmbed(imageUrl: string): string {
 function randomVerifier(): string {
   const bytes = new Uint8Array(48);
   crypto.getRandomValues(bytes);
-  return Array.from(bytes, x => String.fromCharCode(x)).join("")
-    .replace(/./gs, (_, offset: number) => bytes[offset].toString(16).padStart(2, "0"));
+  return Array.from(bytes, b => b.toString(16).padStart(2, "0")).join("");
 }
 async function pkce(verifier: string): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier));
