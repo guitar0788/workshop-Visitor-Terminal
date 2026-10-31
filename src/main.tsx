@@ -14,7 +14,7 @@ import {
 } from "./history";
 import {
   PUBLISH_UI_ENABLED, PUBLISH_PILOT_MODE, beginGitHubLogin, exchangeGitHubReturn, logoutPublishing,
-  markdownEmbed, myCounters, publishDesign, readOAuthReturn, savePublished,
+  deletePublishedCounter, markdownEmbed, myCounters, publishDesign, readOAuthReturn, savePublished,
   type PublishedCounter, type PublishSession
 } from "./publish-client";
 import "./style.css";
@@ -47,6 +47,8 @@ function App() {
   const [publishedSlug, setPublishedSlug] = useState<string | null>(null);
   const [publishingBusy, setPublishingBusy] = useState(false);
   const [publishNotice, setPublishNotice] = useState("");
+  const [deleteTargetSlug, setDeleteTargetSlug] = useState<string | null>(null);
+  const [deleteConfirmation, setDeleteConfirmation] = useState("");
   const handledAuth = useRef(false);
   const nextId = useRef(1);
   const stageRef = useRef<HTMLDivElement>(null);
@@ -162,6 +164,40 @@ function App() {
     setPublishNotice(t.publishSelected + ": " + counter.slug);
   }
 
+  function startDeleteConfirmation(slug: string) {
+    if (publishingBusy) return;
+    setDeleteTargetSlug(slug);
+    setDeleteConfirmation("");
+    setPublishNotice("");
+  }
+
+  function cancelDeleteConfirmation() {
+    if (publishingBusy) return;
+    setDeleteTargetSlug(null);
+    setDeleteConfirmation("");
+  }
+
+  async function removePublishedCounter() {
+    const slug = deleteTargetSlug;
+    if (!publishSession || publishingBusy || !slug || deleteConfirmation !== slug ||
+        !publishedCounters.some(counter => counter.slug === slug)) return;
+    setPublishingBusy(true);
+    try {
+      await deletePublishedCounter(publishSession.accessToken, slug);
+      setPublishedCounters(current => current.filter(counter => counter.slug !== slug));
+      setPublishedSlug(current => current === slug ? null : current);
+      setDeleteTargetSlug(null);
+      setDeleteConfirmation("");
+      setPublishNotice(t.publishDeleteSuccess);
+    } catch {
+      // Keep the explicit confirmation visible after a network error so that
+      // a user can verify the counter still exists before trying again.
+      setPublishNotice(t.publishDeleteError);
+    } finally {
+      setPublishingBusy(false);
+    }
+  }
+
   async function signOutPublishing() {
     if (!publishSession || publishingBusy) return;
     const token = publishSession.accessToken;
@@ -169,6 +205,8 @@ function App() {
     setPublishSession(null);
     setPublishedCounters([]);
     setPublishedSlug(null);
+    setDeleteTargetSlug(null);
+    setDeleteConfirmation("");
     setPublishNotice(t.publishSignedOut);
     try { await logoutPublishing(token); } catch {
       // The in-memory token is discarded regardless; the server token expires
@@ -241,7 +279,41 @@ function App() {
                       onClick={() => void copyPublishedMarkdown(item)}>{t.publishCopy}</button>
                     <a href={item.imageUrl} target="_blank" rel="noopener noreferrer">
                       {t.publishOpen}</a>
+                    <button type="button" className="publish-delete-trigger"
+                      disabled={publishingBusy}
+                      aria-expanded={deleteTargetSlug === item.slug}
+                      onClick={() => deleteTargetSlug === item.slug
+                        ? cancelDeleteConfirmation() : startDeleteConfirmation(item.slug)}>
+                      {t.publishDelete}
+                    </button>
                   </div>
+                  {deleteTargetSlug === item.slug && (
+                    <div className="publish-delete-confirm" role="group"
+                      aria-label={t.publishDeleteConfirmTitle}>
+                      <strong>{t.publishDeleteConfirmTitle}</strong>
+                      <p>{t.publishDeleteWarning}</p>
+                      <p className="publish-delete-slug">{item.slug}</p>
+                      <label>{t.publishDeleteTypeSlug}
+                        <input type="text" value={deleteConfirmation}
+                          autoComplete="off" autoCapitalize="off" spellCheck={false}
+                          disabled={publishingBusy}
+                          onChange={event => setDeleteConfirmation(event.target.value)}
+                          placeholder={item.slug}/>
+                      </label>
+                      <div className="publish-delete-buttons">
+                        <button type="button" className="publish-delete-danger"
+                          disabled={publishingBusy || deleteConfirmation !== item.slug}
+                          onClick={() => void removePublishedCounter()}>
+                          {publishingBusy ? t.publishBusy : t.publishDeleteForever}
+                        </button>
+                        <button type="button" className="secondary"
+                          disabled={publishingBusy}
+                          onClick={cancelDeleteConfirmation}>
+                          {t.publishDeleteCancel}
+                        </button>
+                      </div>
+                    </div>
+                  )}
                   {publishedSlug === item.slug && (
                     <label className="field publish-markdown">{t.publishReadme}
                       <textarea value={markdownEmbed(item.imageUrl)} readOnly rows={2}
