@@ -11,7 +11,7 @@
 1. 先核对 `wrangler.toml` 必须使用原版 CI 的 `workshop-visitor-terminal` 数据库名称及 `00000000-0000-0000-0000-000000000000` 假 UUID；如遇 staging 名称、真实 UUID 或开启发布的配置则拒绝执行。
 2. 使用 `wrangler d1 export --local` 将**临时本地**数据库导出至操作系统临时目录，不接受 `--remote`。
 3. 使用 `wrangler d1 execute --local --persist-to` 导入至**另一个隔离的本地持久化目录**，不会更改原库。
-4. 检查所有计数器、访问次数、用户数字 ID、SVG 设计 JSON、访客去重窗口、每日写入预算、OAuth 状态/票据/会话表及 SQLite 结构与触发器。对比完整内容哈希，并执行 SQLite `PRAGMA integrity_check`。
+4. 检查所有计数器、访问次数、用户数字 ID、SVG 设计 JSON、访客去重窗口、每日写入预算、OAuth 状态/票据/会话表及 SQLite 结构与触发器。对比完整内容哈希及 SQLite 结构信息；Wrangler D1 不提供此演练可用的底层 SQLite 页面完整性 PRAGMA，因此不宣称已验证磁盘页面校验。
 5. 仅修改恢复出来的测试副本，确认原始测试库数据没有变化；最后删除所有临时 SQL 导出和恢复库。
 
 CI 不上传任何 SQL 备份到 GitHub Artifact、Issue、PR、公开仓库或外部服务，日志不输出数据库行和令牌。此演练证明**本地导出与隔离导入在当前 schema 下可工作**，并不等于已经完成真实 Cloudflare staging 数据的恢复验收。
@@ -57,7 +57,7 @@ Cloudflare 官方命令及文档：
 
 ## English summary
 
-The new local recovery drill validates a strictly disposable D1 SQL export/import round trip under Wrangler, hashes and compares counters, numeric ownership, visit receipts, daily budgets, OAuth tables and schema/triggers, runs SQLite integrity checks, mutates only the isolated copy, and securely removes local temporary SQL afterwards. It never exports or restores live D1.
+The new local recovery drill validates a strictly disposable D1 SQL export/import round trip under Wrangler, hashes and compares counters, numeric ownership, visit receipts, daily budgets, OAuth tables and schema/triggers, compares SQLite schema metadata (not low-level SQLite page integrity), mutates only the isolated copy, and securely removes local temporary SQL afterwards. It never exports or restores live D1.
 
 Cloudflare D1 Time Travel is a separate, potentially **destructive in-place** recovery operation (7 days Free / 30 days Paid on supported storage). It is **not authorized** in CI. Secure encrypted retention and a real, isolated cloud recovery drill remain public-launch blockers.
 
