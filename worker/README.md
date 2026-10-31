@@ -1,6 +1,8 @@
 # v0.4 Cloudflare Worker + D1 counter prototype
 
-**Stage: local Wrangler integration tests, NOT deployed.** Workshop Studio on GitHub Pages remains a static editor; its preview values are examples.
+**Stage: isolated Cloudflare staging deployed and tested; user publishing remains OFF by default.** Workshop Studio on GitHub Pages remains a static editor; its preview values are examples.
+
+The authenticated, verified-user publishing flow is described in [PUBLISHING.md](PUBLISHING.md). It requires separate GitHub OAuth setup and a security-reviewed enablement. See [the Cloudflare staging guide](STAGING.md).
 
 ## Endpoints
 
@@ -14,7 +16,7 @@
 | POST | /v1/admin/counters/{slug}/design | Replace sanitized SVG design | Bearer ADMIN_TOKEN |
 | POST | /v1/admin/counters/{slug}/legacy | One-time historical baseline | Bearer ADMIN_TOKEN |
 
-No public signup, public design updates, or shared hosting UI in v0.4. Never copy an ADMIN_TOKEN into client-side JavaScript or a public README.
+The v0.4 administrator routes remain private. The v0.5 user-owned routes are gated by the disabled-by-default publishing feature flag. Never copy an ADMIN_TOKEN into client-side JavaScript or a public README.
 
 ## Request counting semantics
 

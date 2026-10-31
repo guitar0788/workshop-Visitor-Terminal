@@ -12,6 +12,11 @@ import {
   createHistory, finishDrag, previewDrag, recordEdit, redoEdit, undoEdit,
   type EditHistory
 } from "./history";
+import {
+  PUBLISH_UI_ENABLED, beginGitHubLogin, exchangeGitHubReturn, logoutPublishing,
+  markdownEmbed, myCounters, publishDesign, readOAuthReturn, savePublished,
+  type PublishedCounter, type PublishSession
+} from "./publish-client";
 import "./style.css";
 
 const PREVIEW_COUNT = 12856;
@@ -37,6 +42,12 @@ function App() {
   const [cleanPreview, setCleanPreview] = useState(false);
   const [moveMode, setMoveMode] = useState(false);
   const [preciseOpen, setPreciseOpen] = useState(false);
+  const [publishSession, setPublishSession] = useState<PublishSession | null>(null);
+  const [publishedCounters, setPublishedCounters] = useState<PublishedCounter[]>([]);
+  const [publishedSlug, setPublishedSlug] = useState<string | null>(null);
+  const [publishingBusy, setPublishingBusy] = useState(false);
+  const [publishNotice, setPublishNotice] = useState("");
+  const handledAuth = useRef(false);
   const nextId = useRef(1);
   const stageRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<DragState | null>(null);
@@ -60,6 +71,189 @@ function App() {
       // Language switching continues to work without persistent browser storage.
     }
   }, [language]);
+
+  // OAuth return values are one-use. Remove them from the URL immediately;
+  // React StrictMode may execute effects twice during local development.
+  useEffect(() => {
+    if (handledAuth.current) return;
+    handledAuth.current = true;
+    let result: ReturnType<typeof readOAuthReturn>;
+    try {
+      result = readOAuthReturn();
+    } catch {
+      setPublishNotice(translations[language].publishSignInError);
+      return;
+    }
+    if (!result) return;
+    if (!PUBLISH_UI_ENABLED) {
+      setPublishNotice(translations[language].publishSignInError);
+      return;
+    }
+    void exchangeGitHubReturn(result).then(async account => {
+      setPublishSession(account);
+      const owned = await myCounters(account.accessToken);
+      setPublishedCounters(owned.counters);
+      setPublishNotice(translations[language].publishAuthSuccess);
+      setMobileTab("export");
+    }).catch(() => setPublishNotice(translations[language].publishSignInError));
+  // OAuth redirect should be processed once, independent of language changes.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function refreshPublished(token: string) {
+    const list = await myCounters(token);
+    setPublishedCounters(list.counters);
+  }
+
+  async function loginPublishing() {
+    if (publishingBusy) return;
+    setPublishingBusy(true);
+    try {
+      await beginGitHubLogin();
+    } catch {
+      setPublishNotice(t.publishError);
+      setPublishingBusy(false);
+    }
+  }
+
+  async function publishNewCounter() {
+    if (!publishSession || publishingBusy) return;
+    setPublishingBusy(true);
+    try {
+      const created = await publishDesign(publishSession.accessToken, design);
+      setPublishedSlug(created.slug);
+      await refreshPublished(publishSession.accessToken);
+      setPublishNotice(t.publishSuccess);
+    } catch {
+      setPublishNotice(t.publishError);
+    } finally {
+      setPublishingBusy(false);
+    }
+  }
+
+  async function updatePublishedCounter() {
+    if (!publishSession || !publishedSlug || publishingBusy) return;
+    setPublishingBusy(true);
+    try {
+      await savePublished(publishSession.accessToken, publishedSlug, design);
+      await refreshPublished(publishSession.accessToken);
+      setPublishNotice(t.publishSaved);
+    } catch {
+      setPublishNotice(t.publishError);
+    } finally {
+      setPublishingBusy(false);
+    }
+  }
+
+  async function copyPublishedMarkdown(counter: PublishedCounter) {
+    try {
+      await navigator.clipboard.writeText(markdownEmbed(counter.imageUrl));
+      setPublishNotice(t.publishCopied);
+    } catch {
+      setPublishNotice(t.noticeClipboardError);
+    }
+  }
+
+  function loadPublishedDesign(counter: PublishedCounter) {
+    const restored = sanitizeDesign(counter.design);
+    edit(() => restored);
+    setSelectedId(restored.layers[0]?.id ?? null);
+    setPublishedSlug(counter.slug);
+    setPublishNotice(t.publishSelected + ": " + counter.slug);
+  }
+
+  async function signOutPublishing() {
+    if (!publishSession || publishingBusy) return;
+    const token = publishSession.accessToken;
+    // Clear the browser token even when network logout is unavailable.
+    setPublishSession(null);
+    setPublishedCounters([]);
+    setPublishedSlug(null);
+    setPublishNotice(t.publishSignedOut);
+    try { await logoutPublishing(token); } catch {
+      // The in-memory token is discarded regardless; the server token expires
+      // after one hour even when the logout request cannot reach Cloudflare.
+    }
+  }
+
+  function renderPublishing() {
+    const selection = publishedCounters.find(item => item.slug === publishedSlug);
+    return (
+      <section className="publish-panel" aria-label={t.publishTitle}>
+        <div className="publish-heading">
+          <h3>{t.publishTitle}</h3>
+          <span className={"publish-indicator" + (PUBLISH_UI_ENABLED ? " available" : "")}>
+            {PUBLISH_UI_ENABLED ? "BETA" : "PREVIEW"}
+          </span>
+        </div>
+        {!PUBLISH_UI_ENABLED ? (
+          <>
+            <p className="publish-copy">{t.publishUnavailable}</p>
+            <p className="publish-hint">{t.publishPreviewWarning}</p>
+          </>
+        ) : !publishSession ? (
+          <>
+            <p className="publish-copy">{t.publishSignInHint}</p>
+            <button type="button" className="publish-primary" disabled={publishingBusy}
+              onClick={() => void loginPublishing()}>
+              {publishingBusy ? t.publishBusy : t.publishSignIn}
+            </button>
+          </>
+        ) : (
+          <>
+            <div className="publish-account">
+              <strong>{t.publishSession} · @{publishSession.user.login}</strong>
+              <button type="button" className="secondary small"
+                onClick={() => void signOutPublishing()}>{t.publishSignOut}</button>
+            </div>
+            <p className="publish-hint">{t.publishQuota}</p>
+            <div className="publish-actions">
+              <button type="button" className="publish-primary"
+                disabled={publishingBusy || publishedCounters.length >= 3}
+                onClick={() => void publishNewCounter()}>
+                {publishingBusy ? t.publishBusy : t.publishNew}
+              </button>
+              <button type="button" className="secondary"
+                disabled={publishingBusy || !publishedSlug}
+                onClick={() => void updatePublishedCounter()}>
+                {t.publishUpdate}
+              </button>
+            </div>
+            <p className="publish-hint">
+              {selection ? t.publishSelected + ": " + selection.slug : t.publishNone}
+            </p>
+            <h4 className="publish-list-title">{t.publishList}</h4>
+            <div className="publish-list">
+              {publishedCounters.map(item => (
+                <article className={"published-item" + (item.slug === publishedSlug ? " selected" : "")}
+                  key={item.slug}>
+                  <div className="published-summary">
+                    <strong>{item.slug}</strong>
+                    <span>{item.hits.toLocaleString()} {t.publishVisits}</span>
+                  </div>
+                  <div className="published-controls">
+                    <button type="button" className="secondary small"
+                      onClick={() => loadPublishedDesign(item)}>{t.publishLoad}</button>
+                    <button type="button" className="secondary small"
+                      onClick={() => void copyPublishedMarkdown(item)}>{t.publishCopy}</button>
+                    <a href={item.imageUrl} target="_blank" rel="noopener noreferrer">
+                      {t.publishOpen}</a>
+                  </div>
+                  {publishedSlug === item.slug && (
+                    <label className="field publish-markdown">{t.publishReadme}
+                      <textarea value={markdownEmbed(item.imageUrl)} readOnly rows={2}
+                        onFocus={event => event.currentTarget.select()}/>
+                    </label>
+                  )}
+                </article>
+              ))}
+            </div>
+          </>
+        )}
+        {publishNotice && <p className="publish-notice" role="status">{publishNotice}</p>}
+      </section>
+    );
+  }
 
   function edit(updater: (current: TerminalDesign) => TerminalDesign) {
     setHistory(current => recordEdit(current, updater(current.present)));
@@ -421,6 +615,7 @@ function App() {
             onClick={copySvg}>{t.copySvg}</button>
         </div>
         <p className="notice" role="status">{t[noticeKey]}</p>
+        {renderPublishing()}
         <div className="disclaimer">{t.disclosure}</div>
       </>
     );

@@ -6,7 +6,7 @@ A free, open-source visual studio for creating SVG visitor counters for GitHub p
 
 **[Open Workshop Studio / 打开在线编辑器](https://guitar0788.github.io/workshop-Visitor-Terminal/)**
 
-> **Alpha · v0.4 — The online studio still exports static SVG. A separate Cloudflare Worker + D1 backend has been added for local/isolated testing; it has NOT been deployed to production.** All numbers shown are examples; hosted counting, persistent storage and dynamic README embed links are future milestones.
+> **Alpha · v0.5 — GitHub OAuth publishing code is under security review and OFF by default.** The public Studio still exports static SVG and shows demonstration counts. The isolated Cloudflare staging Worker + D1 passed real deployment and persistence tests; this is not a public hosting launch.
 
 ## English
 
@@ -36,15 +36,19 @@ The downloaded SVG is **static**; it does not update visitor counts yet.
 
 ### Cloudflare staging / 云端隔离测试
 
-A **manual-only, staging-only deployment workflow** is ready for Cloudflare account setup. See the [English and Chinese staging guide](worker/STAGING.md). The remote Worker and D1 database have **not** been created by this repository or deployed. Live counting in the GitHub Pages editor is **not enabled**.
+The owner's dedicated Cloudflare staging Worker and D1 database **were deployed and verified** in [Actions run #41219117268](https://github.com/guitar0788/workshop-Visitor-Terminal/actions/runs/41219117268), including deduplication, SVG rendering, and persistence after redeployment. This is **not a production/public-user launch**. Read the [staging guide](worker/STAGING.md).
 
-已准备 Cloudflare 测试专用部署与远程验收工作流。请查看[中英文完整设置说明](worker/STAGING.md)。目前**尚未连接或部署云端 Worker/D1**，GitHub Pages 在线编辑器仍显示演示访问量。
+独立的 Cloudflare staging 已在上述 GitHub Actions 记录中通过云端验收，包括计数、去重与重新部署后数据保留。**这不等于正式开放公众托管**，现有 GitHub Pages 工作台仍然显示演示数字。
 
 ### Backend prototype (v0.4)
 
-A separate Cloudflare Worker + D1 service is available in [worker/](worker/README.md), including a real persistent counting data model, image endpoint, restricted admin API, request deduplication and a guarded one-time legacy baseline. **Not publicly deployed; this GitHub Pages site does not count real visits yet.** No Cloudflare account or secret is included in this repository.
+A separate Cloudflare Worker + D1 service is available in [worker/](worker/README.md), including a real persistent counting data model, image endpoint, restricted admin API, request deduplication and a guarded one-time legacy baseline. **Deployed to an isolated staging environment only; GitHub Pages still displays demo values.** No Cloudflare account or secret is included in this repository.
 
-Security limits: the endpoint counts **qualified upstream image requests, not unique visitors**. GitHub's proxy cache can suppress origin requests. Public enrollment and user-owned counters are deferred until stronger abuse protection and account authorization are implemented.
+Security limits: the endpoint counts **qualified upstream image requests, not unique visitors**. GitHub's proxy cache can suppress origin requests. v0.5 adds GitHub user authorization and ownership enforcement behind a default-off feature flag; the public onboarding and abuse controls still require review.
+
+### v0.5 user-owned publishing (gated beta)
+
+[GitHub OAuth sign-in, verified ownership, D1-backed publishing, design updates, and README Markdown generation](worker/PUBLISHING.md) have been implemented behind an explicit server/browser launch gate. The export panel explains its current preview-only status. An isolated OAuth app and separate authorization are required before enabling sign-in; **never store GitHub OAuth secrets in Vite frontend variables**.
 
 ### Local development
 
@@ -65,7 +69,7 @@ The app builds to the GitHub Pages project path. Pages deployment runs automatic
 
 **[立即打开在线编辑器](https://guitar0788.github.io/workshop-Visitor-Terminal/)**
 
-> **当前为 v0.4 测试版。** 在线编辑器仍然只能导出静态 SVG；独立的 Cloudflare Worker + D1 计数后端已进入离线及隔离测试阶段，尚未部署生产环境。 网站已支持设计与导出，但显示的访问数字属于演示数据。真实计数服务、用户设计的在线托管以及动态 README 图片链接仍在规划中。
+> **当前为 v0.5 开发测试版。** GitHub OAuth 安全登录、用户归属校验、在线发布与 README 嵌入代码正在验收，**公开发布开关仍然关闭**。独立的 Cloudflare Worker + D1 staging 已通过真实云端测试，但在线编辑器仍使用演示数字，不代表真实访问统计。
 
 ### 已实现的功能
 
@@ -96,9 +100,13 @@ The app builds to the GitHub Pages project path. Pages deployment runs automatic
 
 已新增 [Cloudflare Worker + D1 计数后端](worker/README.md)：包含持久化数据库表、动态 SVG 图片接口、管理员验证、短时间重复请求限制及一次性的历史计数迁移保护。
 
-**后端尚未部署，线上 GitHub Pages 编辑器仍然显示演示访问次数。** 此阶段不会修改你的 GitHub 个人主页，不会读取或覆盖旧计数服务的历史数据，也不会在 GitHub 仓库中保存 Cloudflare 密钥。
+**后端已经在独立 Cloudflare staging 环境部署并通过云端测试；GitHub Pages 编辑器仍然显示演示次数。** 此阶段不会修改你的 GitHub 个人主页，不会读取或覆盖旧计数服务的历史数据，也不会在 GitHub 仓库中保存 Cloudflare 密钥。
 
 请注意：GitHub 会通过图片代理和缓存加载 README 图片，因此后端只能统计实际到达服务的有效图片请求，不能保证每次打开主页都增加一次，更不能宣称是独立访客人数。公共用户注册与托管功能需要单独完成身份验证、防滥用与用量审查。
+
+### v0.5 用户在线发布（默认关闭）
+
+已新增 [GitHub OAuth 身份验证、用户权限隔离、在线发布及 README Markdown 生成](worker/PUBLISHING.md)。用户登录和在线发布功能尚未向公众开放，页面会明确显示预览状态，不会把 staging 测试数字冒充真实统计。启用前需要新建独立 GitHub OAuth 应用并完成权限、跨账号和防滥用验收。
 
 ### 本地开发
 
@@ -120,9 +128,10 @@ npm run build
 | 3 | GitHub Pages editor / 在线编辑器 | Complete / 已上线 |
 | 3.1 | English + Simplified Chinese / 中英双语界面 | Complete / 已完成 |
 | 3.2 | Mobile Studio with undo/redo / 手机工作台、撤销与重做 | v0.3 |
-| 4 | Cloudflare Worker + D1 counter prototype / 计数后端原型 | In technical review / 技术审查中 |\n| 4.1 | Isolated deployment, abuse mitigation, and security checks / 隔离部署与安全验收 | Not authorized / 未授权 |
-| 5 | Hosted design publishing and public counter management / 在线设计发布及多用户管理 | Planned / 规划中 |
-| 6 | README dynamic image embed + verified legacy migration / 动态链接与可验证迁移 | Planned / 规划中 |
+| 4 | Cloudflare Worker + D1 counter prototype / 计数后端原型 | Complete / 已完成 |
+| 4.1 | Cloudflare staging D1 deployment and persistence / 云端隔离测试与持久化 | Verified / 已验收 |
+| 5 | OAuth login, verified ownership, hosted designs / OAuth 登录、用户归属与在线设计 | Code ready; launch gated / 代码已开发，暂未开放 |
+| 6 | README embed workflow and verified legacy migration / README 嵌入与可信历史迁移 | Embed code implemented; migration remains restricted / 已开发嵌入代码，旧数据迁移仍受限 |
 
 **Counting disclaimer / 统计说明：** GitHub caches and proxies images in READMEs. A future counting endpoint will count requests that reach the service, not guaranteed unique human visitors or every profile view. GitHub 会缓存及代理 README 图片，因此未来的统计服务只能计算真正到达后端的请求，不能保证每次打开页面都会被统计，也不能将其视为精确的独立访客数量。
 

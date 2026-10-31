@@ -80,6 +80,15 @@ async function main() {
     await boot();
     assert.equal((await api("/health")).status, 200, "Health is reachable");
 
+    // v0.5 must remain closed without GitHub OAuth config or a publish flag.
+    // The real local Worker uses all additive D1 migrations but cannot grant
+    // user-owned publishing sessions in a v0.4 staging configuration.
+    const closedPublish = await api("/v1/my/counters", {
+      headers: { Origin: "https://guitar0788.github.io" }
+    });
+    assert.equal(closedPublish.status, 503,
+      "User publishing must fail closed unless explicitly configured");
+
     const unauthorized = await api("/v1/admin/counters", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ slug, owner: "guitar0788" })
