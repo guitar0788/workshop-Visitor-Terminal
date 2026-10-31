@@ -49,8 +49,9 @@ test("does not mistake HTML-looking React JS strings for genuine remote asset ta
   const result = inlineOfflineBundle(html, source, stylesheet);
   assert.match(result, /connect-src 'none'/);
   assert.match(result, /<script type="module">/);
-  assert.doesNotMatch(result.replace(/<script type="module">[\\s\\S]*?<\\/script>/,
-    "<script></script>"), /<script[^>]+src=/);
+  const outerDocument = result.slice(0, result.indexOf('<script type="module">')) +
+    result.slice(result.lastIndexOf("</script>") + "</script>".length);
+  assert.doesNotMatch(outerDocument, /<script[^>]+src=/);
 });
 
 test("rejects external script, unexpected asset paths or multiple bundles", () => {
