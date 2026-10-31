@@ -22,19 +22,6 @@ jobs:
           npx wrangler d1 execute workshop-visitor-terminal --local --config wrangler.toml --command "SELECT COUNT(*) AS total FROM counters;"
       - name: Validate staging-only configuration safety offline
         run: node --test worker/*.test.mjs
-      - name: Temporary read-only staging response diagnostic
-        if: github.event_name == 'pull_request' && github.head_ref == 'fix/staging-health-readiness'
-        continue-on-error: true
-        run: |
-          node --input-type=module -e '
-            import { describeResponse } from "./worker/health-preflight.mjs";
-            try {
-              const response = await fetch("https://workshop-visitor-terminal-staging.fangcui2007.workers.dev/health", { redirect: "manual", signal: AbortSignal.timeout(12000) });
-              console.log("Current /health:", describeResponse(response, await response.text()));
-            } catch (error) {
-              console.log("Current /health network failure:", error.name);
-            }
-          '
       - run: npm test
       - run: npm run build
       - name: Exercise real local Worker and persistent D1 across restart
