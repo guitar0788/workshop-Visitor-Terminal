@@ -69,6 +69,9 @@ class MemoryD1 implements D1Binding {
           for (const item of db.windows) {
             if (Number(item.split("|")[2]) < oldest) { db.windows.delete(item); changes++; }
           }
+        } else if (query.startsWith("DELETE FROM visit_day_budget")) {
+          // The in-memory double only tracks existing receipt windows.
+          changes = 0;
         } else {
           throw Error("Unknown SQL: " + query);
         }
@@ -158,6 +161,62 @@ describe("Cloudflare D1 counter Worker", () => {
     expect(responses.every(r => r.status === 200)).toBe(true);
     expect(env.DB.counters.get("demo")?.hits).toBe(1);
     expect(env.DB.windows.size).toBe(1);
+  });
+
+  it("guards SVG GET and HEAD before all D1 reads, preserving unaffected API endpoints", async () => {
+    const env = setup();
+    await register(env);
+    const calls: string[] = [];
+    env.SVG_RATE_LIMIT_ENABLED = "true";
+    env.SVG_GLOBAL_RATE_LIMITER = {
+      async limit({ key }) { calls.push("global:" + key); return { success: true }; }
+    };
+    env.SVG_RATE_LIMITER = {
+      async limit({ key }) { calls.push("slug:" + key); return { success: true }; }
+    };
+    const path = "/v1/counters/demo.svg";
+    const served = await handleRequest(publicRequest(path, "203.0.113.10"), env, NOW);
+    expect(served.status).toBe(200);
+    expect(calls).toEqual(["global:all-svg", "slug:slug:demo"]);
+    const before = env.DB.windows.size;
+    env.SVG_GLOBAL_RATE_LIMITER = {
+      async limit({ key }) { calls.push("blocked:" + key); return { success: false }; }
+    };
+    const rate = await handleRequest(publicRequest(path, "203.0.113.11"), env, NOW);
+    expect(rate.status).toBe(429);
+    expect(rate.headers.get("Retry-After")).toBe("60");
+    expect(rate.headers.get("Cache-Control")).toBe("no-store");
+    expect(rate.headers.get("Content-Type")).toBe("application/json");
+    expect(env.DB.windows.size).toBe(before);
+    expect(env.DB.counters.get("demo")?.hits).toBe(1);
+    expect(calls.at(-1)).toBe("blocked:all-svg");
+
+    // Denied per-counter requests also return before D1, without affecting
+    // health or authenticated admin inspection.
+    env.SVG_GLOBAL_RATE_LIMITER = { async limit() { return { success: true }; } };
+    env.SVG_RATE_LIMITER = { async limit() { return { success: false }; } };
+    expect((await handleRequest(publicRequest(path, "203.0.113.12", "HEAD"),
+      env, NOW)).status).toBe(429);
+    expect(env.DB.windows.size).toBe(before);
+    expect((await handleRequest(publicRequest("/health"), env, NOW)).status).toBe(200);
+    expect((await handleRequest(adminRequest("/v1/admin/counters/demo",
+      undefined, TOKEN, "GET"), env, NOW)).status).toBe(200);
+  });
+
+  it("fails closed if SVG protection is explicitly enabled without its bindings", async () => {
+    const env = setup();
+    await register(env);
+    const initial = env.DB.windows.size;
+    env.SVG_RATE_LIMIT_ENABLED = "true";
+    expect((await handleRequest(publicRequest("/v1/counters/demo.svg",
+      "203.0.113.10"), env, NOW)).status).toBe(503);
+    expect(env.DB.windows.size).toBe(initial);
+    // The regular sandbox/local worker is explicitly disabled by default,
+    // retaining backwards-compatible smoke tests and visitor counting.
+    env.SVG_RATE_LIMIT_ENABLED = "false";
+    expect((await handleRequest(publicRequest("/v1/counters/demo.svg",
+      "203.0.113.10"), env, NOW)).status).toBe(200);
+    expect(env.DB.windows.size).toBe(initial + 1);
   });
 
   it("does not increment for HEAD, unknown IP or non-existent counter", async () => {
