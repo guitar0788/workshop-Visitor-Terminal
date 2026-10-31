@@ -8,6 +8,7 @@ import { randomBytes } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { validateStagingOrigin } from "./prepare-staging.mjs";
+import { describeResponse } from "./health-preflight.mjs";
 
 const mode = process.argv[2];
 if (mode !== "initial" && mode !== "verify") throw Error("Expected initial or verify");
@@ -34,8 +35,24 @@ async function admin(path, method = "GET", payload) {
   });
 }
 async function expectJson(response, status) {
-  const body = await response.json();
-  assert.equal(response.status, status, JSON.stringify(body));
+  // Cloudflare and proxy errors can return an HTML page, not JSON.
+  // Parse response safely without emitting the full HTML or credentials.
+  const raw = await response.text();
+  const type = response.headers.get("content-type")?.toLowerCase() ?? "";
+  if (!type.includes("application/json")) {
+    throw Error("Expected JSON HTTP " + status + ", got " +
+      describeResponse(response, raw) + ". Verify the workers.dev route, Access policies and DNS.");
+  }
+  let body;
+  try {
+    body = JSON.parse(raw);
+  } catch {
+    throw Error("Received invalid JSON: " + describeResponse(response));
+  }
+  if (response.status !== status) {
+    throw Error("Expected HTTP " + status + ", got " + describeResponse(response) +
+      "; API error=" + String(body?.error ?? "(none)").slice(0, 100));
+  }
   return body;
 }
 

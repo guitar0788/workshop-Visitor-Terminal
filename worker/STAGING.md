@@ -41,6 +41,14 @@ This is an **opt-in staging deployment**, not production. It does not modify the
 4. If any gate fails, **stop** and inspect the step. Do not copy credentials into a GitHub comment to troubleshoot. Never fall back to a different DB.
 5. Before any public counter rollout, independently assess access control, request abuse, data retention, GitHub Camo caching, quotas and billing. This staging workflow does **not** enable public signup.
 
+### A staging run fails immediately after deployment
+
+If the remote D1 migrations and Worker deployment succeed but the first public health check fails, do not rotate Cloudflare tokens or re-create your database.
+
+The workflow now waits for the exact staging Worker `/health` endpoint to return HTTP 200 with JSON identifying the intended service **before any test counter writes**. It retries read-only requests for up to roughly 75 seconds. If it still cannot reach the Worker, the log includes safe HTTP status, content type, Cloudflare Ray ID and HTML page title (never raw HTML or secrets).
+
+From your browser you can also open `https://workshop-visitor-terminal-staging.fangcui2007.workers.dev/health`. A healthy response is JSON with `"status":"ok"` and `"service":"workshop-visitor-terminal"`. If you instead see Cloudflare Access, an HTML challenge, or a disabled Worker route, inspect **Workers & Pages → workshop-visitor-terminal-staging → Settings → Domains & Routes**, and any applicable Access policies. Do not share credentials or disable account-wide security policies.
+
 ### What is actually verified?
 
 The workflow verifies the deployed Worker HTTP API and D1 persistence across redeployment on Cloudflare's infrastructure, including unauthorized requests, \`HEAD\` handling, SVG escaping, five-minute deduplication and one-time legacy baseline protection. It does **not** prove unique-human-visitor accuracy, a per-profile-view metric or GitHub image-cache behavior.
@@ -85,6 +93,17 @@ The workflow verifies the deployed Worker HTTP API and D1 persistence across red
 工作流会先检查密钥和数据库身份，然后才执行远程迁移与部署；随后检查真实 SVG 接口、计数去重、历史初始化、Worker 重新部署后的持久化结果。
 
 **如果部署失败，先查看失败步骤，不要将密钥复制出来发给任何人。**
+
+### 首次部署后测试失败怎么办？
+
+如果 GitHub Actions 显示 **D1 迁移成功、Worker 部署成功，但公网健康检查失败**，请不要重新创建 API Token，也不要重建数据库。
+
+现在工作流会在写入任何测试计数之前，反复检查 Worker 的 `/health` 地址，最多等待约 75 秒。若 Cloudflare 暂时返回 HTML、HTTP 错误页或仍未就绪，程序会记录错误状态码、响应类型及错误页标题，但不会把密钥或完整网页内容写入日志。
+
+你也可以在浏览器打开：
+`https://workshop-visitor-terminal-staging.fangcui2007.workers.dev/health`
+
+正常时应看到包含 `"status":"ok"` 与 `"service":"workshop-visitor-terminal"` 的 JSON。如果显示 Cloudflare 登录页面或错误页面，进入 Cloudflare 控制台的 **Workers 和 Pages → workshop-visitor-terminal-staging → 设置 → 域和路由（Domains & Routes）** 检查 `workers.dev` 是否启用，以及是否有 Cloudflare Access 访问限制。
 
 ### 当前状态
 
