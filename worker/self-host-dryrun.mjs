@@ -11,13 +11,10 @@ import { tmpdir } from "node:os";
 import { join, resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { makeConfig } from "../scripts/self-host-setup.mjs";
+import { wranglerInvocation } from "./self-host-wrangler.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const configPath = join(ROOT, "wrangler.selfhost.ci.toml");
-const executable = process.platform === "win32"
-  ? join(ROOT, "node_modules", ".bin", "wrangler.cmd")
-  : join(ROOT, "node_modules", ".bin", "wrangler");
-
 export async function dryRunSelfHost({ run = execFileSync } = {}) {
   const outputDir = await mkdtemp(join(tmpdir(), "wvt-selfhost-bundle-"));
   let createdConfig = false;
@@ -31,9 +28,10 @@ export async function dryRunSelfHost({ run = execFileSync } = {}) {
     await writeFile(configPath, config, { flag: "wx", mode: 0o600 });
     createdConfig = true;
     // Never substitute deploy for this exact --dry-run invocation.
-    run(executable, [
+    const invocation = wranglerInvocation(ROOT, [
       "deploy", "--dry-run", "--config", configPath, "--outdir", outputDir
-    ], { cwd: ROOT, env: {
+    ]);
+    run(invocation.executable, invocation.args, { cwd: ROOT, env: {
       ...process.env,
       WRANGLER_SEND_METRICS: "false",
       CLOUDFLARE_API_TOKEN: "",
