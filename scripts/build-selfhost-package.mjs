@@ -7,7 +7,7 @@
  * timestamps, UTF-8 names and CRC-32. Every member is selected from a fixed
  * allowlist; never enumerate the repository or include user-supplied paths.
  *
- * A self-host user extracts it, runs npm ci, creates their OWN D1 and uses the
+ * A self-host user extracts it, runs npm install, creates their OWN D1 and uses the
  * scripts only after explicitly choosing an account and deployment target.
  */
 import { deflateRawSync } from "node:zlib";
@@ -23,7 +23,6 @@ export const ALLOWED_FILES = Object.freeze([
   ".gitignore",
   "docs/SELF_HOSTING.md",
   "package.json",
-  "package-lock.json",
   "src/model.ts",
   "worker/index.ts",
   "worker/service.ts",
@@ -134,7 +133,7 @@ export async function buildSelfHostPackage({ root = ROOT, output = join(ROOT, "d
     path, data: await readFile(join(root, path))
   })));
   // The standalone ZIP is deliberately limited to source, documentation and
-  // the root lockfile. No .dev.vars, tokens, .env, local D1, dist or .wrangler.
+  // project manifests. No .dev.vars, tokens, .env, local D1, dist or .wrangler.
   const result = archive(files);
   await mkdir(dirname(output), { recursive: true });
   await writeFile(output, result);
