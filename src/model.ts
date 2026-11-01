@@ -1,6 +1,6 @@
 import { CARD_THEMES, isCardTheme, cardArtwork, type CardTheme } from "./card-art";
 import { isApprovedTheme, approvedBackdrop, approvedCountMarkup,
-  defaultApprovedCountLayer, approvedCanvasWidth, REFERENCE_HEIGHT }
+  defaultApprovedCountLayer, approvedCanvasWidth, approvedReferenceIsPristine, REFERENCE_HEIGHT }
   from "./approved-reference-cards";
 export { CARD_THEMES } from "./card-art";
 export type { CardTheme } from "./card-art";
@@ -215,8 +215,9 @@ export function renderSvg(input: unknown, visits: number): string {
   ];
   if (isApprovedTheme(d.theme)) {
     // Exact user-approved raster illustration; no redraw or external URL.
-    parts.push(approvedBackdrop(d.theme, d.width, d.height));
     const countLayer = d.layers.find(layer => layer.kind === "count");
+    const pristine = approvedReferenceIsPristine(d.theme, counter, countLayer ?? null);
+    parts.push(approvedBackdrop(d.theme, d.width, d.height, !pristine));
     parts.push(approvedCountMarkup(d.theme, counter, countLayer ?? null, scope));
   } else if (isCardTheme(d.theme)) {
     // All other six illustrated cards retain their existing vector artwork.

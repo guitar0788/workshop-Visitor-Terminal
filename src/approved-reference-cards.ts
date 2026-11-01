@@ -14,6 +14,7 @@
  */
 import { APPROVED_THREE_CARD_IMAGE, APPROVED_SOURCE_WIDTH, APPROVED_SOURCE_HEIGHT }
   from "./approved-three-card-image";
+import { CLEANED_THREE_CARD_IMAGE } from "./approved-clean-card-image";
 
 export const APPROVED_THEMES = ["pixel-card","terminal-card","rpg-card"] as const;
 export type ApprovedTheme = typeof APPROVED_THEMES[number];
@@ -31,16 +32,16 @@ type CleanRegion = {
 };
 const REGION: Record<ApprovedTheme, CleanRegion> = {
   "pixel-card": {
-    cropX: 0, cropWidth: 690, x: 302, y: 164, width: 292, height: 86,
-    textX: 310, textY: 179, fontSize: 68, color: "#122e61"
+    cropX: 0, cropWidth: 690, x: 326, y: 180, width: 280, height: 88,
+    textX: 334, textY: 179, fontSize: 68, color: "#122e61"
   },
   "terminal-card": {
-    cropX: 692, cropWidth: 735, x: 123, y: 189, width: 304, height: 97,
-    textX: 127, textY: 196, fontSize: 65, color: "#6bff9e"
+    cropX: 692, cropWidth: 735, x: 167, y: 207, width: 270, height: 81,
+    textX: 176, textY: 199, fontSize: 65, color: "#6bff9e"
   },
   "rpg-card": {
-    cropX: 1450, cropWidth: 722, x: 221, y: 160, width: 302, height: 105,
-    textX: 226, textY: 163, fontSize: 72, color: "#ffdf92"
+    cropX: 1450, cropWidth: 722, x: 315, y: 171, width: 331, height: 118,
+    textX: 332, textY: 176, fontSize: 72, color: "#ffdf92"
   }
 };
 
@@ -61,7 +62,7 @@ export function defaultApprovedCountLayer(theme: ApprovedTheme) {
  * other six template artworks.
  */
 export function approvedBackdrop(
-  theme: ApprovedTheme, width: number, height: number
+  theme: ApprovedTheme, width: number, height: number, cleaned = false
 ): string {
   const c = REGION[theme];
   const sx = width / c.cropWidth;
@@ -74,7 +75,8 @@ export function approvedBackdrop(
     REFERENCE_HEIGHT + '" overflow="hidden">' +
     '<image x="' + (-c.cropX) + '" y="0" width="' +
     APPROVED_SOURCE_WIDTH + '" height="' + APPROVED_SOURCE_HEIGHT +
-    '" preserveAspectRatio="none" href="' + APPROVED_THREE_CARD_IMAGE + '"/>' +
+    '" preserveAspectRatio="none" href="' +
+    (cleaned ? CLEANED_THREE_CARD_IMAGE : APPROVED_THREE_CARD_IMAGE) + '"/>' +
     '</svg></g>';
 }
 
@@ -89,11 +91,17 @@ const isDefault = (theme: ApprovedTheme, layer: ApprovedCountLayer) => {
     layer.color===d.color && layer.visible;
 };
 
+export function approvedReferenceIsPristine(
+  theme: ApprovedTheme, counter: string, layer: ApprovedCountLayer | null
+): boolean {
+  return layer !== null && counter === REFERENCE_DEMO_COUNT &&
+    isDefault(theme, layer);
+}
+
 export function approvedCountMarkup(theme: ApprovedTheme, counter: string,
   layer: ApprovedCountLayer | null, scope: string): string {
   const r = REGION[theme];
-  const usePristineArt = layer !== null && counter === REFERENCE_DEMO_COUNT &&
-    isDefault(theme, layer);
+  const usePristineArt = approvedReferenceIsPristine(theme, counter, layer);
   const active = layer ?? defaultApprovedCountLayer(theme);
   const clipId = "clip-" + scope + "-visits";
   const clip = '<defs><clipPath id="' + clipId + '"><rect x="' + active.x +
@@ -107,30 +115,10 @@ export function approvedCountMarkup(theme: ApprovedTheme, counter: string,
       '" opacity="0" font-size="12" dominant-baseline="hanging"' +
       ' data-count-layer="true">' + counter + '</text>';
   }
-  let patch = "";
-  if (theme === "pixel-card") {
-    patch = '<defs><linearGradient id="reference-' + scope +
-      '-clean" x2="0" y2="1"><stop stop-color="#bce9ff"/>' +
-      '<stop offset="1" stop-color="#a8d9f9"/></linearGradient></defs>' +
-      '<rect x="' + r.x + '" y="' + r.y + '" width="' + r.width +
-      '" height="' + r.height + '" fill="url(#reference-' + scope +
-      '-clean)"/>';
-  } else if (theme === "terminal-card") {
-    patch = '<defs><pattern id="reference-' + scope +
-      '-scan" width="4" height="4" patternUnits="userSpaceOnUse">' +
-      '<rect width="4" height="4" fill="#04251d"/>' +
-      '<path d="M0 1H4" stroke="#124e3a" stroke-width=".5" opacity=".45"/>' +
-      '</pattern></defs><rect x="' + r.x + '" y="' + r.y +
-      '" width="' + r.width + '" height="' + r.height +
-      '" fill="url(#reference-' + scope + '-scan)"/>';
-  } else {
-    patch = '<defs><linearGradient id="reference-' + scope +
-      '-clean" x2="1" y2="1"><stop stop-color="#06428b"/>' +
-      '<stop offset="1" stop-color="#003477"/></linearGradient></defs>' +
-      '<rect x="' + r.x + '" y="' + r.y + '" width="' + r.width +
-      '" height="' + r.height + '" fill="url(#reference-' + scope + '-clean)"/>';
-  }
-  if (!layer?.visible) return patch;
+  // Different live totals use the matching inpainted reference illustration,
+  // which removes ONLY the original example numerals. No flat rectangles,
+  // shadows over the shield, or original "47" ghost on the RPG frame.
+  if (!layer?.visible) return "";
   const font = Math.max(8, Math.min(layer.fontSize,
     Math.floor((layer.width - 5) / (counter.length * 0.65)),
     Math.floor(layer.height * .78)));
@@ -138,7 +126,7 @@ export function approvedCountMarkup(theme: ApprovedTheme, counter: string,
   const y = layer.y + Math.ceil(font * .24);
   const shadow = theme === "rpg-card" ? ' stroke="#79401a" stroke-width="1.8" paint-order="stroke"' :
     theme === "terminal-card" ? ' stroke="#11522c" stroke-width="1" paint-order="stroke"' : "";
-  return patch + clip + '<text clip-path="url(#' + clipId + ')" x="' + x + '" y="' + y +
+  return clip + '<text clip-path="url(#' + clipId + ')" x="' + x + '" y="' + y +
     '" fill="' + layer.color + '" font-size="' + font +
     '" font-family="ui-monospace, Consolas, Menlo, monospace"' +
     ' font-weight="800" dominant-baseline="hanging"' + shadow +

@@ -27,6 +27,7 @@ export const ALLOWED_FILES = Object.freeze([
   "src/model.ts",
   "src/card-art.ts",
   "src/approved-three-card-image.ts",
+  "src/approved-clean-card-image.ts",
   "src/approved-reference-cards.ts",
   "worker/index.ts",
   "worker/service.ts",
