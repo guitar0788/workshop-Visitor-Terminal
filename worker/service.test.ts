@@ -30,10 +30,10 @@ class MemoryD1 implements D1Binding {
       },
       async all<T>() {
         if (query === "SELECT slug, hits FROM counters ORDER BY slug LIMIT 101") {
-          return { results: [...db.counters.values()]
+          const rows = [...db.counters.values()]
             .sort((a, b) => a.slug.localeCompare(b.slug))
-            .slice(0, 101).map(row => ({ slug: row.slug, hits: row.hits }))
-            as unknown as T[], success: true };
+            .slice(0, 101).map(row => ({ slug: row.slug, hits: row.hits }));
+          return { results: rows as unknown as T[], success: true };
         }
         return { results: [] as T[], success: true };
       },
