@@ -197,6 +197,7 @@ test("doctor --steps prints a gated cross-platform checklist but executes nothin
     try {
       const local = await doctor(parseDoctorArgs(["--steps"]), root);
       assert.match(local, /MANUAL NEXT STEPS \(PRINT-ONLY/);
+      assert.match(local, /npm ci \(NETWORK: locked npm packages only/);
       assert.match(local, /self-host-smoke\.mjs/);
       assert.match(local, /npx wrangler whoami/);
       assert.doesNotMatch(local, /npx wrangler deploy/);
