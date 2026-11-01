@@ -136,7 +136,7 @@ export async function buildGallery({root=ROOT,output=OUTPUT}={}) {
   const model=await import("data:text/javascript;base64,"+
     Buffer.from(result.outputFiles[0].text).toString("base64"));
   if(!Array.isArray(model.CARD_THEMES)||model.CARD_THEMES.length!==6||
-    new Set(model.CARD_THEMES).size!==9)throw Error("Invalid six-theme catalog");
+    new Set(model.CARD_THEMES).size!==6)throw Error("Invalid six-theme catalog");
   const samples=model.CARD_THEMES.flatMap(name=>COUNTS.map(count=>({
     name,count,svg:model.renderSvg(model.clonePreset(name),count)
   })));
