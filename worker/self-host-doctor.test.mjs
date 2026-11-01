@@ -5,7 +5,7 @@ import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { initialize } from "../scripts/self-host-setup.mjs";
 import {
-  parseDoctorArgs, inspectSelfHostDoctor
+  parseDoctorArgs, inspectSelfHostDoctor, explainDoctorFailure
 } from "../scripts/self-host-doctor.mjs";
 
 const WORKER = "wvt-friend-mac-01";
@@ -68,9 +68,16 @@ const doctor = (args, root, environment = {}) =>
 test("doctor allows offline-first workflow and rejects ambiguous remote/write flags", () => {
   assert.deepEqual(parseDoctorArgs([]), {});
   assert.deepEqual(parseDoctorArgs(["--help"]), { help: true });
+  assert.deepEqual(parseDoctorArgs(["--steps"]), { steps: true });
+  assert.deepEqual(parseDoctorArgs(["--steps", "--account-subdomain", ACCOUNT]),
+    { steps: true, "account-subdomain": ACCOUNT });
+  assert.deepEqual(parseDoctorArgs(["--account-subdomain", ACCOUNT, "--steps"]),
+    { "account-subdomain": ACCOUNT, steps: true });
   assert.equal(parseDoctorArgs(["--account-subdomain", ACCOUNT, "--slug", SLUG]).slug, SLUG);
   for (const argv of [
     ["deploy"], ["--remote", "true"], ["--cloudflare-token", "secret"],
+    ["--steps", "--steps"], ["--steps", "--account-subdomain"],
+    ["--account-subdomain", "--steps"],
     ["--account-subdomain"], ["--slug", SLUG],
     ["--report", "receipt.json"], ["--readme", "README.md"],
     ["--account-subdomain", ACCOUNT, "--readme", "README.md"],
@@ -177,4 +184,70 @@ test("doctor refuses stale URL, tampered config, leaked old secrets and missing 
       'PUBLISHING_ENABLED = "true"'));
     await assert.rejects(() => doctor(args, root), /unsafe/);
   });
+});
+
+test("doctor --steps prints a gated cross-platform checklist but executes nothing", async () => {
+  await fixture(async root => {
+    const before = await readFile(join(root, "wrangler.selfhost.toml"), "utf8");
+    const adminBefore = await readFile(join(root, ".wvt-admin-token"), "utf8");
+    const secretBefore = await readFile(join(root, ".wvt-visit-secret"), "utf8");
+    const priorFetch = globalThis.fetch;
+    let requests = 0;
+    globalThis.fetch = () => { requests++; throw Error("NETWORK NEVER ALLOWED"); };
+    try {
+      const local = await doctor(parseDoctorArgs(["--steps"]), root);
+      assert.match(local, /MANUAL NEXT STEPS \(PRINT-ONLY/);
+      assert.match(local, /self-host-smoke\.mjs/);
+      assert.match(local, /npx wrangler whoami/);
+      assert.doesNotMatch(local, /npx wrangler deploy/);
+      assert.doesNotMatch(local, /--remote/);
+      const withOrigin = await doctor(parseDoctorArgs([
+        "--steps", "--account-subdomain", ACCOUNT
+      ]), root);
+      assert.match(withOrigin, /ONLY IF the named Worker\/D1 are YOUR disposable resources/);
+      assert.match(withOrigin, /npx wrangler d1 migrations apply DB --remote/);
+      assert.match(withOrigin, /npx wrangler deploy --config wrangler.selfhost.toml/);
+      assert.match(withOrigin, /npx wrangler secret put ADMIN_TOKEN/);
+      assert.match(withOrigin, /npx wrangler secret put VISIT_HASH_SECRET/);
+      assert.match(withOrigin, /READ-ONLY remote verification/);
+      assert(withOrigin.includes("self-host-verify.mjs --api " + ORIGIN));
+      assert(withOrigin.includes("self-host-publish.mjs list --api " + ORIGIN));
+      for (const text of [local, withOrigin]) {
+        assert(!text.includes(adminBefore.trim()));
+        assert(!text.includes(secretBefore.trim()));
+        assert(!text.includes("12345678-aaaa-4bbb-8ccc-123456789abc"));
+        assert(!text.includes("private-d1-not-a-hostname"));
+      }
+      assert.equal(requests, 0);
+      assert.equal(await readFile(join(root, "wrangler.selfhost.toml"), "utf8"), before);
+      assert.equal(await readFile(join(root, ".wvt-admin-token"), "utf8"), adminBefore);
+      assert.equal(await readFile(join(root, ".wvt-visit-secret"), "utf8"), secretBefore);
+    } finally { globalThis.fetch = priorFetch; }
+  });
+});
+
+test("doctor failure codes are actionable but cannot reflect private paths or secrets", () => {
+  const secret = "private-admin-token-VERY-SECRET-DO-NOT-PRINT";
+  const path = "/Users/private-person/.secrets/" + secret;
+  const examples = [
+    [Object.assign(new Error("open " + path), { code: "ENOENT" }), "WVT-D01"],
+    [new Error("Node.js 22.12+ LTS, 24.x, or 26+ is required by the locked toolchain"), "WVT-D02"],
+    [new Error("Missing, identical, or malformed local secret files"), "WVT-D03"],
+    [new Error("Self-host Wrangler configuration is incomplete or unsafe"), "WVT-D04"],
+    [new Error("Missing or incompatible npm package-lock.json"), "WVT-D05"],
+    [new Error("WVT_API_URL disagrees with the locally configured Worker origin"), "WVT-D06"],
+    [new Error("Invalid counter slug; never guess it from a D1 or Worker name"), "WVT-D07"],
+    [new Error("Report is not a completed real-cloud live-check receipt"), "WVT-D08"],
+    [new Error("README audit requires an existing --slug or successful --report"), "WVT-D09"],
+    [new Error("arbitrary user text " + secret + " in " + path), "WVT-D00"]
+  ];
+  for (const [error, code] of examples) {
+    const result = explainDoctorFailure(error);
+    assert(result.startsWith(code), code + " vs " + result);
+    assert(!result.includes(secret));
+    assert(!result.includes(path));
+    assert(!result.includes("12345678-aaaa"));
+    assert(result.length < 500);
+  }
+  assert.match(explainDoctorFailure(null), /^WVT-D00 /);
 });
