@@ -30,5 +30,7 @@ jobs:
         run: npm run build:offline
       - name: Exercise real local Worker and persistent D1 across restart
         run: node worker/local-smoke.mjs
+      - name: Run self-hosted Worker end-to-end on disposable local D1
+        run: node worker/self-host-smoke.mjs
       - name: Export and restore only the disposable local D1 database
         run: node worker/backup-restore-drill.mjs
