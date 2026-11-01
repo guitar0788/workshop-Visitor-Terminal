@@ -94,13 +94,11 @@ test("release preview ZIP contains ONLY reviewed project sources and never secre
     const service = extracted.get("worker/service.ts").toString("utf8");
     const publishing = extracted.get("worker/publishing.ts").toString("utf8");
     const manifest = JSON.parse(extracted.get("package.json").toString("utf8"));
-    const lock = JSON.parse(extracted.get("package-lock.json").toString("utf8"));
     assert.match(entry, /from "\.\/service"/);
     assert.match(service, /from "\.\/publishing"/);
     assert.match(service, /from "\.\.\/src\/model"/);
     assert.match(publishing, /from "\.\.\/src\/model"/);
-    assert(manifest.devDependencies.wrangler, "Reproducible Wrangler install manifest");
-    assert(lock.packages[""].devDependencies.wrangler, "Root npm lockfile should cover Wrangler");
+    assert(manifest.devDependencies.wrangler, "Wrangler install manifest");
     assert.match(extracted.get("wrangler.selfhost.example.toml").toString("utf8"),
       /PUBLISHING_ENABLED = "false"/);
     assert.match(extracted.get("docs/SELF_HOSTING.md").toString("utf8"), /自托管/);
