@@ -239,7 +239,7 @@ describe("inline gallery fragment isolation", () => {
         }
         expect(svg).not.toContain('id="clip-heading"');
         expect([...svg.matchAll(/<clipPath\b/g)]).toHaveLength(
-          isApprovedTheme(theme) ? 1 : theme === "minimal-card" ? 3 : 2);
+          isApprovedTheme(theme) ? 1 : 3);
       }
     }
     expect(total).toBeGreaterThanOrEqual(24);
