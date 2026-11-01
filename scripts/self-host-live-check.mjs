@@ -21,6 +21,7 @@ import {
 import { validateConfig } from "./self-host-setup.mjs";
 import { verifySelfHost } from "./self-host-verify.mjs";
 import { writeReadinessReport } from "./self-host-readiness.mjs";
+import { resolveSelfHostApi } from "./self-host-api.mjs";
 import { createReadmeSnippet } from "./self-host-readme.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -31,11 +32,12 @@ const HELP = [
   "  node scripts/self-host-live-check.mjs --api https://YOUR-WORKER.YOUR-SUBDOMAIN.workers.dev --owner YOUR_GITHUB_NAME --confirm-worker YOUR-WORKER --allow-persistent-test-record --token-file .wvt-admin-token",
   "  Optional: --report live-check.json (must not exist).",
   "REQUIRES your OWN deployed Cloudflare Worker and D1, completed migrations and secrets.",
+  "Set WVT_API_URL once to omit --api (only your own HTTPS workers.dev origin).",
   "No automatic deploy or cleanup. Inspect the permanent diagnostic slug if a check fails.",
   "This is NOT proof of account ownership or zero Cloudflare usage/costs."
 ].join("\n") + "\n";
 
-export function parseLiveArgs(argv) {
+export function parseLiveArgs(argv, environment = process.env) {
   if (argv.length === 1 && ["help", "--help", "-h"].includes(argv[0])) {
     return { help: true };
   }
@@ -55,7 +57,8 @@ export function parseLiveArgs(argv) {
     }
     args[key] = argv[++i];
   }
-  if (!args.api || !OWNER.test(args.owner ?? "") || !args["confirm-worker"] ||
+  args.api = resolveSelfHostApi(args.api, environment);
+  if (!OWNER.test(args.owner ?? "") || !args["confirm-worker"] ||
       args.consent !== true) {
     throw Error("Live test requires --api, --owner, --confirm-worker and explicit persistent-write consent");
   }
@@ -67,9 +70,9 @@ export function parseLiveArgs(argv) {
 }
 
 export async function assertLiveDestination(args, {
-  root = ROOT, allowLoopbackTest = false
+  root = ROOT, allowLoopbackTest = false, environment = process.env
 } = {}) {
-  const origin = validateApiOrigin(args.api);
+  const origin = validateApiOrigin(resolveSelfHostApi(args.api, environment));
   const hostname = new URL(origin).hostname.toLowerCase();
   if (allowLoopbackTest && /^http:\/\/127\.0\.0\.1:\d+$/.test(origin)) {
     return origin; // Only for direct calls from the local integration suite.
@@ -173,7 +176,7 @@ export async function runLiveCheck(args, {
   if (args.consent !== true || !OWNER.test(args.owner ?? "")) {
     throw Error("Missing explicit persistent-counter consent or owner");
   }
-  const origin = await assertLiveDestination(args, { root, allowLoopbackTest });
+  const origin = await assertLiveDestination(args, { root, allowLoopbackTest, environment });
   const usingLocalTest = allowLoopbackTest && origin.startsWith("http://127.0.0.1:");
   // Verify identity, publishing lockdown, D1 readiness and non-counting HEAD
   // before ANY mutation. The only privileged preflight call is a read.
@@ -281,9 +284,9 @@ async function main() {
     process.stdout.write("PASS: " + result.runtime + " counter create, HEAD, " +
       "one qualifying GET, same-client deduplication and design update.\n" +
       "Permanent diagnostic counter: " + result.diagnosticCounter + "\n" +
-      "Direct SVG URL: " + createReadmeSnippet(args.api, result.diagnosticCounter).url + "\n" +
+      "Direct SVG URL: " + createReadmeSnippet(resolveSelfHostApi(args.api), result.diagnosticCounter).url + "\n" +
       "GitHub README (copy the entire line):\n" +
-      createReadmeSnippet(args.api, result.diagnosticCounter).markdown + "\n" +
+      createReadmeSnippet(resolveSelfHostApi(args.api), result.diagnosticCounter).markdown + "\n" +
       "This diagnostic is NOT the illustrative my-counter slug. Do not change the slug.\n" +
       "Cloudflare account ownership and billing isolation still require manual confirmation.\n" +
       (args.report ? "Sanitized live-check report saved without overwrite.\n" : ""));
