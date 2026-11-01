@@ -5,8 +5,9 @@
  * never embed it in HTML, a GitHub Action, a URL, or a public README.
  */
 import { readFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import { resolve, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { validateConfig } from "./self-host-setup.mjs";
 
 const SLUG = /^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?$/;
 const OWNER = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$/;
@@ -66,6 +67,39 @@ export function validateApiOrigin(raw) {
     throw Error("--api must be the root HTTPS origin of YOUR Worker (HTTP allowed only on loopback)");
   }
   return url.origin;
+}
+
+/**
+ * For workers.dev URLs, compare the first hostname label with the generated
+ * local Worker configuration whenever it exists. This cannot prove Cloudflare
+ * account ownership, but prevents common wrong-Worker typos before any secret
+ * is read or sent. Custom domains must be verified by the operator.
+ */
+export async function assertLocalWorkerHostname(origin, {
+  configPath = join(resolve(dirname(fileURLToPath(import.meta.url)), ".."),
+    "wrangler.selfhost.toml")
+} = {}) {
+  let config;
+  try {
+    config = await readFile(configPath, "utf8");
+  } catch (error) {
+    if (error?.code === "ENOENT") return false;
+    throw Error("Could not inspect private local Worker configuration");
+  }
+  let name;
+  try {
+    name = validateConfig(config).worker;
+  } catch {
+    throw Error("Local self-host configuration is invalid; refusing remote administration");
+  }
+  const hostname = new URL(origin).hostname.toLowerCase();
+  if (hostname.endsWith(".workers.dev")) {
+    const labels = hostname.split(".");
+    if (labels.length !== 4 || labels[0] !== name) {
+      throw Error("Worker hostname does not match the private local self-host configuration");
+    }
+  }
+  return true;
 }
 
 export async function readDesign(path) {
@@ -171,6 +205,7 @@ async function requestJson(origin, token, path, method, payload, fetchImpl) {
 export async function execute(options, { fetchImpl = fetch, environment = process.env } = {}) {
   if (options.command === "help") return HELP;
   const origin = validateApiOrigin(options.api);
+  await assertLocalWorkerHostname(origin);
   await assertSafePublishingTarget(origin, fetchImpl);
   const token = await readAdminToken({ tokenFile: options["token-file"], environment });
   const slug = options.slug;
