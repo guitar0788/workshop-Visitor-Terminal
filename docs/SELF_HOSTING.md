@@ -58,7 +58,26 @@ npx wrangler whoami
 npx wrangler d1 create my-visitor-counter-db
 ```
 
-运行 **本地配置生成器**。将下方名称与上一步得到的真实 D1 UUID 替换成自己的值：
+### 1.1 推荐：交互式本地安装向导
+
+先确认 `npm ci`、`wrangler login` / `whoami`、以及**自己账户中新建的 D1** 已按上面的步骤完成，然后在解压目录运行：
+
+```sh
+node scripts/self-host-wizard.mjs
+```
+
+向导依次询问**你自己账户的确认**（输入 `OWN`）、全新 Worker 名称、新 D1 数据库名称、`wrangler d1 create` 返回的真正 D1 UUID，最后仅在输入 `CREATE` 时创建本地配置和两份随机密钥，并立即执行离线就绪检查。复制 D1 UUID 时只需粘贴在**自己的终端**，不要贴进聊天、Issue 或公开仓库。向导不会联网、执行 Wrangler、创建远程数据库、部署 Worker、上传密钥或读取账户私有信息。
+
+它会严格拒绝覆盖已有的完整或不完整配置。如果已有 `wrangler.selfhost.toml` 或 `.wvt-admin-token` / `.wvt-visit-secret`，**不要删除、重置或重新运行向导以求修复**；改用安全的只读检查：
+
+```sh
+node scripts/self-host-wizard.mjs --check
+node scripts/self-host-doctor.mjs --steps
+```
+
+`--check` 不联网，只核查本地状态。`--steps` 只打印后续操作命令，是否执行云端迁移和部署仍由用户本人决定。离线 PASS **不能证明** Worker 已部署、D1 真正属于哪个 Cloudflare 账户或产生何种账单。
+
+**备选：不使用向导，手动输入参数。** 将下方名称与上一步得到的真实 D1 UUID 替换成自己的值：
 
 ```sh
 node scripts/self-host-setup.mjs init --worker my-visitor-worker --database my-visitor-counter-db --database-id YOUR_NEW_D1_UUID
