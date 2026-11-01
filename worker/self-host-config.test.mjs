@@ -13,5 +13,8 @@ test("public self-host template uses a new isolated DB and never enables central
   assert.match(template, /name = "SVG_RATE_LIMITER"/);
   assert.match(ignore, /wrangler\.selfhost\.toml/);
   assert.match(ignore, /\.wvt-admin-token/);
+  for (const report of ["self-host-readiness.json", "selfhost-live-result.json", "selfhost-ci-report.json", "live-check.json"]) {
+    assert(ignore.split(/\r?\n/).includes(report), "Local acceptance report is not gitignored: " + report);
+  }
   assert.doesNotMatch(template, /fangcui2007|PILOT_GITHUB_USER_ID|GITHUB_CLIENT_SECRET/);
 });
