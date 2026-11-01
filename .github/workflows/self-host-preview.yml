@@ -13,7 +13,6 @@ on:
       - "src/model.ts"
       - "package.json"
       - "package-lock.json"
-      - "package-lock.json"
       - "wrangler.selfhost.example.toml"
       - "docs/SELF_HOSTING.md"
 
