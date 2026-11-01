@@ -14,6 +14,8 @@ jobs:
       - run: npm ci
       - name: Audit runtime dependencies
         run: npm audit --omit=dev --audit-level=high
+      - name: Audit locked development dependencies too
+        run: npm audit --audit-level=moderate
       - name: Apply D1 migrations to a disposable local database
         run: |
           cp wrangler.example.toml wrangler.toml
