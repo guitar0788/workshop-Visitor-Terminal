@@ -14,3 +14,4 @@ wrangler.selfhost.toml
 .wvt-admin-token
 .wvt-visit-secret
 wrangler.selfhost.ci.toml
+wrangler.selfhost.smoke.toml
