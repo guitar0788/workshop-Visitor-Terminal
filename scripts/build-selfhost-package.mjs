@@ -11,6 +11,7 @@
  * scripts only after explicitly choosing an account and deployment target.
  */
 import { deflateRawSync } from "node:zlib";
+import { createHash } from "node:crypto";
 import { readFile, mkdir, writeFile } from "node:fs/promises";
 import { resolve, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -137,7 +138,10 @@ export async function buildSelfHostPackage({ root = ROOT, output = join(ROOT, "d
   const result = archive(files);
   await mkdir(dirname(output), { recursive: true });
   await writeFile(output, result);
-  return { path: output, bytes: result.length, members: files.length, zip: result };
+  const sha256 = createHash("sha256").update(result).digest("hex");
+  const checksumPath = output + ".sha256";
+  await writeFile(checksumPath, sha256 + "  " + ZIP_NAME + "\n", "utf8");
+  return { path: output, checksumPath, sha256, bytes: result.length, members: files.length, zip: result };
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
@@ -145,7 +149,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     const built = await buildSelfHostPackage();
     console.log("PASS: source-only self-host preview ZIP generated (" +
       built.members + " allowed files, " + built.bytes + " bytes).");
-    console.log("Output: dist/" + ZIP_NAME);
+    console.log("Output: dist/" + ZIP_NAME + " and its SHA256 checksum file.");
     console.log("No Cloudflare account, secrets or remote APIs were accessed.");
   } catch {
     console.error("Self-host archive build failed. No release was published.");
