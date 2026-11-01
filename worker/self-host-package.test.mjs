@@ -85,6 +85,8 @@ test("release preview ZIP contains ONLY reviewed project sources and never secre
     const extracted = extractZip(result.zip);
     assert(extracted.has("scripts/self-host-url.mjs"), "Offline URL tool is included in independent self-host ZIP");
     assert(extracted.has("scripts/self-host-doctor.mjs"), "Offline one-command diagnosis is included in independent self-host ZIP");
+    assert(extracted.has("scripts/self-host-wizard.mjs"), "Interactive local-only wizard is included in independent self-host ZIP");
+    assert.match(extracted.get("scripts/self-host-wizard.mjs").toString("utf8"), /runGuidedSetup/);
     assert.deepEqual([...extracted.keys()].sort(), [...ALLOWED_FILES].sort());
     assert(![...extracted.keys()].some(name =>
       /\.dev\.vars|\.env|\.wvt-admin-token|\.wvt-visit-secret|wrangler\.toml|\.sqlite|node_modules|dist\//i.test(name)));
