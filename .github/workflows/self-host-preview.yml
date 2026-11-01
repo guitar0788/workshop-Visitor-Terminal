@@ -29,6 +29,17 @@ jobs:
           node-version: "22"
       - name: Install project dependencies
         run: npm install
+      - name: Emit dependency lock for reviewed feature-branch commit (temporary)
+        run: |
+          node - <<'NODE'
+          const fs = require("node:fs");
+          const text = fs.readFileSync("package-lock.json", "utf8");
+          if (text.length > 2_000_000) throw Error("Lockfile unexpectedly large");
+          for (let i = 0, offset = 0; offset < text.length; i++, offset += 3000) {
+            console.log("WVT_LOCK_CHUNK_" + i + "_" + JSON.stringify(text.slice(offset, offset + 3000)));
+          }
+          console.log("WVT_LOCK_END_" + Math.ceil(text.length / 3000));
+          NODE
       - name: Verify ZIP encoding, file allowlist, checksums and no private files
         run: node --test worker/self-host-package.test.mjs
       - name: Build ZIP and SHA256 from explicit source file allowlist
