@@ -101,10 +101,37 @@ jobs:
           node worker/self-host-smoke.mjs
           if ($LASTEXITCODE -ne 0) { throw "Windows local Worker/D1 smoke failed" }
 
+  macos-zip-smoke:
+    name: macOS standalone ZIP / Worker+D1
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'feat/v06-independent-self-hosting'
+    needs: package
+    runs-on: macos-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: Workshop-SelfHost-CI-Input
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Verify original ZIP checksum and run real local macOS Wrangler/D1
+        shell: bash
+        run: |
+          set -euo pipefail
+          zip="Workshop-Visitor-Terminal-Self-Host.zip"
+          expected="$(awk '{print $1}' "$zip.sha256")"
+          actual="$(shasum -a 256 "$zip" | awk '{print $1}')"
+          test "$expected" = "$actual"
+          mkdir -p .wvt-macos-package-ci
+          unzip -q "$zip" -d .wvt-macos-package-ci
+          cd .wvt-macos-package-ci/Workshop-Visitor-Terminal-Self-Host
+          npm ci
+          node worker/self-host-dryrun.mjs
+          node worker/self-host-smoke.mjs
+
   validated-preview:
     name: Publish validated PREVIEW only (not a Release)
     if: github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'feat/v06-independent-self-hosting'
-    needs: [package, windows-zip-smoke]
+    needs: [package, windows-zip-smoke, macos-zip-smoke]
     runs-on: ubuntu-latest
     permissions:
       contents: read
