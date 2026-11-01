@@ -295,6 +295,14 @@ node scripts/self-host-readme.mjs --report selfhost-live-result.json
 
 如果此前没有生成成功的实机验收 JSON 报告，恢复工具会拒绝凭空猜测一个计数器名称。**不要为绕过这个限制在其他人的账户中制造新的计数器。**
 
+### 5.1.1 三款批准卡片的 SVG 图片加载模式
+
+像素猫、绿色终端和蓝金 RPG 三款使用批准的原始画面（内嵌 `image/avif`），与另外六款矢量插画实现不同。**Chrome 单独打开 SVG 正常，不代表 GitHub README 图片代理能显示它。**
+
+项目新增离线浏览器验收：`node scripts/card-image-context-audit.mjs build` 生成 9 张 HTML `<img>` 引用 SVG 的预览（三款 × 12,847／12,848／999,999,999,999），并由专用 Actions 在真实 Chrome 中执行 `img.decode()`、检查原始尺寸、验证画面确有可见颜色与细节。该测试不连接 Cloudflare/GitHub，不增加访问量或使用数据库。构建产物包含 `WVT-Three-Approved-External-Image-Mode.png` 和离线 HTML。
+
+**这个检查不能替代 GitHub README 的实机图片验收。** GitHub 图片代理、SVG 内嵌 AVIF、安全过滤、缓存及实际 Worker 响应头都可能影响远程展示。三款未通过真实 README 展示前不能宣称 GitHub 兼容已验证，更不能解除 Issue #22 的发布门禁。不要为了视觉诊断重新创建计数器或部署新 Worker。
+
 ### 5.2 纯离线核对本地 README 中的计数器 SVG
 
 如果已经保存了**真实远程验收成功报告**，且电脑上有待提交的 README.md，可在上传 GitHub 前对照检查：

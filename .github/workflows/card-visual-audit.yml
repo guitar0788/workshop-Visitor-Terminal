@@ -5,6 +5,11 @@ on:
     paths:
       - ".github/workflows/card-visual-audit.yml"
       - "scripts/card-visual-audit.mjs"
+      - "scripts/card-image-context-audit.mjs"
+      - "worker/card-image-context-audit.test.mjs"
+      - "src/approved-reference-cards.ts"
+      - "src/approved-three-card-image.ts"
+      - "src/approved-clean-card-image.ts"
       - "worker/card-visual-audit.test.mjs"
       - "src/model.ts"
       - "src/card-art.ts"
@@ -58,6 +63,30 @@ jobs:
             --dump-dom "file://$PWD/dist/Card-Visual-Review.html" \
             > dist/card-browser-dom.html 2> /dev/null
           node scripts/card-visual-audit.mjs check dist/card-browser-dom.html
+      - name: Test exact approved images in external SVG image context
+        run: node --test worker/card-image-context-audit.test.mjs
+      - name: Build nine real reference image-loading cases
+        run: node scripts/card-image-context-audit.mjs build
+      - name: Check Chrome decodes raster-backed SVG through HTML img
+        run: |
+          set -euo pipefail
+          google-chrome --headless=new --no-sandbox --disable-gpu \
+            --disable-dev-shm-usage --disable-extensions \
+            --virtual-time-budget=12000 \
+            --dump-dom "file://$PWD/dist/Approved-Three-External-Image-Review.html" \
+            > dist/approved-external-image-browser-dom.html 2> /dev/null
+          node scripts/card-image-context-audit.mjs check dist/approved-external-image-browser-dom.html
+      - name: Capture external img rendering as review-only screenshot
+        if: always()
+        run: |
+          set -euo pipefail
+          test -s dist/Approved-Three-External-Image-Review.html
+          google-chrome --headless=new --no-sandbox --disable-gpu \
+            --disable-dev-shm-usage --disable-extensions --hide-scrollbars \
+            --window-size=1590,1660 \
+            --screenshot="$PWD/dist/WVT-Three-Approved-External-Image-Mode.png" \
+            "file://$PWD/dist/Approved-Three-External-Image-Review.html" 2> /dev/null
+          test -s dist/WVT-Three-Approved-External-Image-Mode.png
       - name: Upload browser preview image and self-contained HTML (not a release)
         if: always()
         uses: actions/upload-artifact@v4
@@ -66,5 +95,7 @@ jobs:
           path: |
             dist/WVT-Nine-Cards-Visual-Review.png
             dist/Card-Visual-Review.html
+            dist/Approved-Three-External-Image-Review.html
+            dist/WVT-Three-Approved-External-Image-Mode.png
           retention-days: 7
           if-no-files-found: warn
