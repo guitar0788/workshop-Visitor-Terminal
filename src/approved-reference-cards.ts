@@ -19,27 +19,28 @@ export const APPROVED_THEMES = ["pixel-card","terminal-card","rpg-card"] as cons
 export type ApprovedTheme = typeof APPROVED_THEMES[number];
 export const REFERENCE_WIDTH = 690;
 export const REFERENCE_HEIGHT = 362;
+export function approvedCanvasWidth(theme: ApprovedTheme): number { return REGION[theme].cropWidth; }
 export const REFERENCE_DEMO_COUNT = "12,847";
 export function isApprovedTheme(v: unknown): v is ApprovedTheme {
   return v === "pixel-card" || v === "terminal-card" || v === "rpg-card";
 }
 
 type CleanRegion = {
-  cropX: number; x: number; y: number; width: number; height: number;
+  cropX: number; cropWidth: number; x: number; y: number; width: number; height: number;
   textX: number; textY: number; fontSize: number; color: string;
 };
 const REGION: Record<ApprovedTheme, CleanRegion> = {
   "pixel-card": {
-    cropX: 0, x: 302, y: 164, width: 292, height: 86,
+    cropX: 0, cropWidth: 690, x: 302, y: 164, width: 292, height: 86,
     textX: 310, textY: 179, fontSize: 68, color: "#122e61"
   },
   "terminal-card": {
-    cropX: 690, x: 125, y: 189, width: 304, height: 97,
-    textX: 129, textY: 196, fontSize: 65, color: "#6bff9e"
+    cropX: 692, cropWidth: 735, x: 123, y: 189, width: 304, height: 97,
+    textX: 127, textY: 196, fontSize: 65, color: "#6bff9e"
   },
   "rpg-card": {
-    cropX: 1380, x: 291, y: 160, width: 302, height: 105,
-    textX: 296, textY: 163, fontSize: 72, color: "#ffdf92"
+    cropX: 1450, cropWidth: 722, x: 221, y: 160, width: 302, height: 105,
+    textX: 226, textY: 163, fontSize: 72, color: "#ffdf92"
   }
 };
 
@@ -63,13 +64,13 @@ export function approvedBackdrop(
   theme: ApprovedTheme, width: number, height: number
 ): string {
   const c = REGION[theme];
-  const sx = width / REFERENCE_WIDTH;
+  const sx = width / c.cropWidth;
   const sy = height / REFERENCE_HEIGHT;
   // A nested SVG viewport is mandatory: otherwise the full 2090px reference
   // image overflows neighboring inline gallery cards despite their viewBoxes.
   return '<g transform="scale(' + sx + ' ' + sy + ')">' +
-    '<svg x="0" y="0" width="' + REFERENCE_WIDTH + '" height="' +
-    REFERENCE_HEIGHT + '" viewBox="0 0 ' + REFERENCE_WIDTH + ' ' +
+    '<svg x="0" y="0" width="' + c.cropWidth + '" height="' +
+    REFERENCE_HEIGHT + '" viewBox="0 0 ' + c.cropWidth + ' ' +
     REFERENCE_HEIGHT + '" overflow="hidden">' +
     '<image x="' + (-c.cropX) + '" y="0" width="' +
     APPROVED_SOURCE_WIDTH + '" height="' + APPROVED_SOURCE_HEIGHT +

@@ -1,6 +1,6 @@
 import { CARD_THEMES, isCardTheme, cardArtwork, type CardTheme } from "./card-art";
 import { isApprovedTheme, approvedBackdrop, approvedCountMarkup,
-  defaultApprovedCountLayer, REFERENCE_WIDTH, REFERENCE_HEIGHT }
+  defaultApprovedCountLayer, approvedCanvasWidth, REFERENCE_HEIGHT }
   from "./approved-reference-cards";
 export { CARD_THEMES } from "./card-art";
 export type { CardTheme } from "./card-art";
@@ -91,7 +91,7 @@ function makeCardPreset(theme: CardTheme): TerminalDesign {
     const countLayer = defaultApprovedCountLayer(theme);
     const bg = theme === "pixel-card" ? "#112039" :
       theme === "terminal-card" ? "#051f1a" : "#072d67";
-    return { schemaVersion:1, theme, width:REFERENCE_WIDTH,
+    return { schemaVersion:1, theme, width:approvedCanvasWidth(theme),
       height:REFERENCE_HEIGHT, background:bg, accent:countLayer.color,
       // Headings, characters and ornaments are fixed in the approved artwork.
       // Only the live visitor counter can be moved or edited independently.

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { isApprovedTheme } from "./approved-reference-cards";
+import { isApprovedTheme, approvedCanvasWidth } from "./approved-reference-cards";
 import { createRoot } from "react-dom/client";
 import {
   addLayer, CARD_THEMES, moveLayer, reorderLayer, renderSvg, sanitizeDesign,
@@ -632,9 +632,9 @@ function App() {
                 title={cardLabels[index]}
                 onClick={() => changePreset(theme)}>
                 <img alt="" loading="lazy" draggable={false}
-                  width={isApprovedTheme(theme) ? 690 : 600}
+                  width={isApprovedTheme(theme) ? approvedCanvasWidth(theme) : 600}
                   height={isApprovedTheme(theme) ? 362 : 210}
-                  style={{aspectRatio: isApprovedTheme(theme) ? "690 / 362" : "600 / 210"}}
+                  style={{aspectRatio: isApprovedTheme(theme) ? `${approvedCanvasWidth(theme)} / 362` : "600 / 210"}}
                   src={src}/>
                 <span>{cardLabels[index]}</span>
               </button>

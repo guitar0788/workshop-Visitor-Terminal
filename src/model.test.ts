@@ -3,7 +3,7 @@ import {
   addLayer, CARD_THEMES, clonePreset, escapeXml, fittedCountSize, moveLayer,
   renderSvg, reorderLayer, sanitizeDesign
 } from "./model";
-import { isApprovedTheme } from "./approved-reference-cards";
+import { isApprovedTheme, approvedCanvasWidth } from "./approved-reference-cards";
 
 describe("visitor terminal SVG layer model", () => {
   it("starts with editable layers and isolated presets", () => {
@@ -264,13 +264,13 @@ describe("visual reference fidelity — nine wide illustrated cards", () => {
     for (const theme of CARD_THEMES) {
       const card = clonePreset(theme);
       const isReference = isApprovedTheme(theme);
-      expect(card.width).toBe(isReference ? 690 : 600);
+      expect(card.width).toBe(isReference ? approvedCanvasWidth(theme) : 600);
       expect(card.height).toBe(isReference ? 362 : 210);
       expect(card.layers.filter(l => l.kind === "count")).toHaveLength(1);
       expect(card.layers[0].visible).toBe(true);
       const actual = renderSvg(card, 12_847);
       expect(actual).toContain(isReference ?
-        'width="690" height="362" viewBox="0 0 690 362"' :
+        'width="' + approvedCanvasWidth(theme) + '" height="362" viewBox="0 0 ' + approvedCanvasWidth(theme) + ' 362"' :
         'width="600" height="210" viewBox="0 0 600 210"');
       if (!isReference) expect(actual).toContain('scale(1 1)');
       expect(actual).toContain('>12,847</text>');
