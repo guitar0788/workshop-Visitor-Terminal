@@ -7,7 +7,7 @@ import { createHash } from "node:crypto";
 import { inflateRawSync } from "node:zlib";
 import {
   ALLOWED_FILES, PACKAGE_DIR, ROOT, archive, buildSelfHostPackage,
-  crc32, safeZipPath
+  crc32, safeZipPath, validateLockedDependencies
 } from "../scripts/build-selfhost-package.mjs";
 
 function extractZip(buffer) {
@@ -94,6 +94,11 @@ test("release preview ZIP contains ONLY reviewed project sources and never secre
     const service = extracted.get("worker/service.ts").toString("utf8");
     const publishing = extracted.get("worker/publishing.ts").toString("utf8");
     const manifest = JSON.parse(extracted.get("package.json").toString("utf8"));
+    const lock = JSON.parse(extracted.get("package-lock.json").toString("utf8"));
+    assert(validateLockedDependencies(manifest, lock) > 200,
+      "The real npm lock should be complete and pinned");
+    assert.deepEqual(lock.packages[""].dependencies, manifest.dependencies);
+    assert.deepEqual(lock.packages[""].devDependencies, manifest.devDependencies);
     assert.match(entry, /from "\.\/service"/);
     assert.match(service, /from "\.\/publishing"/);
     assert.match(service, /from "\.\.\/src\/model"/);
@@ -104,5 +109,25 @@ test("release preview ZIP contains ONLY reviewed project sources and never secre
     assert.match(extracted.get("docs/SELF_HOSTING.md").toString("utf8"), /自托管/);
   } finally {
     await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("package release validator refuses mismatched and unsafe npm dependency locks", async () => {
+  const manifest = JSON.parse(await readFile(join(ROOT, "package.json"), "utf8"));
+  const original = JSON.parse(await readFile(join(ROOT, "package-lock.json"), "utf8"));
+  assert(validateLockedDependencies(manifest, original) > 200);
+  const clone = () => structuredClone(original);
+  for (const mutate of [
+    v => { v.packages[""].devDependencies.wrangler = "latest"; },
+    v => { v.packages["node_modules/react"].resolved = "https://evil.example/react.tgz"; },
+    v => { v.packages["node_modules/react"].integrity = "unknown"; },
+    v => { v.packages["node_modules/react"].version = "file:../private"; },
+    v => { v.packages["node_modules/react"].link = true; },
+    v => { delete v.packages["node_modules/react"].integrity; },
+    v => { v.lockfileVersion = 1; }
+  ]) {
+    const input = clone();
+    mutate(input);
+    assert.throws(() => validateLockedDependencies(manifest, input));
   }
 });
