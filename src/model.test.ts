@@ -526,3 +526,30 @@ describe("canvas resizing preserves illustrated art and overlay alignment", () =
     expect(clamped.layers.some(l => l.kind === "count")).toBe(true);
   });
 });
+
+describe("in-bounds layer insertion on compact illustrated canvases", () => {
+  it("keeps every inserted tool visible at minimum size through the 32-layer limit", () => {
+    const kinds = ["text", "count", "dot", "panel"] as const;
+    for (const theme of CARD_THEMES) {
+      let design = resizeCanvas(clonePreset(theme), 280, 160);
+      for (let index = 0; index < 36; index++) {
+        const previous = design;
+        design = addLayer(design, kinds[index % kinds.length], "extra_" + index);
+        const inserted = design.layers.find(l => l.id === "extra_" + index);
+        if (!inserted) {
+          expect(previous.layers).toHaveLength(32);
+          expect(design).toBe(previous);
+          continue;
+        }
+        expect(inserted.x).toBeGreaterThanOrEqual(0);
+        expect(inserted.y).toBeGreaterThanOrEqual(0);
+        expect(inserted.x + inserted.width).toBeLessThanOrEqual(280);
+        expect(inserted.y + inserted.height).toBeLessThanOrEqual(160);
+        expect(design.layers.length).toBeLessThanOrEqual(32);
+      }
+      const json = JSON.parse(JSON.stringify(design));
+      expect(sanitizeDesign(json)).toEqual(design);
+      expect(renderSvg(json, 42)).toContain(">42</text>");
+    }
+  });
+});
