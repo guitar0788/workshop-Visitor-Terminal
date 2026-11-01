@@ -16,3 +16,8 @@ wrangler.selfhost.toml
 wrangler.selfhost.ci.toml
 wrangler.selfhost.smoke.toml
 .wvt-package-ci/
+self-host-readiness.json
+selfhost-live-result.json
+selfhost-ci-report.json
+local-readiness.json
+live-check.json
