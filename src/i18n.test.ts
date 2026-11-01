@@ -60,3 +60,21 @@ describe("Studio bilingual UI", () => {
     }
   });
 });
+
+describe("Minecraft-style bilingual card labels", () => {
+  it("localizes all three new voxel scenes without altering old presets", () => {
+    const examples = [["mc-overworld","主世界访客"],["mc-nether","下界探索者"],
+      ["mc-end","末地探索者"]] as const;
+    for(const [theme,title] of examples) {
+      const en=createLocalizedPreset(theme,"en");
+      const zh=createLocalizedPreset(theme,"zh-CN");
+      expect(en.theme).toBe(theme);
+      expect(zh.layers.find(layer=>layer.id==="heading")?.text).toBe(title);
+      expect(en.layers.find(layer=>layer.id==="heading")?.text).not.toBe(title);
+      expect(renderSvg(zh,100)).toContain(title);
+      expect(clonePreset(theme)).toEqual(en);
+    }
+    expect(translations.en.cardTemplates).toContain("6");
+    expect(translations["zh-CN"].cardTemplates).toContain("6");
+  });
+});

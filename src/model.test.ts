@@ -88,9 +88,9 @@ describe("visitor terminal SVG layer model", () => {
 
 
 describe("v0.6 illustrated visitor cards", () => {
-  it("delivers nine independent original card templates with editable live counts", () => {
-    expect(CARD_THEMES).toHaveLength(9);
-    expect(new Set(CARD_THEMES).size).toBe(9);
+  it("offers six illustrated cards with live editable visitor counts", () => {
+    expect(CARD_THEMES).toHaveLength(6);
+    expect(new Set(CARD_THEMES).size).toBe(6);
     for (const theme of CARD_THEMES) {
       const design = clonePreset(theme);
       expect(design.theme).toBe(theme);
@@ -179,7 +179,7 @@ describe("formatted count fit and long-term visitor growth", () => {
     }
   });
 
-  it("shrinks 12-digit counts to fit all nine illustrated count boxes", () => {
+  it("shrinks 12-digit counts to fit all selectable illustrated count boxes", () => {
     for (const theme of CARD_THEMES) {
       const d = clonePreset(theme);
       const counter = "999,999,999,999";
@@ -219,7 +219,7 @@ describe("formatted count fit and long-term visitor growth", () => {
 
 
 describe("inline gallery fragment isolation", () => {
-  it("never shares a clip or built-in gradient/pattern identifier across 18 rendered cards", () => {
+  it("never shares a clip or gradient identifier across 12 rendered cards", () => {
     const ids = new Set<string>();
     let total = 0;
     for (const theme of CARD_THEMES) {
@@ -242,7 +242,7 @@ describe("inline gallery fragment isolation", () => {
           isApprovedTheme(theme) ? 1 : theme === "minimal-card" ? 3 : 2);
       }
     }
-    expect(total).toBeGreaterThanOrEqual(38);
+    expect(total).toBeGreaterThanOrEqual(24);
   });
 
   it("keeps SVG fragment targets distinct when a user moves a layer", () => {
@@ -259,7 +259,7 @@ describe("inline gallery fragment isolation", () => {
 });
 
 
-describe("visual reference fidelity — nine wide illustrated cards", () => {
+describe("visual fidelity — approved three plus three Minecraft-inspired voxel scenes", () => {
   it("uses the original wide-banner canvas instead of old tall placeholder proportions", () => {
     for (const theme of CARD_THEMES) {
       const card = clonePreset(theme);
@@ -283,7 +283,7 @@ describe("visual reference fidelity — nine wide illustrated cards", () => {
 
   it("renders distinct actual vector scenes rather than switching only colors or text", () => {
     const scenes = CARD_THEMES.map(theme => renderSvg(clonePreset(theme), 12_847));
-    expect(new Set(scenes).size).toBe(9);
+    expect(new Set(scenes).size).toBe(6);
     for (const [i, svg] of scenes.entries()) {
       const theme = CARD_THEMES[i];
       if (isApprovedTheme(theme)) {
@@ -295,9 +295,9 @@ describe("visual reference fidelity — nine wide illustrated cards", () => {
       }
       expect(svg).toContain("<defs>");
     }
-    expect(scenes[5]).toContain("planet");
-    expect(scenes[6]).toContain("paperLines");
-    expect(scenes[7]).toContain("neonGlow");
+    expect(scenes[3]).toContain("ovsky");
+    expect(scenes[4]).toContain("lavaGlow");
+    expect(scenes[5]).toContain("eGlow");
   });
 });
 
@@ -378,6 +378,48 @@ describe("owner-approved 1 / 3 / 5 composition fidelity", () => {
       expect(svg).not.toContain('>12,847</text>');
       expect(svg).toContain('data-count-layer="true"');
       expect(svg).not.toContain('opacity="0"');
+    }
+  });
+});
+
+
+describe("selectable Minecraft styles and retired-card compatibility", () => {
+  const active = ["pixel-card","terminal-card","rpg-card",
+    "mc-overworld","mc-nether","mc-end"] as const;
+  const retired = ["modern-card","cozy-card","space-card",
+    "notebook-card","neon-card","minimal-card"] as const;
+
+  it("only offers the approved three plus Overworld/Nether/End; all preserve real counts", () => {
+    expect([...CARD_THEMES]).toEqual([...active]);
+    for (const theme of active) {
+      const svg = renderSvg(clonePreset(theme), 12_848);
+      expect(svg).toContain(">12,848</text>");
+      expect(svg).not.toContain("<script");
+      expect(svg).not.toContain("https://");
+      if (theme.startsWith("mc-")) {
+        expect(svg).not.toMatch(/<image\b/);
+        expect(svg).toContain('shape-rendering="crispEdges"');
+      }
+    }
+  });
+
+  it("can still reopen and render all six retired serialized designs", () => {
+    for (const theme of retired) {
+      expect(CARD_THEMES as readonly string[]).not.toContain(theme);
+      const original=clonePreset(theme);
+      const restored=sanitizeDesign(JSON.parse(JSON.stringify(original)));
+      expect(restored.theme).toBe(theme);
+      expect(restored).toEqual(original);
+      expect(renderSvg(restored, 50)).toContain(">50</text>");
+    }
+  });
+
+  it("keeps every approved illustrated card byte-for-byte consistent at demo count", () => {
+    for (const theme of ["pixel-card","terminal-card","rpg-card"] as const) {
+      const a=renderSvg(clonePreset(theme),12_847);
+      expect(a).toContain('href="data:image/avif;base64,');
+      expect(a).toContain('opacity="0"');
+      expect(a).toContain('>12,847</text>');
     }
   });
 });

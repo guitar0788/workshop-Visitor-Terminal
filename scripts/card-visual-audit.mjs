@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Produce a browser-reviewable HTML gallery from the actual shared SVG renderer.
- * The browser evaluates SVGGraphicsElement.getBBox() for nine styles at both
+ * The browser evaluates SVGGraphicsElement.getBBox() for six selectable styles at both
  * ordinary and maximum-length visit counts. No remote access, no D1 or secrets.
  */
 import { build } from "esbuild";
@@ -12,7 +12,7 @@ import { fileURLToPath } from "node:url";
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 export const OUTPUT = resolve(ROOT, "dist", "Card-Visual-Review.html");
 export const COUNTS = [12_847, 999_999_999_999];
-export const SAMPLES = 18;
+export const SAMPLES = 12;
 const browserScript = [
   "(function(){",
   "const failures=[];let checkedText=0;const usedIds=new Set();",
@@ -25,7 +25,7 @@ const browserScript = [
   "usedIds.add(node.id);}",
   "const texts=[...svg.querySelectorAll('text')];",
   "const approved=['pixel-card','terminal-card','rpg-card'].includes(sample.dataset.theme);",
-  "if(texts.length!==(approved?1:sample.dataset.theme==='minimal-card'?3:2))failures.push(sample.dataset.theme+': wrong text layer count');",
+  "if(texts.length!==(approved?1:3))failures.push(sample.dataset.theme+': wrong text layer count');",
   "for(const t of texts){",
   "const clip=t.getAttribute('clip-path');",
   "if(!clip||!/^url\\(#clip-[A-Za-z0-9_-]{1,100}\\)$/.test(clip)){failures.push('unsafe/missing clip');continue;}",
@@ -119,8 +119,8 @@ export function createGallery(samples) {
     '<meta http-equiv="Content-Security-Policy" content="default-src '+
     "'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; "+
     "connect-src 'none'; img-src data:; base-uri 'none'; form-action 'none'"+
-    '"><title>WVT nine-card visual QA</title><style>'+css+'</style></head>'+
-    '<body><h1>Workshop Visitor Terminal · Nine illustrated card styles</h1>'+
+    '"><title>WVT six-card visual QA</title><style>'+css+'</style></head>'+
+    '<body><h1>Workshop Visitor Terminal · Six illustrated card styles</h1>'+
     '<p>Offline browser rendering at 12,847 and 999,999,999,999 visits. These are NOT cloud statistics.</p>'+
     '<main class="grid">'+cells+'</main>'+
     '<div class="note">This unsigned preview tests local SVG layout only. '+
@@ -135,8 +135,8 @@ export async function buildGallery({root=ROOT,output=OUTPUT}={}) {
   if(result.outputFiles?.length!==1)throw Error("Unexpected model bundler output");
   const model=await import("data:text/javascript;base64,"+
     Buffer.from(result.outputFiles[0].text).toString("base64"));
-  if(!Array.isArray(model.CARD_THEMES)||model.CARD_THEMES.length!==9||
-    new Set(model.CARD_THEMES).size!==9)throw Error("Invalid nine-theme catalog");
+  if(!Array.isArray(model.CARD_THEMES)||model.CARD_THEMES.length!==6||
+    new Set(model.CARD_THEMES).size!==9)throw Error("Invalid six-theme catalog");
   const samples=model.CARD_THEMES.flatMap(name=>COUNTS.map(count=>({
     name,count,svg:model.renderSvg(model.clonePreset(name),count)
   })));
@@ -154,7 +154,7 @@ export function parseBrowserAudit(html) {
   try{r=JSON.parse(match[1].replaceAll("&quot;",'"').replaceAll("&amp;","&"));}
   catch{throw Error("Malformed browser font audit result");}
   if(!r||r.schemaVersion!==1||r.kind!=="workshop-visitor-terminal-browser-svg-audit"||
-    r.sampleCount!==SAMPLES||r.checkedText!==32||
+    r.sampleCount!==SAMPLES||r.checkedText!==24||
     r.remoteRendering!=="NOT_TESTED"||r.githubReadmeRendering!=="NOT_TESTED"||
     !Array.isArray(r.failures)||r.failures.some(x=>typeof x!=="string")||
     !Number.isSafeInteger(r.overflowCount)||r.overflowCount!==r.failures.length||

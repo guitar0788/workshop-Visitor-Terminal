@@ -26,6 +26,7 @@ export const ALLOWED_FILES = Object.freeze([
   "package-lock.json",
   "src/model.ts",
   "src/card-art.ts",
+  "src/minecraft-card-art.ts",
   "src/approved-three-card-image.ts",
   "src/approved-clean-card-image.ts",
   "src/approved-reference-cards.ts",

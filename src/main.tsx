@@ -599,9 +599,9 @@ function App() {
 
   function renderTemplates() {
     const cardLabels = [
-      t.pixelCardTemplate, t.modernCardTemplate, t.terminalCardTemplate,
-      t.cozyCardTemplate, t.rpgCardTemplate, t.spaceCardTemplate,
-      t.notebookCardTemplate, t.neonCardTemplate, t.minimalCardTemplate
+      t.pixelCardTemplate, t.terminalCardTemplate, t.rpgCardTemplate,
+      t.minecraftOverworldTemplate, t.minecraftNetherTemplate,
+      t.minecraftEndTemplate
     ];
     return (
       <div className="template-picker">
@@ -611,6 +611,10 @@ function App() {
             <optgroup label={t.cardTemplates}>
               {CARD_THEMES.map((theme, index) =>
                 <option key={theme} value={theme}>{cardLabels[index]}</option>)}
+              {!CARD_THEMES.includes(design.theme as typeof CARD_THEMES[number]) &&
+                !["pixel", "cyber", "minimal"].includes(design.theme) && (
+                  <option value={design.theme}>{t.legacyTemplate}</option>
+                )}
             </optgroup>
             <optgroup label={t.classicTemplates}>
               <option value="pixel">{t.pixelTemplate}</option>

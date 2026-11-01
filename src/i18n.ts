@@ -17,9 +17,10 @@ const english = {
   cyberTemplate: "✧ Cyber HUD",
   minimalTemplate: "◻ Minimal",
   classicTemplates: "Classic styles",
-  cardTemplates: "Illustrated cards · 9",
+  legacyTemplate: "Previously saved style (no longer offered)",
+  cardTemplates: "Illustrated cards · 6",
   galleryHint: "Select a card to preview and edit its layers.",
-  galleryExpand: "Show all 9",
+  galleryExpand: "Show all 6",
   galleryCollapse: "Swipe gallery",
   pixelCardTemplate: "Pixel Card · Garden",
   modernCardTemplate: "Modern Card",
@@ -30,6 +31,9 @@ const english = {
   notebookCardTemplate: "Notebook",
   neonCardTemplate: "Neon Tech",
   minimalCardTemplate: "Minimal Badge",
+  minecraftOverworldTemplate: "Minecraft · Overworld",
+  minecraftNetherTemplate: "Minecraft · Nether",
+  minecraftEndTemplate: "Minecraft · The End",
   addLayer: "Add a layer",
   maxLayers: "MAX 32",
   layerList: "Layers",
@@ -185,9 +189,10 @@ const chinese: TranslationCatalog = {
   cyberTemplate: "✧ 赛博仪表盘",
   minimalTemplate: "◻ 极简风格",
   classicTemplates: "经典风格",
-  cardTemplates: "插画卡片 · 9 款",
+  legacyTemplate: "已保存的旧风格（不再提供新建）",
+  cardTemplates: "插画卡片 · 6 款",
   galleryHint: "点击预览卡片，自动切换到可编辑模板。",
-  galleryExpand: "展开全部 9 款",
+  galleryExpand: "展开全部 6 款",
   galleryCollapse: "收起为滑动图库",
   pixelCardTemplate: "像素卡片 · 花园",
   modernCardTemplate: "现代卡片",
@@ -198,6 +203,9 @@ const chinese: TranslationCatalog = {
   notebookCardTemplate: "手账卡片",
   neonCardTemplate: "霓虹科技",
   minimalCardTemplate: "简约徽章",
+  minecraftOverworldTemplate: "我的世界 · 主世界",
+  minecraftNetherTemplate: "我的世界 · 下界",
+  minecraftEndTemplate: "我的世界 · 末地",
   addLayer: "添加图层",
   maxLayers: "最多 32 层",
   layerList: "图层列表",
@@ -372,10 +380,20 @@ export function createLocalizedPreset(theme: Theme, language: Language): Termina
   const design = clonePreset(theme);
   if (language !== "zh-CN") return design;
   if (isCardTheme(theme)) {
-    return { ...design, layers: design.layers.map(layer =>
-      layer.id === "heading" ? { ...layer, text: theme === "minimal-card" ? "工坊" : "工坊访客" } :
-      layer.id === "caption" ? { ...layer, text: theme === "minimal-card" ? "访客" : "累计访问 · 谢谢你" } : layer
-    ) };
+    const minecraftText: Record<string, [string, string]> = {
+      "mc-overworld": ["主世界访客", "方块探索 · 世界在线"],
+      "mc-nether": ["下界探索者", "传送门已开启 · 继续冒险"],
+      "mc-end": ["末地探索者", "越过传送门 · 探索虚空"]
+    };
+    return { ...design, layers: design.layers.map(layer => {
+      if (minecraftText[theme]) {
+        if (layer.id === "heading") return { ...layer, text: minecraftText[theme][0], fontSize: 20 };
+        if (layer.id === "caption") return { ...layer, text: minecraftText[theme][1], fontSize: 11 };
+        return layer;
+      }
+      return layer.id === "heading" ? { ...layer, text: theme === "minimal-card" ? "工坊" : "工坊访客" } :
+        layer.id === "caption" ? { ...layer, text: theme === "minimal-card" ? "访客" : "累计访问 · 谢谢你" } : layer;
+    }) };
   }
   const title = theme === "pixel" ? "工坊访客终端" : theme === "cyber" ? "赛博访客终端" : "主页访问统计";
   return {

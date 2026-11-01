@@ -1,4 +1,4 @@
-import { CARD_THEMES, isCardTheme, cardArtwork, type CardTheme } from "./card-art";
+import { CARD_THEMES, LEGACY_CARD_THEMES, isCardTheme, cardArtwork, type CardTheme } from "./card-art";
 import { isApprovedTheme, approvedBackdrop, approvedCountMarkup,
   defaultApprovedCountLayer, approvedCanvasWidth, approvedReferenceIsPristine, REFERENCE_HEIGHT }
   from "./approved-reference-cards";
@@ -84,7 +84,13 @@ const CARD_CONFIG: Record<CardTheme, {
   "neon-card": { accent:"#f4ecff", background:"#141336", heading:"WORKSHOP VISITORS", caption:"DIGITAL SIGNAL · ACTIVE",
     titleX:235,titleY:62,titleWidth:322,titleSize:23,countX:238,countY:102,countWidth:314,countSize:48,labelX:239,labelY:175,captionSize:9,captionWidth:302 },
   "minimal-card": { accent:"#1e583d", background:"#ecfff2", heading:"WORKSHOP", caption:"VISITORS",
-    titleX:233,titleY:76,titleWidth:191,titleSize:22,countX:443,countY:89,countWidth:128,countSize:31,labelX:234,labelY:111,captionSize:22,captionWidth:180 }
+    titleX:233,titleY:76,titleWidth:191,titleSize:22,countX:443,countY:89,countWidth:128,countSize:31,labelX:234,labelY:111,captionSize:22,captionWidth:180 },
+  "mc-overworld": { accent:"#d4f8b1", background:"#123039", heading:"OVERWORLD VISITORS", caption:"BLOCKS EXPLORED  /  WORLD ONLINE",
+    titleX:251,titleY:53,titleWidth:308,titleSize:20,countX:251,countY:96,countWidth:311,countSize:51,labelX:251,labelY:157,captionSize:11,captionWidth:310 },
+  "mc-nether": { accent:"#ffe1a3", background:"#251323", heading:"NETHER TRAVELERS", caption:"PORTAL ACTIVE  /  KEEP EXPLORING",
+    titleX:252,titleY:54,titleWidth:302,titleSize:20,countX:252,countY:98,countWidth:312,countSize:50,labelX:252,labelY:158,captionSize:10,captionWidth:310 },
+  "mc-end": { accent:"#e8d6ff", background:"#1d1534", heading:"THE END EXPLORERS", caption:"BEYOND THE PORTAL  /  VOID SAFE",
+    titleX:254,titleY:54,titleWidth:300,titleSize:20,countX:254,countY:99,countWidth:308,countSize:50,labelX:254,labelY:159,captionSize:10,captionWidth:300 }
 };
 function makeCardPreset(theme: CardTheme): TerminalDesign {
   if (isApprovedTheme(theme)) {
@@ -112,8 +118,8 @@ function makeCardPreset(theme: CardTheme): TerminalDesign {
 
 export const presets: Record<Theme, TerminalDesign> = {
   pixel: makePreset("pixel"), minimal: makePreset("minimal"), cyber: makePreset("cyber"),
-  ...Object.fromEntries(CARD_THEMES.map(theme => [theme, makeCardPreset(theme)])) as
-    Record<CardTheme, TerminalDesign>
+  ...Object.fromEntries([...CARD_THEMES, ...LEGACY_CARD_THEMES].map(theme =>
+    [theme, makeCardPreset(theme)])) as Record<CardTheme, TerminalDesign>
 };
 
 export function clonePreset(theme: Theme): TerminalDesign {

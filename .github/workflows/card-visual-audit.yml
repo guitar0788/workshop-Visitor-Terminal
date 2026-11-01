@@ -15,6 +15,7 @@ on:
       - "worker/card-visual-audit.test.mjs"
       - "src/model.ts"
       - "src/card-art.ts"
+      - "src/minecraft-card-art.ts"
       - "src/main.tsx"
       - "src/style.css"
       - "package.json"
@@ -29,7 +30,7 @@ concurrency:
 
 jobs:
   browser-render:
-    name: Render nine illustrated cards in headless Chrome
+    name: Render six selectable cards in headless Chrome
     if: github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'feat/v06-independent-self-hosting'
     runs-on: ubuntu-latest
     steps:
@@ -46,7 +47,7 @@ jobs:
         run: node --test worker/github-readme-probe.test.mjs
       - name: Test contact-sheet source validation
         run: node --test worker/card-visual-audit.test.mjs
-      - name: Generate 18 SVG cards using the actual shared renderer
+      - name: Generate 12 SVG cards using the actual shared renderer
         run: node scripts/card-visual-audit.mjs build
       - name: Capture real browser visual contact sheet
         run: |
@@ -54,9 +55,9 @@ jobs:
           google-chrome --headless=new --no-sandbox --disable-gpu \
             --disable-dev-shm-usage --disable-extensions --hide-scrollbars \
             --window-size=1590,2450 \
-            --screenshot="$PWD/dist/WVT-Nine-Cards-Visual-Review.png" \
+            --screenshot="$PWD/dist/WVT-Six-Cards-Visual-Review.png" \
             "file://$PWD/dist/Card-Visual-Review.html" 2> /dev/null
-          test -s dist/WVT-Nine-Cards-Visual-Review.png
+          test -s dist/WVT-Six-Cards-Visual-Review.png
       - name: Measure actual Chrome SVG text clipping
         run: |
           set -euo pipefail
@@ -109,9 +110,9 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: WVT-Nine-Cards-Browser-Preview-Not-A-Release
+          name: WVT-Six-Cards-Browser-Preview-Not-A-Release
           path: |
-            dist/WVT-Nine-Cards-Visual-Review.png
+            dist/WVT-Six-Cards-Visual-Review.png
             dist/Card-Visual-Review.html
             dist/Approved-Three-External-Image-Review.html
             dist/WVT-Three-Approved-External-Image-Mode.png

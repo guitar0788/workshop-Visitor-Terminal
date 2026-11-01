@@ -102,6 +102,10 @@ test("release preview ZIP contains ONLY reviewed project sources and never secre
     assert(extracted.get("src/approved-three-card-image.ts").toString("utf8").includes("data:image/avif;base64,"));
     assert.match(cardArt, /pixel-card/);
     assert.match(cardArt, /minimal-card/);
+    assert(extracted.has("src/minecraft-card-art.ts"), "All three Minecraft-style scenes included in standalone ZIP");
+    assert.match(extracted.get("src/minecraft-card-art.ts").toString("utf8"), /mc-overworld/);
+    assert.match(extracted.get("src/minecraft-card-art.ts").toString("utf8"), /mc-nether/);
+    assert.match(extracted.get("src/minecraft-card-art.ts").toString("utf8"), /mc-end/);
     assert.match(service, /from "..\/src\/model"/);
     assert.match(extracted.get("src/model.ts").toString("utf8"), /from ".\/card-art"/);
     const manifest = JSON.parse(extracted.get("package.json").toString("utf8"));
