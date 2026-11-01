@@ -17,6 +17,7 @@ import { fileURLToPath } from "node:url";
 import { makeConfig } from "../scripts/self-host-setup.mjs";
 import { execute } from "../scripts/self-host-publish.mjs";
 import { verifySelfHost } from "../scripts/self-host-verify.mjs";
+import { runLiveCheck } from "../scripts/self-host-live-check.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const CONFIG_NAME = "wrangler.selfhost.smoke.toml";
@@ -209,8 +210,22 @@ export async function smokeSelfHostedCounter() {
     assert.match(await afterRestart.text(), /UPDATED AND PERSISTED/);
     smokeStage = "post-restart-no-double-count";
     assert.match(await cli("inspect"), /Recorded upstream requests: 1/);
+    smokeStage = "simulate-consented-remote-acceptance-locally";
+    const liveReport = await runLiveCheck({
+      api: origin, owner: "self-host-tester",
+      "confirm-worker": "wvt-selfhost-disposable",
+      "token-file": tokenPath, consent: true
+    }, {
+      allowLoopbackTest: true,
+      newSlug: () => "livecheck-" + randomBytes(7).toString("hex")
+    });
+    assert.equal(liveReport.runtime, "LOCAL_INTEGRATION");
+    assert.equal(liveReport.result, "PASS");
+    assert.equal(liveReport.observed.sameClientRequestDeduplication, "PASS");
+    assert.equal(liveReport.independentCloudflareAccountOwnership, "NOT_VERIFIED");
+
     console.log("PASS: self-hosted Wrangler local migrations, private CLI publishing, " +
-      "SVG, deduplication, design update, restart persistence, and closed OAuth.");
+      "SVG, deduplication, design update, restart persistence, closed OAuth, and opt-in live acceptance in local simulation.");
   } finally {
     if (running) await shutdown(running.child);
     if (devVarsCreated) await rm(DEV_VARS, { force: true });
