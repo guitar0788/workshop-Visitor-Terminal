@@ -22,6 +22,9 @@ permissions:
 
 jobs:
   package:
+    # Only the reviewed in-repository preview branch may publish a test ZIP.
+    # Untrusted fork pull requests must not create a similarly named artifact.
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'feat/v06-independent-self-hosting'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
