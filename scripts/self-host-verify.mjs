@@ -8,17 +8,22 @@
  * Never use this for the repository owner's staging Worker.
  */
 import { randomBytes } from "node:crypto";
-import { resolve } from "node:path";
+import { writeFile } from "node:fs/promises";
+import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { resolveSelfHostApi } from "./self-host-api.mjs";
 import { readAdminToken, validateApiOrigin, assertLocalWorkerHostname } from "./self-host-publish.mjs";
 
 const SLUG = /^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?$/;
+/* A report is a local filename only: no path traversal, network destinations,
+ * redirection or implicit overwriting of someone else's data. */
+const SAFE_REPORT = /^selfhost-readonly-[a-z0-9_-]{1,48}\.json$/;
 const HELP = [
   "Verify your OWN Cloudflare Worker (read-only, no counter increments):",
   "  node scripts/self-host-verify.mjs --api https://YOUR-WORKER.YOUR-SUBDOMAIN.workers.dev --token-file .wvt-admin-token",
   "  node scripts/self-host-verify.mjs --api https://YOUR-WORKER.YOUR-SUBDOMAIN.workers.dev --token-file .wvt-admin-token --slug my-counter",
   "Or set WVT_API_URL once and omit --api in a macOS terminal.",
+  "Optional: --report selfhost-readonly-report.json writes a redacted, exclusive local JSON proof.",
   "Also accepts WVT_ADMIN_TOKEN instead of --token-file.",
   "Never pass secrets via CLI arguments, and do not use the maintainer staging origin."
 ].join("\n") + "\n";
@@ -26,10 +31,10 @@ const HELP = [
 export function parseVerifyArgs(argv, environment = process.env) {
   if (argv.length === 1 && ["--help", "-h", "help"].includes(argv[0])) return { help: true };
   if (argv.length % 2 !== 0) {
-    throw Error("Expected --api, optional --token-file, optional --slug");
+    throw Error("Expected --api, optional --token-file, --slug and --report");
   }
   const args = {};
-  const allowed = new Set(["api", "token-file", "slug"]);
+  const allowed = new Set(["api", "token-file", "slug", "report"]);
   for (let i = 0; i < argv.length; i += 2) {
     const key = argv[i].startsWith("--") ? argv[i].slice(2) : "";
     if (!allowed.has(key) || Object.hasOwn(args, key) ||
@@ -42,6 +47,9 @@ export function parseVerifyArgs(argv, environment = process.env) {
   validateApiOrigin(args.api);
   if (args.slug !== undefined && !SLUG.test(args.slug)) {
     throw Error("Invalid --slug");
+  }
+  if (args.report !== undefined && !SAFE_REPORT.test(args.report)) {
+    throw Error("Report must be an ignored selfhost-readonly-NAME.json filename (no directory or URL)");
   }
   return args;
 }
@@ -200,11 +208,77 @@ export async function verifySelfHost(args, {
   };
 }
 
+/**
+ * Only fixed, whitelisted status flags may enter an attachment for Issue #22.
+ * The origin, account subdomain, worker name, counter slug, admin token,
+ * budget usage totals, D1 metadata and request headers are intentionally
+ * impossible to serialize through this function.
+ */
+export function makeReadOnlyVerificationReport(result) {
+  if (!result || result.noDatabaseWrites !== true ||
+      typeof result.origin !== "string" ||
+      (result.checkedSlug !== null &&
+       (typeof result.checkedSlug !== "string" || !SLUG.test(result.checkedSlug))) ||
+      !result.budget || !Number.isSafeInteger(result.budget.admitted) ||
+      !Number.isSafeInteger(result.budget.remaining)) {
+    throw Error("No successful read-only verification result to summarize");
+  }
+  const existing = result.checkedSlug !== null;
+  if (existing && (result.svgHeaders?.embeddableResponseHeaders !== true ||
+      result.svgHeaders?.contentType !== "image/svg+xml" ||
+      !Number.isSafeInteger(result.svgHeaders?.cacheMaxAgeSeconds) ||
+      result.svgHeaders.cacheMaxAgeSeconds < 1 ||
+      result.svgHeaders.cacheMaxAgeSeconds > 3600)) {
+    throw Error("An existing SVG has not passed full read-only header verification");
+  }
+  if (!existing && result.svgHeaders !== null) {
+    throw Error("A missing counter cannot have verified SVG headers");
+  }
+  return {
+    schemaVersion: 1,
+    kind: "workshop-visitor-terminal-selfhost-readonly-verification",
+    runtime: "REMOTE_READ_ONLY_SELF_HOST",
+    result: "PASS",
+    checks: {
+      workerIdentity: "PASS",
+      oauthPublishingDisabled: "PASS",
+      anonymousAdminBlocked: "PASS",
+      authenticatedDailyBudgetAndRateLimits: "PASS",
+      nonCountingSvgHead: "PASS",
+      knownCounterSvgHeaders: existing ? "PASS" : "NOT_TESTED"
+    },
+    notVerified: {
+      independentCloudflareAccountOwnership: "NOT_VERIFIED",
+      counterCreateUpdateAndRealVisits: "NOT_TESTED",
+      remoteD1RedeployPersistence: "NOT_TESTED",
+      githubRemoteSvgImageProxyAndCaching: "NOT_TESTED",
+      cloudflareUsageAndBillingIsolation: "NOT_VERIFIED"
+    },
+    databaseWritesRequested: false,
+    secretOrAccountMetadataIncluded: false,
+    releaseGate: "NO_GO_PENDING_INDEPENDENT_ACCEPTANCE",
+    note: "Operator-provided results, not signed evidence. Maintainer review and live account proof remain required."
+  };
+}
+
+export async function saveReadOnlyVerificationReport(result, filename, { directory = "." } = {}) {
+  if (!SAFE_REPORT.test(filename ?? "")) {
+    throw Error("Unsafe read-only report filename");
+  }
+  const sanitized = makeReadOnlyVerificationReport(result);
+  // Create exactly once, private by default; do not overwrite prior evidence.
+  await writeFile(join(directory, filename), JSON.stringify(sanitized, null, 2) + "\n", {
+    flag: "wx", mode: 0o600
+  });
+  return sanitized;
+}
+
 async function main() {
   try {
     const args = parseVerifyArgs(process.argv.slice(2));
     if (args.help) { process.stdout.write(HELP); return; }
     const result = await verifySelfHost(args);
+    if (args.report) await saveReadOnlyVerificationReport(result, args.report);
     process.stdout.write(
       "PASS: Self-hosted Worker identity, disabled OAuth, private admin API, " +
       "D1 daily budget, rate limits and non-counting SVG HEAD verified.\n" +
@@ -215,6 +289,7 @@ async function main() {
         " (public caching, nosniff and cross-origin headers: PASS; max-age " +
         result.svgHeaders.cacheMaxAgeSeconds + "s).\n" :
         "Checked random, missing SVG with HEAD (expected 404; SVG headers NOT TESTED).\n") +
+      (args.report ? "Sanitized, locally private report created (existing files are never overwritten).\n" : "") +
       "No database writes were requested. GitHub image proxy/cache, billing and account ownership NOT VERIFIED.\n"
     );
   } catch (error) {

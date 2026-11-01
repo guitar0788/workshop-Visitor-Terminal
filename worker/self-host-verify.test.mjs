@@ -1,7 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
-  parseVerifyArgs, validateUsage, validateSvgHeadHeaders, verifySelfHost
+  parseVerifyArgs, validateUsage, validateSvgHeadHeaders, verifySelfHost,
+  makeReadOnlyVerificationReport, saveReadOnlyVerificationReport
 } from "../scripts/self-host-verify.mjs";
 
 const ORIGIN = "https://test-own-worker.example.workers.dev";
@@ -209,4 +213,74 @@ test("SVG image metadata validation is local, deterministic and does not claim G
   ]) assert.throws(() => validateSvgHeadHeaders(new Headers({
     ...SAFE_SVG_HEADERS, ...bad
   })), /caching/);
+});
+
+
+test("read-only verification CLI accepts only ignored, local, unique report filenames", () => {
+  const safe = parseVerifyArgs(["--api", ORIGIN, "--report", "selfhost-readonly-check1.json"]);
+  assert.equal(safe.report, "selfhost-readonly-check1.json");
+  for (const path of [
+    "../selfhost-readonly-report.json", "logs/selfhost-readonly-report.json",
+    "selfhost-readonly-.json", "SELFHOST-READONLY-REPORT.json",
+    "selfhost-readonly-report.JSON", "file:///tmp/report.json",
+    ".wvt-admin-token", "selfhost-live-result.json", "README.md",
+    "selfhost-readonly-../token.json", "selfhost-readonly-a.json?x=y"
+  ]) {
+    assert.throws(() => parseVerifyArgs(["--api", ORIGIN, "--report", path]),
+      /Report must be an ignored/);
+  }
+  assert.throws(() => parseVerifyArgs(["--api", ORIGIN,
+    "--report", "selfhost-readonly-a.json", "--report", "selfhost-readonly-b.json"]));
+});
+
+test("successful remote read-only checks produce a minimal sanitized report; existing reports are never replaced", async () => {
+  const result = await verifySelfHost({ api: ORIGIN, slug: "demo-private-counter" }, {
+    ...auth, ...responses({ image: 200 })
+  });
+  result.adminSecret = TOKEN;
+  result.d1DatabaseId = "11111111-2222-3333-4444-555555555555";
+  const summary = makeReadOnlyVerificationReport(result);
+  assert.equal(summary.runtime, "REMOTE_READ_ONLY_SELF_HOST");
+  assert.equal(summary.releaseGate, "NO_GO_PENDING_INDEPENDENT_ACCEPTANCE");
+  assert.equal(summary.checks.knownCounterSvgHeaders, "PASS");
+  assert.equal(summary.notVerified.independentCloudflareAccountOwnership, "NOT_VERIFIED");
+  assert.equal(summary.notVerified.githubRemoteSvgImageProxyAndCaching, "NOT_TESTED");
+  const serialized = JSON.stringify(summary);
+  for (const forbidden of [ORIGIN, "demo-private-counter", TOKEN, result.d1DatabaseId,
+    "2026-11-01", "42", "19958", "Authorization", "Bearer"]) {
+    assert.equal(serialized.includes(forbidden), false, "Leaked private detail into shareable report");
+  }
+
+  const dir = await mkdtemp(join(tmpdir(), "wvt-readonly-proof-"));
+  const name = "selfhost-readonly-proof.json";
+  try {
+    assert.deepEqual(await saveReadOnlyVerificationReport(result, name, { directory: dir }), summary);
+    const file = join(dir, name);
+    assert.deepEqual(JSON.parse(await readFile(file, "utf8")), summary);
+    if (process.platform !== "win32") assert.equal((await stat(file)).mode & 0o777, 0o600);
+    await assert.rejects(
+      () => saveReadOnlyVerificationReport(result, name, { directory: dir }),
+      error => error?.code === "EEXIST"
+    );
+    assert.deepEqual(JSON.parse(await readFile(file, "utf8")), summary);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("a missing random SVG produces a visibly weaker report and unsafe claims fail closed", async () => {
+  const check = await verifySelfHost({ api: ORIGIN }, { ...auth, ...responses() });
+  const report = makeReadOnlyVerificationReport(check);
+  assert.equal(report.checks.knownCounterSvgHeaders, "NOT_TESTED");
+  assert.equal(report.checks.nonCountingSvgHead, "PASS");
+  assert.equal(report.databaseWritesRequested, false);
+  assert.throws(() => makeReadOnlyVerificationReport({
+    ...check, noDatabaseWrites: false
+  }), /successful read-only/);
+  assert.throws(() => makeReadOnlyVerificationReport({
+    ...check, svgHeaders: { contentType: "image/svg+xml" }
+  }), /missing counter/);
+  assert.throws(() => makeReadOnlyVerificationReport({
+    ...check, checkedSlug: "unknown", svgHeaders: null
+  }), /not passed full/);
 });

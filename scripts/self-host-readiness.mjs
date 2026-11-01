@@ -25,6 +25,9 @@ const REQUIRED_FILES = Object.freeze([
   "worker/migrations/0003_publishing.sql",
   "worker/migrations/0004_visit_budget.sql",
   "scripts/self-host-publish.mjs", "scripts/self-host-verify.mjs",
+  "src/card-art.ts", "src/minecraft-card-art.ts",
+  "src/approved-reference-cards.ts", "src/approved-three-card-image.ts",
+  "src/approved-clean-card-image.ts",
   "wrangler.selfhost.example.toml"
 ]);
 const PRIVATE_IGNORED = Object.freeze([
@@ -113,6 +116,10 @@ export async function inspectOfflineReadiness({
     if (!lines.includes(file)) {
       throw Error("Private config and credentials must be gitignored");
     }
+  }
+  if (!ignore.split(/\r?\n/).some(line =>
+      line.trim() === "selfhost-readonly-*.json")) {
+    throw Error("Sanitized verification reports must be ignored by Git");
   }
   const [manifest, lock] = await Promise.all([
     readFile(join(root, "package.json"), "utf8").then(JSON.parse),

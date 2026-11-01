@@ -18,6 +18,8 @@ wrangler.selfhost.smoke.toml
 .wvt-package-ci/
 self-host-readiness.json
 selfhost-live-result.json
+# Read-only remote verification reports may be shared only after owner review.
+selfhost-readonly-*.json
 selfhost-ci-report.json
 local-readiness.json
 live-check.json

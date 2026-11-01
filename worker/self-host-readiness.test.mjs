@@ -17,7 +17,9 @@ const sources = [
   ".gitignore", "package.json", "package-lock.json",
   "wrangler.selfhost.example.toml",
   "worker/index.ts", "worker/service.ts", "worker/publishing.ts",
-  "src/model.ts",
+  "src/model.ts", "src/card-art.ts", "src/minecraft-card-art.ts",
+  "src/approved-reference-cards.ts", "src/approved-three-card-image.ts",
+  "src/approved-clean-card-image.ts",
   "worker/migrations/0001_initial.sql",
   "worker/migrations/0002_atomic_increment.sql",
   "worker/migrations/0003_publishing.sql",
@@ -103,8 +105,14 @@ test("readiness fails closed when Worker/D1 limits, secrets or ignore rules are 
   });
   await fixture(async root => {
     const ignorePath = join(root, ".gitignore");
-    await writeFile(ignorePath, "# no ignore\n");
+    await writeFile(ignorePath, "# no ignore\\n");
     await assert.rejects(() => inspectOfflineReadiness({ root }), /gitignored/);
+  });
+  await fixture(async root => {
+    const ignorePath = join(root, ".gitignore");
+    const ignored = await readFile(ignorePath, "utf8");
+    await writeFile(ignorePath, ignored.replace("selfhost-readonly-*.json", ""));
+    await assert.rejects(() => inspectOfflineReadiness({ root }), /reports must be ignored/);
   });
 });
 
