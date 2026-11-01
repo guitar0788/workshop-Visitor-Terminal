@@ -10,7 +10,7 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const FILES = ["wrangler.selfhost.toml", ".wvt-admin-token", ".wvt-visit-secret"];
-const WORKER_NAME = /^[a-z][a-z0-9-]{2,62}$/;
+const WORKER_NAME = /^[a-z](?:[a-z0-9-]{1,61}[a-z0-9])$/;
 const DB_NAME = /^[a-z][a-z0-9_-]{2,62}$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const HELP = [
@@ -78,28 +78,56 @@ export function makeConfig(template, options, namespaces) {
 }
 
 export function validateConfig(contents) {
-  const names = [...contents.matchAll(/^name = "([^"]+)"$/gm)];
-  const dbs = [...contents.matchAll(/^database_name = "([^"]+)"$/gm)];
-  const ids = [...contents.matchAll(/^database_id = "([^"]+)"$/gm)];
-  const ns = [...contents.matchAll(/^namespace_id = "([^"]+)"$/gm)];
-  if (names.length < 3 || // Worker name + two limiter binding names
-      !WORKER_NAME.test(names[0][1]) ||
-      names[0][1] === "workshop-visitor-terminal-staging" ||
-      dbs.length !== 1 || !DB_NAME.test(dbs[0][1]) ||
-      ids.length !== 1 || !UUID.test(ids[0][1]) ||
-      /^0{8}-0{4}-0{4}-0{4}-0{12}$/i.test(ids[0][1]) ||
-      ns.length !== 2 || ns.some(x => !/^[1-9][0-9]*$/.test(x[1])) ||
-      ns[0][1] === ns[1][1] ||
-      !/^binding = "DB"$/m.test(contents) ||
-      !/^PUBLISHING_ENABLED = "false"$/m.test(contents) ||
-      !/^SVG_RATE_LIMIT_ENABLED = "true"$/m.test(contents) ||
-      !/^name = "SVG_RATE_LIMITER"$/m.test(contents) ||
-      !/^name = "SVG_GLOBAL_RATE_LIMITER"$/m.test(contents) ||
-      !/^migrations_dir = "worker\/migrations"$/m.test(contents) ||
+  if (typeof contents !== "string" || contents.length > 20_000) {
+    throw Error("Self-host Wrangler configuration is incomplete or unsafe");
+  }
+  const values = pattern => [...contents.matchAll(pattern)].map(match => match[1]);
+  const occurrences = (pattern, count = 1) =>
+    (contents.match(pattern) ?? []).length === count;
+  const names = values(/^name = "([^"]+)"$/gm);
+  const dbs = values(/^database_name = "([^"]+)"$/gm);
+  const ids = values(/^database_id = "([^"]+)"$/gm);
+  const ns = values(/^namespace_id = "([^"]+)"$/gm);
+  const rateBlocks = contents.split(/^\[\[ratelimits\]\]$/m);
+  const rateLimits = rateBlocks.slice(1).map(block => {
+    const simple = block.match(/^\[ratelimits\.simple\]([\s\S]*?)(?=^\[|$)/m)?.[1];
+    return {
+      limit: simple?.match(/^limit = (\d+)$/m)?.[1],
+      period: simple?.match(/^period = (\d+)$/m)?.[1]
+    };
+  });
+  if (names.length !== 3 ||
+      !WORKER_NAME.test(names[0]) || names[0].includes("--") ||
+      names[0] === "workshop-visitor-terminal-staging" ||
+      names[1] !== "SVG_RATE_LIMITER" ||
+      names[2] !== "SVG_GLOBAL_RATE_LIMITER" ||
+      dbs.length !== 1 || !DB_NAME.test(dbs[0]) ||
+      ids.length !== 1 || !UUID.test(ids[0]) ||
+      /^0{8}-0{4}-0{4}-0{4}-0{12}$/i.test(ids[0]) ||
+      ns.length !== 2 || ns.some(x =>
+        !/^[1-9][0-9]*$/.test(x) || Number(x) > 2147483647) ||
+      ns[0] === ns[1] ||
+      !occurrences(/^\[\[d1_databases\]\]$/gm) ||
+      !occurrences(/^\[vars\]$/gm) ||
+      !occurrences(/^\[triggers\]$/gm) ||
+      !occurrences(/^\[\[ratelimits\]\]$/gm, 2) ||
+      !occurrences(/^\[ratelimits\.simple\]$/gm, 2) ||
+      !occurrences(/^main = "worker\/index\.ts"$/gm) ||
+      !occurrences(/^workers_dev = true$/gm) ||
+      !occurrences(/^binding = "DB"$/gm) ||
+      !occurrences(/^migrations_dir = "worker\/migrations"$/gm) ||
+      !occurrences(/^PUBLISHING_ENABLED = "false"$/gm) ||
+      !occurrences(/^SVG_RATE_LIMIT_ENABLED = "true"$/gm) ||
+      !occurrences(/^crons = \["17 \* \* \* \*"\]$/gm) ||
+      !occurrences(/^limit = \d+$/gm, 2) ||
+      !occurrences(/^period = \d+$/gm, 2) ||
+      rateLimits.length !== 2 ||
+      rateLimits[0].limit !== "60" || rateLimits[0].period !== "60" ||
+      rateLimits[1].limit !== "120" || rateLimits[1].period !== "60" ||
       /REPLACE_WITH_|STAGING_D1_|fangcui2007|GITHUB_CLIENT_SECRET|PILOT_GITHUB_USER_ID/i.test(contents)) {
     throw Error("Self-host Wrangler configuration is incomplete or unsafe");
   }
-  return { worker: names[0][1], database: dbs[0][1], databaseId: ids[0][1] };
+  return { worker: names[0], database: dbs[0], databaseId: ids[0] };
 }
 
 function strongSecret(value) {
