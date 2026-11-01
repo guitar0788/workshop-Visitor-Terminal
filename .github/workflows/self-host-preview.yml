@@ -27,8 +27,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-      - name: Install locked project dependencies
-        run: npm ci
+      - name: Install project dependencies
+        run: npm install
       - name: Verify ZIP encoding, file allowlist, checksums and no private files
         run: node --test worker/self-host-package.test.mjs
       - name: Build ZIP and SHA256 from explicit source file allowlist
@@ -42,7 +42,7 @@ jobs:
           mkdir -p .wvt-package-ci
           unzip -q dist/Workshop-Visitor-Terminal-Self-Host.zip -d .wvt-package-ci
           cd .wvt-package-ci/Workshop-Visitor-Terminal-Self-Host
-          npm ci
+          npm install
           node worker/self-host-dryrun.mjs
           node worker/self-host-smoke.mjs
       - name: Upload only the reviewed ZIP and SHA256 (no database backups)
