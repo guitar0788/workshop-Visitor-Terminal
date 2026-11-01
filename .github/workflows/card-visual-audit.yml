@@ -39,6 +39,15 @@ jobs:
         run: node --test worker/card-visual-audit.test.mjs
       - name: Generate 18 SVG cards using the actual shared renderer
         run: node scripts/card-visual-audit.mjs build
+      - name: Capture real browser visual contact sheet
+        run: |
+          set -euo pipefail
+          google-chrome --headless=new --no-sandbox --disable-gpu \
+            --disable-dev-shm-usage --disable-extensions --hide-scrollbars \
+            --window-size=1590,2450 \
+            --screenshot="$PWD/dist/WVT-Nine-Cards-Visual-Review.png" \
+            "file://$PWD/dist/Card-Visual-Review.html" 2> /dev/null
+          test -s dist/WVT-Nine-Cards-Visual-Review.png
       - name: Measure actual Chrome SVG text clipping
         run: |
           set -euo pipefail
@@ -49,16 +58,8 @@ jobs:
             --dump-dom "file://$PWD/dist/Card-Visual-Review.html" \
             > dist/card-browser-dom.html 2> /dev/null
           node scripts/card-visual-audit.mjs check dist/card-browser-dom.html
-      - name: Capture real browser visual contact sheet
-        run: |
-          set -euo pipefail
-          google-chrome --headless=new --no-sandbox --disable-gpu \
-            --disable-dev-shm-usage --disable-extensions --hide-scrollbars \
-            --window-size=1590,2450 \
-            --screenshot="$PWD/dist/WVT-Nine-Cards-Visual-Review.png" \
-            "file://$PWD/dist/Card-Visual-Review.html" 2> /dev/null
-          test -s dist/WVT-Nine-Cards-Visual-Review.png
       - name: Upload browser preview image and self-contained HTML (not a release)
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: WVT-Nine-Cards-Browser-Preview-Not-A-Release
@@ -66,4 +67,4 @@ jobs:
             dist/WVT-Nine-Cards-Visual-Review.png
             dist/Card-Visual-Review.html
           retention-days: 7
-          if-no-files-found: error
+          if-no-files-found: warn

@@ -88,7 +88,7 @@ function makeCardPreset(theme: CardTheme): TerminalDesign {
   const c = CARD_CONFIG[theme];
   const layers: Layer[] = [
     { id:"heading", kind:"text", x:c.titleX, y:c.titleY, width:c.titleWidth,
-      height:26, text:c.heading, fontSize:c.titleSize, color:c.accent, visible:true },
+      height:theme === "terminal-card" ? 30 : 26, text:c.heading, fontSize:c.titleSize, color:c.accent, visible:true },
     { id:"visits", kind:"count", x:c.countX, y:c.countY, width:c.countWidth,
       height:61, text:"", fontSize:c.countSize, color:c.accent, visible:true },
     { id:"caption", kind:"text", x:c.labelX, y:c.labelY, width:216,
@@ -200,12 +200,18 @@ export function renderSvg(input: unknown, visits: number): string {
     } else {
       const content = layer.kind === "count" ? counter : layer.text;
       const fittedSize = layer.kind === "count" ? fittedCountSize(layer, counter) : layer.fontSize;
+      // Actual Chrome font metrics put hanging glyphs ABOVE their nominal
+      // baseline. Offset illustrated-card labels by their actual font size;
+      // otherwise the clipPath cuts off the top of the live count.
+      // Keep classic SVG baselines byte-for-byte unchanged for v0.5 designs.
+      const baselineY = layer.y + (isCardTheme(d.theme)
+        ? Math.ceil(fittedSize * 0.20) : 2);
       // Text is clipped to its designated box so user designs cannot overflow the exported SVG.
       parts.push('<defs><clipPath id="clip-', layer.id,
         '"><rect x="', String(layer.x), '" y="', String(layer.y),
         '" width="', String(layer.width), '" height="', String(layer.height),
         '"/></clipPath></defs><text clip-path="url(#clip-', layer.id,
-        ')" x="', String(layer.x), '" y="', String(layer.y + 2),
+        ')" x="', String(layer.x), '" y="', String(baselineY),
         '" dominant-baseline="hanging" fill="', layer.color,
         '" font-size="', String(fittedSize),
         '"', ...(layer.kind === "count" && fittedSize * counter.length * 0.63 > layer.width - 4
