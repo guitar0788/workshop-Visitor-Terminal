@@ -340,10 +340,14 @@ export function reorderLayer(input: TerminalDesign, id: string, direction: -1 | 
 export function addLayer(input: TerminalDesign, kind: LayerKind, id: string): TerminalDesign {
   if (input.layers.length >= 32 || input.layers.some(layer => layer.id === id)) return input;
   const offset = (input.layers.length * 19) % 110;
+  const width = Math.min(input.width, kind === "dot" ? 20 : kind === "panel" ? 130 : 210);
+  const height = Math.min(input.height, kind === "dot" ? 20 : kind === "panel" ? 64 : 36);
+  // A resized 280 x 160 card must never create an invisible off-canvas layer.
+  // Keep the original stagger on normal canvases, and bound both coordinates.
+  const x = Math.max(0, Math.min(input.width - width, 24 + offset));
+  const y = Math.max(0, Math.min(input.height - height, 48 + offset));
   const layer: Layer = {
-    id, kind, x: 24 + offset, y: 48 + offset,
-    width: kind === "dot" ? 20 : kind === "panel" ? 130 : 210,
-    height: kind === "dot" ? 20 : kind === "panel" ? 64 : 36,
+    id, kind, x, y, width, height,
     text: kind === "text" ? "YOUR TEXT" : "", fontSize: 18,
     color: input.accent, visible: true
   };
