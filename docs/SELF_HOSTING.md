@@ -21,7 +21,7 @@
 
 Windows 可用 `certutil -hashfile Workshop-Visitor-Terminal-Self-Host.zip SHA256` 对比旁边的 `.sha256` 文件内容，确认下载未损坏；macOS/Linux 可以使用 `sha256sum -c Workshop-Visitor-Terminal-Self-Host.zip.sha256`。
 
-在解压后的自托管目录打开 CMD、PowerShell 或终端，安装 Node.js 20+，然后运行：
+在解压后的自托管目录打开 CMD、PowerShell 或终端，安装 Node.js 22+（当前锁定的 Wrangler 4.156.0 要求 Node.js 22 或更高），然后运行：
 
 ```sh
 npm ci
@@ -31,7 +31,7 @@ npx wrangler whoami
 
 **方法 B：从 GitHub 克隆整个开发仓库**
 
-如果需要修改源代码，请安装 Node.js 20+ 和 Git，并执行：
+如果需要修改源代码，请安装 Node.js 22+ 和 Git，并执行：
 
 ```sh
 git clone https://github.com/guitar0788/workshop-Visitor-Terminal.git
@@ -43,15 +43,6 @@ npx wrangler whoami
 ```
 
 当前 PR #21 仍为 Draft；合并正式发行之后才能直接从 main 获取上述新功能。无论使用哪种方式，**都必须使用自己的 Cloudflare 账户**。
-
-```sh
-git clone https://github.com/guitar0788/workshop-Visitor-Terminal.git
-cd workshop-Visitor-Terminal
-git switch feat/v06-independent-self-hosting
-npm ci
-npx wrangler login
-npx wrangler whoami
-```
 
 核对 `whoami` 显示的是**你自己的账户**，然后创建名称全新的 D1 数据库：
 
