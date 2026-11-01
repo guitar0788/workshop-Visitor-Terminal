@@ -123,7 +123,9 @@ export function approvedCountMarkup(theme: ApprovedTheme, counter: string,
     Math.floor((layer.width - 5) / (counter.length * 0.65)),
     Math.floor(layer.height * .78)));
   const x = layer.x;
-  const y = layer.y + Math.ceil(font * .24);
+  // Keep resized counts vertically centered at the approved numeral row.
+  const y = layer.y + Math.ceil(layer.fontSize * .24) +
+    Math.round((layer.fontSize - font) / 2);
   const shadow = theme === "rpg-card" ? ' stroke="#79401a" stroke-width="1.8" paint-order="stroke"' :
     theme === "terminal-card" ? ' stroke="#11522c" stroke-width="1" paint-order="stroke"' : "";
   return clip + '<text clip-path="url(#' + clipId + ')" x="' + x + '" y="' + y +
