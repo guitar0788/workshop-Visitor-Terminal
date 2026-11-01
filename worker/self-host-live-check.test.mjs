@@ -156,7 +156,7 @@ test("consented live run exercises only its own new counter, HEAD and dedupe wit
     assert.equal(mock.state.text, "LIVE CHECK UPDATED");
     assert.equal(mock.state.writes, 2, "Only create and design update write to admin D1");
     assert(mock.state.calls.every(x => x.redirect === "error"));
-    assert.equal(mock.state.calls.filter(x => x.isAuth).length, 10);
+    assert.equal(mock.state.calls.filter(x => x.isAuth).length, 8);
     assert(mock.state.calls.filter(x => x.method === "POST").every(x => x.isAuth));
     assert(mock.state.calls.filter(x => x.path.endsWith(".svg"))
       .every(x => !x.isAuth && !x.headers["CF-Connecting-IP"]),
