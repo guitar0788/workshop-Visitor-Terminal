@@ -208,3 +208,48 @@ test("local self-host configuration prevents wrong workers.dev hostname before r
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+test("authenticated request transport and JSON failures never leak token or remote bodies", async () => {
+  const cases = [
+    async () => { throw Error("Bearer " + token + " SECRET_REMOTE_TRACE"); },
+    async () => new Response("Bearer " + token + " SECRET_REMOTE_BODY", {
+      status: 200, headers: { "Content-Type": "application/json" }
+    }),
+    async () => new Response("x".repeat(20_001) + token, {
+      status: 200, headers: { "Content-Type": "application/json" }
+    }),
+    async () => ({ status: 200, ok: true, headers: new Headers() })
+  ];
+  for (const operation of cases) {
+    await assert.rejects(() => execute(opts("inspect"), {
+      environment: { WVT_ADMIN_TOKEN: token },
+      fetchImpl: safeFetch(operation)
+    }), error => {
+      assert.equal(error instanceof Error, true);
+      assert(!error.message.includes(token), "Never print the administrator token");
+      assert(!error.message.includes("SECRET_REMOTE"), "Never print remote diagnostic contents");
+      assert.match(error.message, /Worker connection failed|invalid or oversized|invalid HTTP response/);
+      return true;
+    });
+  }
+});
+
+test("uncertain counter creation tells the operator to inspect, not blindly create again", async () => {
+  await withDesign(async path => {
+    let attempts = 0;
+    await assert.rejects(() => execute(opts("create", {
+      owner: "tester", design: path
+    }), {
+      environment: { WVT_ADMIN_TOKEN: token },
+      fetchImpl: safeFetch(async () => {
+        attempts++;
+        throw Error("Request failed after server committed Bearer " + token);
+      })
+    }), error => {
+      assert.match(error.message, /It may already exist. Inspect this slug/);
+      assert(!error.message.includes(token));
+      return true;
+    });
+    assert.equal(attempts, 1, "Never retry a possibly committed create automatically");
+  });
+});

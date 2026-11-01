@@ -180,25 +180,45 @@ export async function assertSafePublishingTarget(origin, fetchImpl = fetch) {
 }
 
 async function requestJson(origin, token, path, method, payload, fetchImpl) {
-  const response = await fetchImpl(origin + path, {
-    method,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Accept: "application/json",
-      ...(payload === undefined ? {} : { "Content-Type": "application/json" })
-    },
-    ...(payload === undefined ? {} : { body: JSON.stringify(payload) }),
-    // A redirect must never forward the private token to a new destination.
-    redirect: "error",
-    signal: AbortSignal.timeout(12_000)
-  });
+  let response;
+  try {
+    response = await fetchImpl(origin + path, {
+      method,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/json",
+        ...(payload === undefined ? {} : { "Content-Type": "application/json" })
+      },
+      ...(payload === undefined ? {} : { body: JSON.stringify(payload) }),
+      // Never follow redirects with administrator credentials.
+      redirect: "error",
+      signal: AbortSignal.timeout(12_000)
+    });
+  } catch {
+    // Transport errors can include URLs, request headers, or bearer tokens.
+    // Never rethrow or print an untrusted fetch exception.
+    throw Error("Authenticated Worker connection failed or redirect was blocked");
+  }
+  if (!(response instanceof Response)) {
+    throw Error("Worker returned an invalid HTTP response");
+  }
   if (!response.ok) {
     throw Error(`Worker rejected ${method} ${path}: HTTP ${response.status}`);
   }
-  if (!response.headers.get("content-type")?.includes("application/json")) {
+  if (!response.headers.get("content-type")?.toLowerCase().includes("application/json")) {
     throw Error("Worker returned an unexpected content type");
   }
-  const data = await response.json();
+  let data;
+  try {
+    const body = await response.text();
+    if (Buffer.byteLength(body, "utf8") > 20_000) {
+      throw Error("Oversized authenticated response");
+    }
+    data = JSON.parse(body);
+  } catch {
+    // Never surface a remote JSON body or a parser exception in CLI logs.
+    throw Error("Worker returned invalid or oversized authenticated JSON");
+  }
   if (!data || typeof data !== "object" || Array.isArray(data)) {
     throw Error("Worker returned malformed JSON");
   }
@@ -220,9 +240,17 @@ export async function execute(options, { fetchImpl = fetch, environment = proces
   }
   const design = await readDesign(options.design);
   if (options.command === "create") {
-    const created = await requestJson(origin, token, "/v1/admin/counters", "POST",
-      { slug, owner: options.owner }, fetchImpl);
-    if (created.slug !== slug) throw Error("Created counter identity mismatch");
+    try {
+      const created = await requestJson(origin, token, "/v1/admin/counters", "POST",
+        { slug, owner: options.owner }, fetchImpl);
+      if (created.slug !== slug) throw Error("Created counter identity mismatch");
+    } catch (error) {
+      // A D1 insert can commit even when its HTTP response is lost. Do not
+      // suggest a blind second create, which could produce duplicate records.
+      const reason = error instanceof Error ? error.message : "unconfirmed response";
+      throw Error("Counter " + slug + " creation was not confirmed (" + reason +
+        "). It may already exist. Inspect this slug before attempting create again.");
+    }
   }
   try {
     const updated = await requestJson(origin, token, resource + "/design", "POST", { design }, fetchImpl);

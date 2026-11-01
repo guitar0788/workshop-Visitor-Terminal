@@ -190,6 +190,8 @@ node scripts/self-host-publish.mjs inspect --api https://YOUR-WORKER.YOUR-SUBDOM
 
 如果首次 `create` 已写入记录但设计上传失败，请使用 `update` 重试，而不是再次创建或清空数据库。管理员令牌只从本地忽略文件或 `WVT_ADMIN_TOKEN` 环境变量读取，不通过命令行参数传入。
 
+**网络错误保护：** 自托管发布工具的认证请求现在只输出经过筛选的错误，不回显网络异常、远程响应正文或管理员令牌。如果第一次 `create` 请求超时、断开或返回非预期数据，不能确认云端 D1 是否已成功插入；请先使用 `inspect` 检查原始 slug，确认后才考虑 `update`，不要直接更换 slug 或重复写入。此处不会自动重试创建。
+
 **发布前的匿名安全检查：** `create`、`update`、`inspect` 每次都会先调用自己的 `/health`、`/v1/my/counters` 和匿名 `/v1/admin/usage`，确认目标确实表现为预期的 Workshop Worker、OAuth 公开发布关闭且管理员接口拒绝匿名请求。只有这三项检查通过后，工具才会读取并发送管理员密钥。这能阻止误连到不兼容的服务，**不能证明目标服务器归自己所有**：恶意服务器仍可能伪装上述接口，请务必自行核对 `--api` 和 Cloudflare 控制台中的 Worker 名称。认证请求禁止跳转。若本地已有 `wrangler.selfhost.toml`，工具还会对 `*.workers.dev` 地址检查 Worker 主机名前缀与本地配置一致；配置损坏或名称不一致时拒绝发布。**自定义域名无法通过这个名称检查验证所有权**，请在 Cloudflare 中亲自确认绑定。
 
 
