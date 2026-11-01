@@ -55,6 +55,7 @@ npx wrangler d1 create my-visitor-counter-db
 ```sh
 node scripts/self-host-setup.mjs init --worker my-visitor-worker --database my-visitor-counter-db --database-id YOUR_NEW_D1_UUID
 node scripts/self-host-setup.mjs check
+node scripts/self-host-readiness.mjs check
 ```
 
 该命令仅在电脑本地生成 `wrangler.selfhost.toml`、`.wvt-admin-token` 和 `.wvt-visit-secret`，**不会访问 Cloudflare、部署 Worker 或修改远程 D1**。会生成两份不同的随机密钥和互不相同的限流命名空间 ID；每个命名空间还应检查不与自己的其他 Worker 冲突。
@@ -64,7 +65,15 @@ node scripts/self-host-setup.mjs check
 - `wrangler.selfhost.toml` 与两份密钥文件均由 `.gitignore` 排除，不可上传到 GitHub。Windows 上还需注意所在文件夹的 NTFS 共享权限。
 - **仅首次初始化时使用新建的 D1 数据库**；本工具不是从其他账户迁移或接管已有计数器的工具。
 
-### 3. 先执行无需 Cloudflare 账户的端到端测试
+**新增：发行前离线验收报告。** `node scripts/self-host-readiness.mjs check` 会在不调用网络的情况下确认 Node.js 22+、私有配置、两个不同的本地密钥、Git 忽略规则、npm 锁定依赖、Worker 原始代码及四份 D1 迁移脚本。如果需要保留一份**不包含 Worker 名称、D1 UUID、管理员密钥或密钥哈希**的 JSON 报告，可以改用：
+
+```sh
+node scripts/self-host-readiness.mjs check --report self-host-readiness.json
+```
+
+报告文件使用不可覆盖的独占写入：已存在时会停止，不会修改旧文件。报告中的云端账户归属、远程 D1 迁移、部署、实际访问和计费会明确标记为 `NOT_TESTED`，**离线通过不等于获准正式发布**。如果要把报告附在 GitHub Issue 中，应事先自行检查文件内容，只提交报告，不要附带本地配置、秘密文件或 `.dev.vars`。
+
+### 2. 先执行无需 Cloudflare 账户的端到端测试
 
 在执行任何远程部署之前，使用本仓库自带的**一次性本地自托管测试**：
 
@@ -79,7 +88,7 @@ node worker/self-host-smoke.mjs
 - 如果项目根目录已有 `.dev.vars` 或 `wrangler.selfhost.smoke.toml`，脚本会拒绝运行，以防覆盖它们。此时请使用干净的项目副本进行测试，不要删除已有用户密钥。
 - 测试通过不代表 Cloudflare 账户身份、真实 D1、公开访问和费用控制已经完成实机验收。
 
-### 4. 本地检查后，再自行部署
+### 3. 本地检查后，再自行部署
 
 先对自己的**本地**数据库执行迁移：
 
@@ -126,7 +135,7 @@ node scripts/self-host-verify.mjs --api https://YOUR-WORKER.YOUR-SUBDOMAIN.worke
 
 
 
-### 5. 发布离线 Studio 中设计的 JSON
+### 4. 发布离线 Studio 中设计的 JSON
 
 在 [Workshop Studio](https://guitar0788.github.io/workshop-Visitor-Terminal/) 或离线单文件编辑器选择「保存设计」，得到 `visitor-terminal.design.json`。把该文件放在本地仓库目录。**不要**使用账户数据快照或 HTML 文件充当设计 JSON。
 
@@ -156,7 +165,7 @@ node scripts/self-host-publish.mjs inspect --api https://YOUR-WORKER.YOUR-SUBDOM
 
 
 
-### 6. 费用、安全与云端账户隔离
+### 5. 费用、安全与云端账户隔离
 
 **最重要的隔离规则：** 每位自托管者使用自己的 Cloudflare 账户、新建 Worker 和 D1，以及自己生成的管理员密钥。不要将维护者的 Worker URL、D1 UUID、Cloudflare API Token、GitHub OAuth 密钥复制给其他用户。发布包不会自动连到维护者账号，也不会替用户选择套餐。
 
@@ -179,7 +188,7 @@ node scripts/self-host-publish.mjs inspect --api https://YOUR-WORKER.YOUR-SUBDOM
 
 ## English summary
 
-Get the CI-tested source-only preview ZIP from the latest successful PR #21 Build Self-Host Preview run (GitHub Actions Artifacts). Unzip the Actions artifact and then its inner `Workshop-Visitor-Terminal-Self-Host.zip` into a NEW folder. Check the included SHA256, run `npm ci`, then create a new D1 in your own Cloudflare account. This is not an official GitHub Release and the PR artifact is retained for seven days.\n\nUse **your own** Cloudflare account and create a new D1 database. Run `node scripts/self-host-setup.mjs init --worker ... --database ... --database-id ...` and then `node scripts/self-host-setup.mjs check` to generate and validate a private local Wrangler config and two secrets without network access. The self-host template disables GitHub OAuth and reuses the existing counter backend. Run the disposable local end-to-end test `node worker/self-host-smoke.mjs` first, then run local migrations and explicitly opt in to remote D1 migrations and deployment. After deployment, run the read-only `node scripts/self-host-verify.mjs --api YOUR_WORKER_URL --token-file .wvt-admin-token` check (optionally `--slug` for an existing published counter). It verifies the Worker's identity, closed OAuth, private admin access, D1 budget and SVG HEAD without writing counts. Export a Studio `schemaVersion: 1` design JSON, and run `node scripts/self-host-publish.mjs create|update|inspect` against **your own HTTPS Worker** with a private `--token-file`. Success prints the dynamic SVG Markdown; it does not update a GitHub profile automatically.
+Get the CI-tested source-only preview ZIP from the latest successful PR #21 Build Self-Host Preview run (GitHub Actions Artifacts). Unzip the Actions artifact and then its inner `Workshop-Visitor-Terminal-Self-Host.zip` into a NEW folder. Check the included SHA256, run `npm ci`, then create a new D1 in your own Cloudflare account. This is not an official GitHub Release and the PR artifact is retained for seven days.\n\nUse **your own** Cloudflare account and create a new D1 database. Run `node scripts/self-host-setup.mjs init --worker ... --database ... --database-id ...` and then `node scripts/self-host-setup.mjs check` to generate and validate a private local Wrangler config and two secrets without network access. The self-host template disables GitHub OAuth and reuses the existing counter backend. Run the disposable local end-to-end test `node worker/self-host-smoke.mjs` first, then use `node scripts/self-host-readiness.mjs check` to create a network-free local readiness gate before running migrations and explicitly opting into remote D1 migrations and deployment. The optional `--report` JSON excludes credentials and marks all remote checks NOT_TESTED. After deployment, run the read-only `node scripts/self-host-verify.mjs --api YOUR_WORKER_URL --token-file .wvt-admin-token` check (optionally `--slug` for an existing published counter). It verifies the Worker's identity, closed OAuth, private admin access, D1 budget and SVG HEAD without writing counts. Export a Studio `schemaVersion: 1` design JSON, and run `node scripts/self-host-publish.mjs create|update|inspect` against **your own HTTPS Worker** with a private `--token-file`. Success prints the dynamic SVG Markdown; it does not update a GitHub profile automatically.
 
 This is a technical preview, not a hosted service or promise of free Cloudflare capacity. Image cache effects mean counts represent qualifying upstream requests, not unique people.
 
