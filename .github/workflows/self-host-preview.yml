@@ -1,0 +1,56 @@
+name: Build Self-Host Preview
+
+# This workflow has NO Cloudflare credentials, no deployment rights, and no
+# database snapshot access. Keep it separate from Verify: the recovery drill's
+# safety invariant explicitly prohibits any artifact uploading in Verify.
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/self-host-preview.yml"
+      - "scripts/build-selfhost-package.mjs"
+      - "scripts/self-host-*.mjs"
+      - "worker/**"
+      - "src/model.ts"
+      - "package.json"
+      - "package-lock.json"
+      - "wrangler.selfhost.example.toml"
+      - "docs/SELF_HOSTING.md"
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install locked project dependencies
+        run: npm ci
+      - name: Verify ZIP encoding, file allowlist, checksums and no private files
+        run: node --test worker/self-host-package.test.mjs
+      - name: Build ZIP and SHA256 from explicit source file allowlist
+        run: node scripts/build-selfhost-package.mjs
+      - name: Check built ZIP digest
+        run: |
+          cd dist
+          sha256sum -c Workshop-Visitor-Terminal-Self-Host.zip.sha256
+      - name: Install standalone ZIP into a fresh temporary directory
+        run: |
+          mkdir -p .wvt-package-ci
+          unzip -q dist/Workshop-Visitor-Terminal-Self-Host.zip -d .wvt-package-ci
+          cd .wvt-package-ci/Workshop-Visitor-Terminal-Self-Host
+          npm ci
+          node worker/self-host-dryrun.mjs
+          node worker/self-host-smoke.mjs
+      - name: Upload only the reviewed ZIP and SHA256 (no database backups)
+        uses: actions/upload-artifact@v4
+        with:
+          name: Workshop-SelfHost-Preview
+          path: |
+            dist/Workshop-Visitor-Terminal-Self-Host.zip
+            dist/Workshop-Visitor-Terminal-Self-Host.zip.sha256
+          retention-days: 7
+          if-no-files-found: error
