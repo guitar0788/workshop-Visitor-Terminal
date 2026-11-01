@@ -10,6 +10,7 @@
 import { randomBytes } from "node:crypto";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { resolveSelfHostApi } from "./self-host-api.mjs";
 import { readAdminToken, validateApiOrigin, assertLocalWorkerHostname } from "./self-host-publish.mjs";
 
 const SLUG = /^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?$/;
@@ -17,13 +18,14 @@ const HELP = [
   "Verify your OWN Cloudflare Worker (read-only, no counter increments):",
   "  node scripts/self-host-verify.mjs --api https://YOUR-WORKER.YOUR-SUBDOMAIN.workers.dev --token-file .wvt-admin-token",
   "  node scripts/self-host-verify.mjs --api https://YOUR-WORKER.YOUR-SUBDOMAIN.workers.dev --token-file .wvt-admin-token --slug my-counter",
+  "Or set WVT_API_URL once and omit --api in a macOS terminal.",
   "Also accepts WVT_ADMIN_TOKEN instead of --token-file.",
   "Never pass secrets via CLI arguments, and do not use the maintainer staging origin."
 ].join("\n") + "\n";
 
-export function parseVerifyArgs(argv) {
+export function parseVerifyArgs(argv, environment = process.env) {
   if (argv.length === 1 && ["--help", "-h", "help"].includes(argv[0])) return { help: true };
-  if (argv.length === 0 || argv.length % 2 !== 0) {
+  if (argv.length % 2 !== 0) {
     throw Error("Expected --api, optional --token-file, optional --slug");
   }
   const args = {};
@@ -36,7 +38,7 @@ export function parseVerifyArgs(argv) {
     }
     args[key] = argv[i + 1];
   }
-  if (!args.api) throw Error("Provide your own --api Worker URL");
+  args.api = resolveSelfHostApi(args.api, environment);
   validateApiOrigin(args.api);
   if (args.slug !== undefined && !SLUG.test(args.slug)) {
     throw Error("Invalid --slug");
@@ -107,7 +109,7 @@ export async function verifySelfHost(args, {
   makeProbeSlug = () => "probe-" + randomBytes(12).toString("hex")
 } = {}) {
   if (args.help) return HELP;
-  const origin = validateApiOrigin(args.api);
+  const origin = validateApiOrigin(resolveSelfHostApi(args.api, environment));
   await assertLocalWorkerHostname(origin);
   // Read the secret only after checking the destination. Never send the
   // credential to the maintainer staging API, even if explicitly requested.
