@@ -44,7 +44,7 @@ export function parseArgs(argv, environment = process.env) {
     }
     options[name] = value;
   }
-  options.api = resolveSelfHostApi(options.api, environment);
+  options.api = validateApiOrigin(resolveSelfHostApi(options.api, environment));
   if (!options.slug || !SLUG.test(options.slug)) {
     throw Error("Provide a valid lowercase --slug (1–40 characters)");
   }
