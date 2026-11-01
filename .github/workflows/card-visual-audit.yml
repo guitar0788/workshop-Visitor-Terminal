@@ -10,6 +10,8 @@ on:
       - "src/approved-reference-cards.ts"
       - "src/approved-three-card-image.ts"
       - "src/approved-clean-card-image.ts"
+      - "docs/qa/**"
+      - "worker/github-readme-probe.test.mjs"
       - "worker/card-visual-audit.test.mjs"
       - "src/model.ts"
       - "src/card-art.ts"
@@ -40,6 +42,8 @@ jobs:
           node-version: "22"
       - name: Install exact locked dependencies
         run: npm ci
+      - name: Validate GitHub README SVG proxy samples without network access
+        run: node --test worker/github-readme-probe.test.mjs
       - name: Test contact-sheet source validation
         run: node --test worker/card-visual-audit.test.mjs
       - name: Generate 18 SVG cards using the actual shared renderer
