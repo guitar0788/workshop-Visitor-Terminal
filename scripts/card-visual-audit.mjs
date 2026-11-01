@@ -109,7 +109,7 @@ export function createGallery(samples) {
     ".sample{background:#1c293b;border:1px solid #38506b;border-radius:17px;padding:13px;min-width:0}",
     ".label{display:flex;justify-content:space-between;gap:7px;margin:1px 0 11px;font-size:12px}",
     ".label span{color:#b1c6da;font-size:11px}",
-    "svg{width:100%;height:auto;aspect-ratio:600/210;display:block;border-radius:6px}",
+    "svg{width:100%;height:auto;display:block;border-radius:6px}",
     ".note{padding:20px 0 5px;font-size:12px;line-height:1.6;color:#c0cad5}",
     "@media(max-width:880px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}}",
     "@media(max-width:560px){.grid{grid-template-columns:1fr}body{padding:16px}}"
