@@ -216,6 +216,21 @@ node scripts/self-host-live-check.mjs --api https://YOUR-WORKER.YOUR-SUBDOMAIN.w
 
 ### 5.1 README 图片出现 `Counter not found`：无需重新部署的恢复方法
 
+### 5.2 纯离线核对本地 README 中的计数器 SVG
+
+如果已经保存了**真实远程验收成功报告**，且电脑上有待提交的 README.md，可在上传 GitHub 前对照检查：
+
+```bash
+export WVT_API_URL="https://YOUR-WORKER.YOUR-SUBDOMAIN.workers.dev"
+node scripts/self-host-readme.mjs --report selfhost-live-result.json --readme README.md
+```
+
+该检查只读取本地 Markdown 和现有验收报告，绝不连接 Cloudflare 或 GitHub，不读取管理员令牌、不增加访客计数、不修改 README。返回 \`MATCH\` 表示图片链接与成功验收报告的确切 SVG URL 一致；\`DIFFERENT_COUNTER_URL\` 表示检测到其他计数器图片，但没有匹配真实验收报告的链接；\`MISSING_COUNTER_IMAGE\` 表示未发现符合格式的计数器 Markdown 图片。工具始终输出正确的 README Markdown 以供自行复制。
+
+这不是远程 D1、浏览器渲染、GitHub 图片代理或 Cloudflare 计费隔离验收；也不能在没有成功实机验收报告时猜测 slug。朋友已经完成的测试不需要重跑，也不需要创建新的诊断计数器。
+
+
+
 **Mac 真实试用反馈已记录为 [Issue #24](https://github.com/guitar0788/workshop-Visitor-Terminal/issues/24)。** `/health` 返回成功，仅代表 Worker 服务已启动；当 README 引用的 SVG 路径中某个计数器名称在 D1 不存在时，服务会返回 HTTP 404 `Counter not found`。这通常是把文档示例 `my-counter` 当成真实计数器，而实机验收工具实际创建的是**随机 `livecheck-...` 计数器**。不能把某个不存在的名称自动转换成真实计数器，更不应该为了修复 README 反复部署 Worker 或重新创建 D1。
 
 从本版开始，**成功执行实机测试之后**，终端会自动输出原始 HTTPS 图片 URL 和可以直接复制的完整 Markdown：`![Visitor counter](https://.../v1/counters/livecheck-....svg)`。只复制该真实路径，不要复制 `my-counter` 模板。

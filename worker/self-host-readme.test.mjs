@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import {
   parseReadmeArgs, validatedDiagnosticSlug, createReadmeSnippet,
-  recoverReadmeSnippet
+  recoverReadmeSnippet, auditReadmeMarkdown, auditReadmeFile
 } from "../scripts/self-host-readme.mjs";
 
 const ORIGIN = "https://wvt-friend-mac-01.wvt-friend-mac-01.workers.dev";
@@ -93,4 +93,35 @@ test("CLI success path prints the actual diagnostic rather than a placeholder", 
   assert.match(source, /This diagnostic is NOT the illustrative my-counter slug/);
   const packageSource = await readFile("scripts/build-selfhost-package.mjs", "utf8");
   assert.match(packageSource, /scripts\/self-host-readme\.mjs/);
+});
+
+test("local README audit detects correct, wrong and missing images without network access", async () => {
+  const expected = ORIGIN + "/v1/counters/" + SLUG + ".svg";
+  const right = "![Visits](<" + expected + ">)";
+  assert.equal(auditReadmeMarkdown(right, expected), "MATCH");
+  assert.equal(auditReadmeMarkdown("![Other](" + ORIGIN + "/v1/counters/my-counter.svg)", expected), "DIFFERENT_COUNTER_URL");
+  assert.equal(auditReadmeMarkdown("![Other](https://other.example/v1/counters/my-counter.svg)", expected), "DIFFERENT_COUNTER_URL");
+  assert.equal(auditReadmeMarkdown("plain text " + expected, expected), "MISSING_COUNTER_IMAGE");
+  assert.equal(auditReadmeMarkdown("<!-- " + right + " -->", expected), "MISSING_COUNTER_IMAGE");
+  const fence = String.fromCharCode(96).repeat(3);
+  assert.equal(auditReadmeMarkdown(fence + "markdown\n" + right + "\n" + fence, expected), "MISSING_COUNTER_IMAGE");
+  assert.equal(auditReadmeMarkdown("![Other](https://invalid.example/image.png)\n" + right, expected), "MATCH");
+  const root = await mkdtemp(join(tmpdir(), "wvt-readme-audit-"));
+  try {
+    const path = join(root, "README.md");
+    await writeFile(path, right, "utf8");
+    assert.equal(await auditReadmeFile(path, expected), "MATCH");
+    await writeFile(path, "x".repeat(200_001));
+    await assert.rejects(auditReadmeFile(path, expected), /200 KB/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("optional README path accepts Markdown but rejects private token or config paths", () => {
+  const valid = parseReadmeArgs(["--api", ORIGIN, "--report", "live.json", "--readme", "README.md"]);
+  assert.equal(valid.readme, "README.md");
+  for (const path of [".wvt-admin-token", ".dev.vars", "README.html", "test.json"]) {
+    assert.throws(() => parseReadmeArgs(["--api", ORIGIN, "--report", "live.json", "--readme", path]));
+  }
 });
