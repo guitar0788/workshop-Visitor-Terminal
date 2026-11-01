@@ -292,6 +292,34 @@ export function renderSvg(input: unknown, visits: number): string {
   return parts.join("");
 }
 
+/**
+ * Resize the image and its editable overlay geometry as one operation.
+ * Artwork is scaled by renderSvg; layer coordinates must follow the same
+ * coordinate transform, otherwise titles and counts drift off their panels.
+ * Existing saved dimensions are never changed by sanitizeDesign/import.
+ */
+export function resizeCanvas(input: TerminalDesign, nextWidth: number, nextHeight: number): TerminalDesign {
+  const original = sanitizeDesign(input);
+  const width = number(nextWidth, original.width, 280, 800);
+  const height = number(nextHeight, original.height, 160, 480);
+  if (width === original.width && height === original.height) return original;
+  const sx = width / original.width;
+  const sy = height / original.height;
+  const fontScale = Math.min(sx, sy);
+  return sanitizeDesign({
+    ...original, width, height,
+    layers: original.layers.map(layer => ({
+      ...layer,
+      x: Math.round(layer.x * sx), y: Math.round(layer.y * sy),
+      width: Math.max(8, Math.round(layer.width * sx)),
+      height: Math.max(8, Math.round(layer.height * sy)),
+      fontSize: layer.kind === "text" || layer.kind === "count"
+        ? Math.max(8, Math.min(80, Math.round(layer.fontSize * fontScale)))
+        : layer.fontSize
+    }))
+  });
+}
+
 export function moveLayer(input: TerminalDesign, id: string, dx: number, dy: number): TerminalDesign {
   if (!Number.isFinite(dx) || !Number.isFinite(dy)) return input;
   return { ...input, layers: input.layers.map(layer => layer.id === id ? {
