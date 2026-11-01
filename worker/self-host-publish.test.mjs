@@ -4,7 +4,8 @@ import { mkdtemp, writeFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import {
-  parseArgs, validateApiOrigin, readDesign, readAdminToken, execute
+  parseArgs, validateApiOrigin, readDesign, readAdminToken, execute,
+  assertSafePublishingTarget
 } from "../scripts/self-host-publish.mjs";
 
 const origin = "https://my-worker.example.workers.dev";
@@ -14,6 +15,24 @@ const opts = (command, extras = {}) => ({
   command, api: origin, slug: "my-counter", ...extras
 });
 const response = (status, data) => Response.json(data, { status });
+const preflightResponse = (url, init) => {
+  const path = new URL(url).pathname;
+  if (!["/health", "/v1/my/counters", "/v1/admin/usage"].includes(path)) {
+    return null;
+  }
+  assert.equal(init.method, "GET");
+  assert.equal(init.redirect, "error");
+  assert(!init.headers.Authorization, "Anonymous preflight must not expose admin token");
+  if (path === "/health") {
+    return response(200, { status: "ok", service: "workshop-visitor-terminal", api: "v1" });
+  }
+  if (path === "/v1/my/counters") {
+    return response(503, { error: "Publishing is not enabled" });
+  }
+  return response(401, { error: "Unauthorized" });
+};
+const safeFetch = operation => async (url, init) =>
+  preflightResponse(url, init) ?? operation(url, init);
 
 async function withDesign(callback) {
   const dir = await mkdtemp(join(tmpdir(), "wvt-selfhost-"));
@@ -66,11 +85,11 @@ test("reads a local admin secret without sending it to stdout", async () => {
 test("create and update send validated design to own host only and output embed link", async () => {
   await withDesign(async path => {
     const seen = [];
-    const fetchImpl = async (url, init) => {
+    const fetchImpl = safeFetch(async (url, init) => {
       seen.push({ url, ...init });
       if (url.endsWith("/design")) return response(200, { slug: "my-counter", updated: true });
       return response(201, { slug: "my-counter" });
-    };
+    });
     const result = await execute(opts("create", { owner: "tester", design: path }), {
       environment: { WVT_ADMIN_TOKEN: token }, fetchImpl
     });
@@ -89,7 +108,7 @@ test("create error cannot silently overwrite an existing counter", async () => {
     let called = 0;
     await assert.rejects(() => execute(opts("create", { owner: "tester", design: path }), {
       environment: { WVT_ADMIN_TOKEN: token },
-      fetchImpl: async () => { called++; return response(409, { error: "existing" }); }
+      fetchImpl: safeFetch(async () => { called++; return response(409, { error: "existing" }); })
     }), /HTTP 409/);
     assert.equal(called, 1);
   });
@@ -100,22 +119,63 @@ test("create partially succeeds but design failure provides safe recovery", asyn
     let calls = 0;
     await assert.rejects(() => execute(opts("create", { owner: "tester", design: path }), {
       environment: { WVT_ADMIN_TOKEN: token },
-      fetchImpl: async () => ++calls === 1
+      fetchImpl: safeFetch(async () => ++calls === 1
         ? response(201, { slug: "my-counter" })
-        : response(503, { error: "temporarily down" })
+        : response(503, { error: "temporarily down" }))
     }), /Retry with update/);
     assert.equal(calls, 2);
   });
 });
 
 test("inspect is read-only and fails on counter identity mismatch", async () => {
-  const fetchImpl = async (url, init) => {
+  const fetchImpl = safeFetch(async (url, init) => {
     assert.equal(init.method, "GET");
     return response(200, { slug: "my-counter", hits: 27 });
-  };
+  });
   assert.match(await execute(opts("inspect"), { environment: { WVT_ADMIN_TOKEN: token }, fetchImpl }), /27/);
   await assert.rejects(() => execute(opts("inspect"), {
     environment: { WVT_ADMIN_TOKEN: token },
-    fetchImpl: async () => response(200, { slug: "other", hits: 10 })
+    fetchImpl: safeFetch(async () => response(200, { slug: "other", hits: 10 }))
   }), /identity/);
+});
+
+test("preflight rejects lookalikes, public OAuth and anonymous admin before any authenticated call", async () => {
+  for (const unsafe of [
+    { path: "/health", reply: response(200, { status: "ok", service: "other", api: "v1" }) },
+    { path: "/v1/my/counters", reply: response(200, { counters: [] }) },
+    { path: "/v1/my/counters", reply: response(503, { error: "Service configuration unavailable" }) },
+    { path: "/v1/admin/usage", reply: response(200, { admitted: 0 }) },
+    { path: "/health", reply: Response.redirect(origin + "/not-health") },
+    { path: "/health", reply: new Response("<html>wrong backend</html>", {
+      status: 200, headers: { "Content-Type": "text/html" }
+    }) }
+  ]) {
+    let authenticatedCalls = 0;
+    const fetchImpl = async (url, init) => {
+      if (init.headers.Authorization) authenticatedCalls++;
+      if (new URL(url).pathname === unsafe.path) return unsafe.reply.clone();
+      return preflightResponse(url, init);
+    };
+    await assert.rejects(() => execute(opts("inspect"), {
+      environment: { WVT_ADMIN_TOKEN: token }, fetchImpl
+    }), /safety preflight/);
+    assert.equal(authenticatedCalls, 0);
+  }
+});
+
+test("preflight is anonymous, rejects unsafe network errors and never echoes their details", async () => {
+  const fetchImpl = async () => {
+    throw Error("secret-example Authorization: Bearer very-secret-DO-NOT-LOG");
+  };
+  await assert.rejects(() => assertSafePublishingTarget(origin, fetchImpl), err => {
+    assert.match(err.message, /safety preflight/);
+    assert(!err.message.includes("DO-NOT-LOG"));
+    return true;
+  });
+  await assert.rejects(() => execute(opts("inspect", {
+    "token-file": "this-file-was-never-created"
+  }), {
+    environment: { WVT_ADMIN_TOKEN: token },
+    fetchImpl: async () => response(200, { service: "unknown" })
+  }), /safety preflight/);
 });
