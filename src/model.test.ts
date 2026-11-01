@@ -446,7 +446,7 @@ describe("six illustrated-card editing and exported-design parity", () => {
       if (isApprovedTheme(theme)) {
         // Editing text overlays must preserve the approved raster plate.
         const image = (svg: string) =>
-          svg.match(/<image\\b[^>]*href="(data:image\\/avif;base64,[^"]+)"/)?.[1];
+          svg.split('href="data:image/avif;base64,')[1]?.split('"')[0];
         expect(image(rendered)).toBe(image(original));
       } else {
         expect(rendered).toContain('shape-rendering="crispEdges"');
@@ -460,8 +460,8 @@ describe("six illustrated-card editing and exported-design parity", () => {
       const withSecondCount = addLayer(original, "count", "custom_second_count");
       const restored = sanitizeDesign(JSON.parse(JSON.stringify(withSecondCount)));
       const rendered = renderSvg(restored, 12_848);
-      expect([...rendered.matchAll(/>12,848<\\/text>/g)]).toHaveLength(2);
-      expect([...rendered.matchAll(/<clipPath\\b/g)]).toHaveLength(2);
+      expect(rendered.split('>12,848</text>').length - 1).toBe(2);
+      expect(rendered.split('<clipPath').length - 1).toBe(2);
 
       // Hiding the original slot must not also hide the extra count.
       const hiddenMain = sanitizeDesign({
@@ -469,7 +469,7 @@ describe("six illustrated-card editing and exported-design parity", () => {
           layer.id === "visits" ? { ...layer, visible: false } : layer)
       });
       const hiddenSvg = renderSvg(hiddenMain, 12_848);
-      expect([...hiddenSvg.matchAll(/>12,848<\\/text>/g)]).toHaveLength(1);
+      expect(hiddenSvg.split('>12,848</text>').length - 1).toBe(1);
       expect(hiddenSvg).not.toContain('>12,847</text>');
       expect(hiddenSvg).not.toContain('href="https://');
     }
