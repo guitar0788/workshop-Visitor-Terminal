@@ -158,7 +158,7 @@ export function parseBrowserAudit(html) {
     r.remoteRendering!=="NOT_TESTED"||r.githubReadmeRendering!=="NOT_TESTED"||
     !Array.isArray(r.failures)||r.failures.some(x=>typeof x!=="string")||
     !Number.isSafeInteger(r.overflowCount)||r.overflowCount!==r.failures.length||
-    r.overflowCount<0)throw Error("Incomplete browser visual audit");
+    r.overflowCount<0)throw Error("Incomplete browser visual audit: samples="+r?.sampleCount+" text="+r?.checkedText+" overflows="+r?.overflowCount+" failures="+JSON.stringify(r?.failures).slice(0,800));
   return r;
 }
 
