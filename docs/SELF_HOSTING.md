@@ -21,7 +21,9 @@
 
 Windows 可用 `certutil -hashfile Workshop-Visitor-Terminal-Self-Host.zip SHA256` 对比旁边的 `.sha256` 文件内容，确认下载未损坏；macOS/Linux 可以使用 `sha256sum -c Workshop-Visitor-Terminal-Self-Host.zip.sha256`。
 
-在解压后的自托管目录打开 CMD、PowerShell 或终端，安装 Node.js 22+（当前锁定的 Wrangler 4.156.0 要求 Node.js 22 或更高），然后运行：
+在解压后的自托管目录打开 CMD、PowerShell 或终端，安装 Node.js 22.12+（当前锁定的 Wrangler 要求 Node.js 22+，修复后的 Vitest 5 测试工具要求 Node.js 22.12+），然后运行：
+
+**Windows 兼容性：** 自托管 ZIP 已经在 GitHub 的 Windows 运行器上实测解压、`npm ci`、Worker 无部署编译和真实本地 D1；本地测试使用跨平台 Node 入口，不依赖 Windows `.cmd` 子进程。Cloudflare 官方当前只承诺 Wrangler 在 **Windows 11** 上受支持；Windows 10 的本地 Worker/D1 运行没有通过本项目验证，不应将本次 Windows CI 成功推广为 Windows 10 兼容保证。
 
 ```sh
 npm ci
@@ -31,7 +33,7 @@ npx wrangler whoami
 
 **方法 B：从 GitHub 克隆整个开发仓库**
 
-如果需要修改源代码，请安装 Node.js 22+ 和 Git，并执行：
+如果需要修改源代码，请安装 Node.js 22.12+ 和 Git，并执行：
 
 ```sh
 git clone https://github.com/guitar0788/workshop-Visitor-Terminal.git
@@ -65,7 +67,7 @@ node scripts/self-host-readiness.mjs check
 - `wrangler.selfhost.toml` 与两份密钥文件均由 `.gitignore` 排除，不可上传到 GitHub。Windows 上还需注意所在文件夹的 NTFS 共享权限。
 - **仅首次初始化时使用新建的 D1 数据库**；本工具不是从其他账户迁移或接管已有计数器的工具。
 
-**新增：发行前离线验收报告。** `node scripts/self-host-readiness.mjs check` 会在不调用网络的情况下确认 Node.js 22+、私有配置、两个不同的本地密钥、Git 忽略规则、npm 锁定依赖、Worker 原始代码及四份 D1 迁移脚本。如果需要保留一份**不包含 Worker 名称、D1 UUID、管理员密钥或密钥哈希**的 JSON 报告，可以改用：
+**新增：发行前离线验收报告。** `node scripts/self-host-readiness.mjs check` 会在不调用网络的情况下确认 Node.js 22.12+、私有配置、两个不同的本地密钥、Git 忽略规则、npm 锁定依赖、Worker 原始代码及四份 D1 迁移脚本。如果需要保留一份**不包含 Worker 名称、D1 UUID、管理员密钥或密钥哈希**的 JSON 报告，可以改用：
 
 ```sh
 node scripts/self-host-readiness.mjs check --report self-host-readiness.json
@@ -208,6 +210,6 @@ node scripts/self-host-live-check.mjs --api https://YOUR-WORKER.YOUR-SUBDOMAIN.w
 
 Get the CI-tested source-only preview ZIP from the latest successful PR #21 Build Self-Host Preview run (GitHub Actions Artifacts). Unzip the Actions artifact and then its inner `Workshop-Visitor-Terminal-Self-Host.zip` into a NEW folder. Check the included SHA256, run `npm ci`, then create a new D1 in your own Cloudflare account. This is not an official GitHub Release and the PR artifact is retained for seven days.\n\nUse **your own** Cloudflare account and create a new D1 database. Run `node scripts/self-host-setup.mjs init --worker ... --database ... --database-id ...` and then `node scripts/self-host-setup.mjs check` to generate and validate a private local Wrangler config and two secrets without network access. The self-host template disables GitHub OAuth and reuses the existing counter backend. Run the disposable local end-to-end test `node worker/self-host-smoke.mjs` first, then use `node scripts/self-host-readiness.mjs check` to create a network-free local readiness gate before running migrations and explicitly opting into remote D1 migrations and deployment. The optional `--report` JSON excludes credentials and marks all remote checks NOT_TESTED. After deployment, run the read-only `node scripts/self-host-verify.mjs --api YOUR_WORKER_URL --token-file .wvt-admin-token` check (optionally `--slug` for an existing published counter). It verifies the Worker's identity, closed OAuth, private admin access, D1 budget and SVG HEAD without writing counts. Export a Studio `schemaVersion: 1` design JSON, and run `node scripts/self-host-publish.mjs create|update|inspect` against **your own HTTPS Worker** with a private `--token-file`. Success prints the dynamic SVG Markdown; it does not update a GitHub profile automatically.
 
-Optional remote write acceptance: after manually deploying YOUR OWN Worker/D1, run `node scripts/self-host-live-check.mjs --api YOUR_WORKER_URL --owner YOUR_GITHUB_NAME --confirm-worker YOUR-WORKER --allow-persistent-test-record --token-file .wvt-admin-token`. This explicitly creates a **permanent** diagnostic counter and tests real SVG counting, deduplication and design updates. CI only simulates this on disposable local D1; a passing local simulation does not prove an independent Cloudflare account deployment.\n\nThis is a technical preview, not a hosted service or promise of free Cloudflare capacity. Image cache effects mean counts represent qualifying upstream requests, not unique people.
+Optional remote write acceptance: after manually deploying YOUR OWN Worker/D1, run `node scripts/self-host-live-check.mjs --api YOUR_WORKER_URL --owner YOUR_GITHUB_NAME --confirm-worker YOUR-WORKER --allow-persistent-test-record --token-file .wvt-admin-token`. This explicitly creates a **permanent** diagnostic counter and tests real SVG counting, deduplication and design updates. CI only simulates this on disposable local D1; a passing local simulation does not prove an independent Cloudflare account deployment.\n\nWindows CI now installs and tests the extracted ZIP using Node.js 22 on a Windows GitHub runner. Use Node.js 22.12+ for the locked patched Vitest 5 tooling; Cloudflare officially supports Wrangler on Windows 11, not Windows 10. Release preview ZIPs are gated on a full `npm audit --audit-level=moderate` and real Windows Worker/D1 smoke, but this remains a technical preview.\n\nThis is a technical preview, not a hosted service or promise of free Cloudflare capacity. Image cache effects mean counts represent qualifying upstream requests, not unique people.
 
 Official Cloudflare references: [D1 Wrangler commands](https://developers.cloudflare.com/d1/wrangler-commands/) and [Workers rate limiting](https://developers.cloudflare.com/workers/runtime-apis/bindings/rate-limit/).
