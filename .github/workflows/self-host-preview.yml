@@ -37,6 +37,28 @@ jobs:
         run: |
           npm audit --json > "$RUNNER_TEMP/wvt-npm-audit.json" || true
           node -e 'const fs=require("node:fs"); const a=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+"/wvt-npm-audit.json","utf8")); if(!a.metadata || !a.vulnerabilities) throw Error("npm audit inventory missing"); console.log("npm full dependency audit:",JSON.stringify(a.metadata.vulnerabilities)); for(const [name,v] of Object.entries(a.vulnerabilities)){console.log("AUDIT",JSON.stringify({package:name,severity:v.severity,range:v.range,fixAvailable:v.fixAvailable,via:v.via.filter(x=>typeof x==="object").map(x=>({title:x.title,url:x.url}))}));}'
+      - name: Generate reviewed Vitest 5 patch candidate lockfile (temporary)
+        shell: bash
+        run: |
+          scratch="$(mktemp -d)"
+          cp package.json package-lock.json "$scratch/"
+          npm install --prefix "$scratch" --package-lock-only --ignore-scripts --no-audit --no-fund --save-dev vitest@5.0.5
+          node - "$scratch/package-lock.json" <<'NODE'
+          const fs = require("node:fs");
+          const source = fs.readFileSync(process.argv[2], "utf8");
+          if (source.length > 300000 || source.length < 10000) throw Error("Unexpected Vitest candidate lock size");
+          const doc = JSON.parse(source);
+          if (doc.packages?.["node_modules/vitest"]?.version !== "5.0.5" ||
+              doc.packages?.[""]?.devDependencies?.vitest !== "^5.0.5") {
+            throw Error("Wrong Vitest candidate lock");
+          }
+          const stride = 3000;
+          for (let offset = 0, i = 0; offset < source.length; offset += stride, i++) {
+            console.log("WVT_VITEST_LOCK_CHUNK_" + i + "_" + JSON.stringify(source.slice(offset, offset + stride)));
+          }
+          console.log("WVT_VITEST_LOCK_END_" + Math.ceil(source.length / stride));
+          NODE
+          rm -rf "$scratch"
       - name: Verify ZIP encoding, file allowlist, checksums and no private files
         run: node --test worker/self-host-package.test.mjs
       - name: Build ZIP and SHA256 from explicit source file allowlist
