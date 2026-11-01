@@ -75,7 +75,7 @@ export function createGallery(samples) {
   // even though every individual SVG is correct when opened in isolation.
   const usedIds = new Set();
   for (const sample of samples) {
-    for (const [, id] of sample.svg.matchAll(/\\bid="([^"]+)"/g)) {
+    for (const [, id] of sample.svg.matchAll(/\bid="([^"]+)"/g)) {
       if (usedIds.has(id)) throw Error("Repeated SVG fragment ID across cards: " + id);
       usedIds.add(id);
     }
