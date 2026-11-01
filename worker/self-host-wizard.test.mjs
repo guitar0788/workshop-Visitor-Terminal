@@ -60,7 +60,7 @@ test("wizard command modes are exact; no cloud or secret flags accepted", () => 
     ["init"], ["--check", "--steps"], ["--help", "--check"],
     ["--worker", WORKER], ["--token-file", ".wvt-admin-token"]
   ]) assert.throws(() => parseWizardArgs(argv), /Use the wizard/);
-  assert.match(WIZARD_INTRO, /your OWN account/i);
+  assert.match(WIZARD_INTRO, /your OWN Cloudflare account/i);
   assert.match(WIZARD_NEXT, /NOT verify cloud ownership/);
 });
 
