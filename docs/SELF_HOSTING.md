@@ -84,7 +84,27 @@ npx wrangler secret put VISIT_HASH_SECRET --config wrangler.selfhost.toml
 
 上述两次 `secret put` 会提示输入密钥：分别从本机 `.wvt-admin-token` 和 `.wvt-visit-secret` 文件**复制完整的单行值**粘贴，不要把密钥放入命令行参数、截图或公开日志。使用 Windows CMD、PowerShell、macOS Terminal 或 Linux Shell 时均可采用此交互方式；不要在 PowerShell 中使用 `< 文件名` 重定向。
 
-只有创建者明确选择执行上述命令时才会进行远程部署。第一次部署后、秘密尚未设置完整时，计数功能应返回 HTTP 503。完成后测试自己的 `https://<your-worker>.<your-subdomain>.workers.dev/health`；注意 `/health` 只检查基本路由，不证明数据库已经就绪。
+只有创建者明确选择执行上述命令时才会进行远程部署。第一次部署后、秘密尚未设置完整时，计数功能应返回 HTTP 503。单独的 `/health` 只证明路由工作，不证明 D1 已准备好。
+
+**新：部署后只读验收（推荐）**
+
+将地址换成自己 Worker 的真实 HTTPS 根地址，执行：
+
+```sh
+node scripts/self-host-verify.mjs --api https://YOUR-WORKER.YOUR-SUBDOMAIN.workers.dev --token-file .wvt-admin-token
+```
+
+它会依次确认服务身份、OAuth 发布门禁关闭、匿名管理员访问被拒绝、管理员密钥可读 D1 当日写入预算且限流标志正常，并向随机不存在的计数器发出一次 **HEAD** 请求（预期 HTTP 404）。所有探针仅使用 GET/HEAD，不会增加任何访问次数，也不会修改 D1、Cloudflare 配置或仓库文件。若出现 HTTP 401、403、429、503 或异常 HTML 响应，命令会停止并报告失败环节；**不要通过反复刷新真实 SVG 来排查**。
+
+首次实际创建自己的计数器之后，可以进一步检查它的 SVG 是否已公开可读（同样只发送 HEAD，不增加次数）：
+
+```sh
+node scripts/self-host-verify.mjs --api https://YOUR-WORKER.YOUR-SUBDOMAIN.workers.dev --token-file .wvt-admin-token --slug my-counter
+```
+
+**安全提醒：** 工具不会自动发现自己的 Cloudflare 地址；请手动核对 `--api` 确实指向自己的 Worker。管理员密钥仅会发送至这个明确指定且通过地址校验的 HTTPS 目标，禁止重定向，也禁止维护者的 staging 地址。它无法核验 Cloudflare 账号的实际所有权、收费额度、域名 DNS、其他 Worker 的流量、真实跨机房限流或 GitHub 图片缓存行为。它验证的是现有服务端接口的可观察状态，不是完整生产环境安全审计。
+
+
 
 ### 5. 发布离线 Studio 中设计的 JSON
 
@@ -122,7 +142,7 @@ node scripts/self-host-publish.mjs inspect --api https://YOUR-WORKER.YOUR-SUBDOM
 
 ## English summary
 
-Use **your own** Cloudflare account and create a new D1 database. Run `node scripts/self-host-setup.mjs init --worker ... --database ... --database-id ...` and then `node scripts/self-host-setup.mjs check` to generate and validate a private local Wrangler config and two secrets without network access. The self-host template disables GitHub OAuth and reuses the existing counter backend. Run the disposable local end-to-end test `node worker/self-host-smoke.mjs` first, then run local migrations and explicitly opt in to remote D1 migrations and deployment. Export a Studio `schemaVersion: 1` design JSON, and run `node scripts/self-host-publish.mjs create|update|inspect` against **your own HTTPS Worker** with a private `--token-file`. Success prints the dynamic SVG Markdown; it does not update a GitHub profile automatically.
+Use **your own** Cloudflare account and create a new D1 database. Run `node scripts/self-host-setup.mjs init --worker ... --database ... --database-id ...` and then `node scripts/self-host-setup.mjs check` to generate and validate a private local Wrangler config and two secrets without network access. The self-host template disables GitHub OAuth and reuses the existing counter backend. Run the disposable local end-to-end test `node worker/self-host-smoke.mjs` first, then run local migrations and explicitly opt in to remote D1 migrations and deployment. After deployment, run the read-only `node scripts/self-host-verify.mjs --api YOUR_WORKER_URL --token-file .wvt-admin-token` check (optionally `--slug` for an existing published counter). It verifies the Worker's identity, closed OAuth, private admin access, D1 budget and SVG HEAD without writing counts. Export a Studio `schemaVersion: 1` design JSON, and run `node scripts/self-host-publish.mjs create|update|inspect` against **your own HTTPS Worker** with a private `--token-file`. Success prints the dynamic SVG Markdown; it does not update a GitHub profile automatically.
 
 This is a technical preview, not a hosted service or promise of free Cloudflare capacity. Image cache effects mean counts represent qualifying upstream requests, not unique people.
 
