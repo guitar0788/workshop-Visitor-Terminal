@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { isApprovedTheme, approvedCanvasWidth } from "./approved-reference-cards";
+import { isCardTheme } from "./card-art";
 import { createRoot } from "react-dom/client";
 import {
-  addLayer, CARD_THEMES, moveLayer, reorderLayer, renderSvg, sanitizeDesign,
+  addLayer, CARD_THEMES, MAX_VISITOR_COUNT, moveLayer, reorderLayer, renderSvg, sanitizeDesign,
   type Layer, type LayerKind, type TerminalDesign, type Theme
 } from "./model";
 import {
@@ -657,6 +658,11 @@ function App() {
             );
           })}
         </div>
+        {isCardTheme(design.theme) && (
+          <p className="template-gallery-hint" role="note">
+            {isApprovedTheme(design.theme) ? t.approvedArtworkLimit : t.vectorArtworkLimit}
+          </p>
+        )}
       </div>
     );
   }
@@ -776,11 +782,13 @@ function App() {
           <h3>{t.canvas}</h3><span>{t.readmeReady}</span>
         </div>
         <div className="form-grid canvas-settings">
-          <label className="field">{t.background}
-            <input type="color" value={design.background}
-              onChange={event => updateDesign({ background: event.target.value })}/>
-          </label>
-          <label className="field">{t.border}
+          {!isCardTheme(design.theme) && (
+            <label className="field">{t.background}
+              <input type="color" value={design.background}
+                onChange={event => updateDesign({ background: event.target.value })}/>
+            </label>
+          )}
+          <label className="field">{isCardTheme(design.theme) ? t.newLayerColor : t.border}
             <input type="color" value={design.accent}
               onChange={event => updateDesign({ accent: event.target.value })}/>
           </label>
@@ -810,9 +818,9 @@ function App() {
       <>
         <div className="preview-footer">
           <label className="field demo-count">{t.exampleCount}
-            <input type="number" min={0} max={999999999} value={demoCount}
+            <input type="number" min={0} max={MAX_VISITOR_COUNT} step={1} value={demoCount}
               onChange={event => setDemoCount(Math.max(
-                0, Math.min(999999999, Number(event.target.value) || 0)
+                0, Math.min(MAX_VISITOR_COUNT, Math.floor(Number(event.target.value) || 0))
               ))}/>
           </label>
           <span className="muted">{t.demoWarning}</span>
