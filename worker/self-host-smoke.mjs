@@ -291,6 +291,17 @@ export async function smokeSelfHostedCounter() {
       "Read-only verification must not record any visits");
     assert.equal(readiness.noDatabaseWrites, true);
 
+    // Real local Worker response, not a mocked Headers object. HEAD must
+    // expose safe README image headers and must leave the D1 count at zero.
+    const withImage = await verifySelfHost({
+      api: origin, "token-file": tokenPath, slug: SLUG
+    });
+    assert.equal(withImage.svgHeaders?.contentType, "image/svg+xml");
+    assert.equal(withImage.svgHeaders?.cacheMaxAgeSeconds, 60);
+    assert.equal(withImage.svgHeaders?.embeddableResponseHeaders, true);
+    assert.equal(withImage.noDatabaseWrites, true);
+    assert.match(await cli("inspect"), /Recorded upstream requests: 0/);
+
     const imagePath = "/v1/counters/" + SLUG + ".svg";
     assert.equal((await api(imagePath, { method: "HEAD" })).status, 200);
     assert.match(await cli("inspect"), /Recorded upstream requests: 0/);
