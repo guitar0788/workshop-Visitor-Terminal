@@ -23,6 +23,7 @@ export const ALLOWED_FILES = Object.freeze([
   ".gitignore",
   "docs/SELF_HOSTING.md",
   "package.json",
+  "package-lock.json",
   "src/model.ts",
   "worker/index.ts",
   "worker/service.ts",
@@ -58,6 +59,33 @@ export function crc32(buffer) {
     }
   }
   return (crc ^ 0xffffffff) >>> 0;
+}
+
+export function validateLockedDependencies(manifest, lock) {
+  if (!manifest || !lock || lock.lockfileVersion !== 3 ||
+      lock.name !== manifest.name || lock.version !== manifest.version ||
+      !lock.packages || !lock.packages[""] ||
+      Object.keys(lock.packages).length < 10) {
+    throw Error("Missing or unexpected npm package lockfile");
+  }
+  const root = lock.packages[""];
+  for (const key of ["dependencies", "devDependencies"]) {
+    if (JSON.stringify(root[key] ?? {}) !== JSON.stringify(manifest[key] ?? {})) {
+      throw Error("Lockfile does not match package.json " + key);
+    }
+  }
+  for (const [path, value] of Object.entries(lock.packages)) {
+    if (path === "") continue;
+    if (!path.startsWith("node_modules/") ||
+        !value || typeof value !== "object" ||
+        !/^https:\/\/registry\.npmjs\.org\//.test(value.resolved ?? "") ||
+        !/^sha512-[A-Za-z0-9+/=]+$/.test(value.integrity ?? "") ||
+        !/^\d+\.\d+\.\d+/.test(value.version ?? "") ||
+        value.link === true || value.inBundle === true) {
+      throw Error("Unsafe or incomplete locked npm dependency at " + path);
+    }
+  }
+  return Object.keys(lock.packages).length - 1;
 }
 
 export function archive(entries) {
@@ -134,6 +162,10 @@ export async function buildSelfHostPackage({ root = ROOT, output = join(ROOT, "d
   })));
   // The standalone ZIP is deliberately limited to source, documentation and
   // project manifests. No .dev.vars, tokens, .env, local D1, dist or .wrangler.
+  validateLockedDependencies(
+    JSON.parse(files.find(f => f.path === "package.json").data.toString("utf8")),
+    JSON.parse(files.find(f => f.path === "package-lock.json").data.toString("utf8"))
+  );
   const result = archive(files);
   await mkdir(dirname(output), { recursive: true });
   await writeFile(output, result);
