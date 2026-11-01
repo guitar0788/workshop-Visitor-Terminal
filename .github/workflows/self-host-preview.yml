@@ -15,6 +15,7 @@ on:
       - "package-lock.json"
       - "wrangler.selfhost.example.toml"
       - "docs/SELF_HOSTING.md"
+      - ".gitignore"
 
 permissions:
   contents: read
