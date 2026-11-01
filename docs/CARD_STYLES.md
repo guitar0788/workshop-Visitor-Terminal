@@ -13,6 +13,14 @@ Workshop Studio now offers **six illustrated presets**. This is a source-only dr
 
 The three new voxel scenes are **original, Minecraft-inspired fan-style graphics**, not copied game textures, official logos or assets. Their count/heading/caption are editable layers and are dynamically updated by the same Worker SVG renderer. No external images or fonts are fetched for these three scenes.
 
+## Editing contract
+
+- **Pixel Cat / Green Terminal / Blue-Gold RPG:** the owner-approved raster contains its original fixed title and ornaments. Only the dynamic count is an original editable slot. Additional text, shapes and count layers are **overlays**, not replacements for baked lettering. The original AVIF plate is preserved at 12,847; a cleaned version removes the baked digits when the value or main count layer changes. New count overlays must render independently of the main approved count.
+- **Minecraft Overworld / Nether / End:** the scene is original built-in vector artwork; editable heading, caption and count layers are separate from that fixed backdrop. Changing text does not change the illustrated terrain or objects.
+- **All illustrated cards:** the background is supplied by the artwork, so Studio hides the otherwise ineffective plain background picker. The accent setting controls the default color of newly added layers; existing layer colors remain individually editable. A 12-digit example count is supported in preview, standalone SVG and Worker rendering.
+- **Cross-surface parity:** JSON export/import, live Studio preview, standalone SVG and D1 Worker SVG all use the same sanitized design/renderer. CI exercises actual local browser DOM/text/image decoding plus edited-design round trips; it does not demonstrate real independent Cloudflare billing or GitHub's live remote image-proxy cache.
+
+
 ## Retired from the new-template picker
 
 `modern-card`, `cozy-card`, `space-card`, `notebook-card`, `neon-card`, and `minimal-card` are **not selectable for creating new designs**. Their prior designs remain readable/renderable so existing published counters and saved JSON do not silently revert to a different style. They are not included in the six-card visual gallery. The three preexisting v0.5 classic presets (`pixel`, `cyber`, `minimal`) are separate and remain available.
