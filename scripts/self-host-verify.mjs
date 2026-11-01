@@ -10,7 +10,7 @@
 import { randomBytes } from "node:crypto";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { readAdminToken, validateApiOrigin } from "./self-host-publish.mjs";
+import { readAdminToken, validateApiOrigin, assertLocalWorkerHostname } from "./self-host-publish.mjs";
 
 const SLUG = /^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?$/;
 const HELP = [
@@ -108,6 +108,7 @@ export async function verifySelfHost(args, {
 } = {}) {
   if (args.help) return HELP;
   const origin = validateApiOrigin(args.api);
+  await assertLocalWorkerHostname(origin);
   // Read the secret only after checking the destination. Never send the
   // credential to the maintainer staging API, even if explicitly requested.
   const token = await readAdminToken({
