@@ -41,6 +41,7 @@ export const ALLOWED_FILES = Object.freeze([
   "scripts/self-host-api.mjs",
   "scripts/self-host-url.mjs",
   "scripts/self-host-doctor.mjs",
+  "scripts/self-host-wizard.mjs",
   "scripts/self-host-setup.mjs",
   "scripts/self-host-publish.mjs",
   "scripts/self-host-verify.mjs",
