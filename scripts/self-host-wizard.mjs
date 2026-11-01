@@ -34,6 +34,29 @@ export function parseWizardArgs(args) {
   throw Error("Use the wizard without arguments, --check or --help");
 }
 
+/** Explain expected first-run mistakes without exposing any typed value. */
+export function explainWizardFailure(error) {
+  const message = error instanceof Error ? error.message : "";
+  if (message === "Choose a unique lowercase Worker name, new D1 name, and a genuine D1 UUID") {
+    return "WVT-W01 INVALID_INPUT: Use a unique lowercase Worker name (letters, digits, hyphens), " +
+      "a new lowercase D1 name, and the UUID returned by your OWN Wrangler D1 create command. " +
+      "No configuration or secret file was created.";
+  }
+  if (message.startsWith("Self-host setup already exists or is partial.")) {
+    return "WVT-W02 EXISTING_SETUP: At least one private local configuration or secret file exists. " +
+      "Nothing was overwritten. Do not delete credentials; use --check or self-host-doctor.";
+  }
+  if (message === "Interactive terminal required for first-run setup") {
+    return "WVT-W03 INTERACTIVE_TERMINAL: Run this command in a local interactive terminal, " +
+      "not a CI pipeline or a pasted shell script. The --check mode is read-only.";
+  }
+  if (message === "Unexpected local readiness status") {
+    return "WVT-W04 READINESS_NOT_CONFIRMED: Local preparation was not verified. " +
+      "Preserve existing config and secrets; run --check or self-host-doctor before proceeding.";
+  }
+  return explainDoctorFailure(error);
+}
+
 export const WIZARD_INTRO = [
   "LOCAL-ONLY SETUP — no Cloudflare resources will be modified.",
   "First, in your OWN terminal/account, separately run:",
@@ -148,7 +171,7 @@ async function main() {
   } catch (error) {
     // Never include raw exception messages, D1 UUIDs, credentials, local paths or
     // caller-supplied values in output. Diagnose with the existing redacted tool.
-    process.stderr.write(explainDoctorFailure(error) + "\n" +
+    process.stderr.write(explainWizardFailure(error) + "\n" +
       "Guided setup stopped. No Cloudflare request or deployment was made.\n");
     process.exitCode = 1;
   } finally {
