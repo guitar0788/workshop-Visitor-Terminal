@@ -15,18 +15,23 @@ export const COUNTS = [12_847, 999_999_999_999];
 export const SAMPLES = 18;
 const browserScript = [
   "(function(){",
-  "const failures=[];let checkedText=0;",
+  "const failures=[];let checkedText=0;const usedIds=new Set();",
   "const samples=[...document.querySelectorAll('.sample')];",
   "for(const sample of samples){",
   "const svg=sample.querySelector('svg');",
   "if(!svg){failures.push('missing svg');continue;}",
+  "for(const node of svg.querySelectorAll('[id]')){",
+  "if(usedIds.has(node.id))failures.push('duplicate inline SVG id: '+node.id);",
+  "usedIds.add(node.id);}",
   "const texts=[...svg.querySelectorAll('text')];",
   "if(texts.length!==3)failures.push(sample.dataset.theme+': wrong text layer count');",
   "for(const t of texts){",
   "const clip=t.getAttribute('clip-path');",
-  "if(!clip||!/^url\\(#clip-[A-Za-z0-9_-]{1,48}\\)$/.test(clip)){failures.push('unsafe/missing clip');continue;}",
+  "if(!clip||!/^url\\(#clip-[A-Za-z0-9_-]{1,100}\\)$/.test(clip)){failures.push('unsafe/missing clip');continue;}",
   "const rect=svg.querySelector('clipPath#'+clip.slice(5,-1)+' rect');",
   "if(!rect){failures.push('no clip rect');continue;}",
+  "const clipTarget=document.getElementById(clip.slice(5,-1));",
+  "if(clipTarget!==rect.parentNode)failures.push('wrong cross-card clip target: '+clip);",
   "const b=t.getBBox();const x=+rect.getAttribute('x'),y=+rect.getAttribute('y');",
   "const w=+rect.getAttribute('width'),h=+rect.getAttribute('height');",
   "checkedText++;const q=1.5;",
@@ -37,6 +42,13 @@ const browserScript = [
   "' box '+[b.x,b.y,b.width,b.height].map(n=>n.toFixed(1)).join(',')+",
   "' clip '+[x,y,w,h].join(','));",
   "}",
+  "for(let i=0;i<texts.length;i++){for(let j=i+1;j<texts.length;j++){",
+  "const a=texts[i].getBBox(),b=texts[j].getBBox();",
+  "const overlapX=Math.min(a.x+a.width,b.x+b.width)-Math.max(a.x,b.x);",
+  "const overlapY=Math.min(a.y+a.height,b.y+b.height)-Math.max(a.y,b.y);",
+  "if(overlapX>3&&overlapY>2)failures.push(sample.dataset.theme+",
+  "' text overlap: '+texts[i].textContent.slice(0,16)+' / '+texts[j].textContent.slice(0,16));",
+  "}}",
   "if(svg.querySelector('script,image,foreignObject'))failures.push('unsafe svg');",
   "}",
   "document.getElementById('visual-audit').textContent=JSON.stringify({",
@@ -58,6 +70,15 @@ export function createGallery(samples) {
       /<script\b|<foreignObject\b|<image\b|\shref\s*=/i.test(s.svg)){
       throw Error("Invalid or duplicate card SVG");}
     seen.add(s.name+":"+s.count);
+  }
+  // Static second barrier: a multi-card page MUST NOT reuse SVG fragment IDs
+  // even though every individual SVG is correct when opened in isolation.
+  const usedIds = new Set();
+  for (const sample of samples) {
+    for (const [, id] of sample.svg.matchAll(/\\bid="([^"]+)"/g)) {
+      if (usedIds.has(id)) throw Error("Repeated SVG fragment ID across cards: " + id);
+      usedIds.add(id);
+    }
   }
   const cells=samples.map(s=>'<section class="sample" data-theme="'+s.name+
     '" data-count="'+s.count+'"><div class="label"><strong>'+s.name+

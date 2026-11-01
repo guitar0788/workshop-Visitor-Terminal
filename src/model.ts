@@ -77,7 +77,7 @@ const CARD_CONFIG: Record<CardTheme, {
   "space-card": { accent:"#f4eaff", background:"#1b1b56", heading:"WORKSHOP VISITORS", caption:"EXPLORING THE STARS",
     titleX:47,titleY:59,titleWidth:259,titleSize:18,countX:47,countY:106,countWidth:255,countSize:45,labelX:48,labelY:167 },
   "notebook-card": { accent:"#614432", background:"#fff5e4", heading:"WORKSHOP VISITORS", caption:"MY VISITOR NOTES",
-    titleX:64,titleY:58,titleWidth:239,titleSize:19,countX:66,countY:113,countWidth:231,countSize:49,labelX:68,labelY:169 },
+    titleX:64,titleY:58,titleWidth:239,titleSize:19,countX:66,countY:101,countWidth:231,countSize:47,labelX:68,labelY:175 },
   "neon-card": { accent:"#e9e2ff", background:"#131737", heading:"WORKSHOP VISITORS", caption:"DIGITAL SIGNAL · ACTIVE",
     titleX:166,titleY:60,titleWidth:227,titleSize:17,countX:165,countY:109,countWidth:229,countSize:44,labelX:167,labelY:170 },
   "minimal-card": { accent:"#1a4a3d", background:"#f1fff6", heading:"WORKSHOP VISITORS", caption:"HELLO THERE",
@@ -165,10 +165,36 @@ export function fittedCountSize(layer: Layer, value: string): number {
   return Math.max(8, Math.min(layer.fontSize, layer.height - 4, byWidth));
 }
 
+/** Prevent cross-card SVG fragment collisions in pages with many inline SVGs. */
+export function svgInstanceScope(design: TerminalDesign, counter: string): string {
+  const source = JSON.stringify([design.theme, design.width, design.height,
+    design.layers, counter]);
+  let a = 2166136261, b = 2166136261 ^ 0x9e3779b9;
+  for (let i = 0; i < source.length; i++) {
+    const code = source.charCodeAt(i);
+    a = Math.imul(a ^ code, 16777619) >>> 0;
+    b = Math.imul(b ^ (code + (i & 255)), 16777619) >>> 0;
+  }
+  return a.toString(16).padStart(8, "0") + b.toString(16).padStart(8, "0");
+}
+
+function scopedCardArtwork(artwork: string, scope: string): string {
+  // Trusted built-in art only; namespace gradient/pattern IDs as well.
+  const ids = new Set([...artwork.matchAll(/\bid="([a-zA-Z][a-zA-Z0-9_-]*)"/g)]
+    .map(match => match[1]));
+  let out = artwork;
+  for (const id of ids) {
+    out = out.replaceAll('id="' + id + '"', 'id="art-' + scope + '-' + id + '"');
+    out = out.replaceAll('url(#' + id + ')', 'url(#art-' + scope + '-' + id + ')');
+  }
+  return out;
+}
+
 export function renderSvg(input: unknown, visits: number): string {
   const d = sanitizeDesign(input);
   const count = Number.isFinite(visits) ? Math.floor(Math.max(0, Math.min(999999999999, visits))) : 0;
   const counter = count.toLocaleString("en-US");
+  const scope = svgInstanceScope(d, counter);
   const parts = [
     '<svg xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Profile visit counter" width="',
     String(d.width), '" height="', String(d.height),
@@ -179,7 +205,7 @@ export function renderSvg(input: unknown, visits: number): string {
     // Canonical vector art scales to any configured canvas dimensions.
     // These elements are bundled constants, not user-controlled SVG markup.
     parts.push('<g transform="scale(', String(d.width / 420), ' ', String(d.height / 220),
-      ')">', cardArtwork(d.theme), '</g>');
+      ')">', scopedCardArtwork(cardArtwork(d.theme), scope), '</g>');
   } else {
     parts.push('<rect x="2" y="2" width="', String(d.width - 4),
       '" height="', String(d.height - 4), '" rx="', d.theme === "pixel" ? "2" : "12",
@@ -206,11 +232,13 @@ export function renderSvg(input: unknown, visits: number): string {
       // Keep classic SVG baselines byte-for-byte unchanged for v0.5 designs.
       const baselineY = layer.y + (isCardTheme(d.theme)
         ? Math.ceil(fittedSize * 0.20) : 2);
+      // Distinct IDs even in a page with all nine SVGs embedded inline.
+      const clipId = "clip-" + scope + "-" + layer.id;
       // Text is clipped to its designated box so user designs cannot overflow the exported SVG.
-      parts.push('<defs><clipPath id="clip-', layer.id,
+      parts.push('<defs><clipPath id="', clipId,
         '"><rect x="', String(layer.x), '" y="', String(layer.y),
         '" width="', String(layer.width), '" height="', String(layer.height),
-        '"/></clipPath></defs><text clip-path="url(#clip-', layer.id,
+        '"/></clipPath></defs><text clip-path="url(#', clipId,
         ')" x="', String(layer.x), '" y="', String(baselineY),
         '" dominant-baseline="hanging" fill="', layer.color,
         '" font-size="', String(fittedSize),

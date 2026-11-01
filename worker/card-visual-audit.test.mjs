@@ -71,3 +71,13 @@ test("the verifier flags actual browser-measured clipping, not just SVG string c
     await assert.rejects(()=>checkBrowserAudit(file),/clipped 1/);
   }finally{await rm(root,{recursive:true,force:true});}
 });
+
+
+test("fails closed on the exact cross-SVG ID collision from the owner's screenshot", () => {
+  const fake=Array.from({length:SAMPLES},(_,i)=>({
+    name:"card-"+String.fromCharCode(97+i),
+    count:COUNTS[i%2],
+    svg:'<svg xmlns="http://www.w3.org/2000/svg"><defs><clipPath id="clip-visits"><rect/></clipPath></defs><text clip-path="url(#clip-visits)">12,847</text></svg>'
+  }));
+  assert.throws(()=>createGallery(fake),/Repeated SVG fragment ID across cards: clip-visits/);
+});

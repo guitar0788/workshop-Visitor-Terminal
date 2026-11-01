@@ -201,3 +201,43 @@ describe("formatted count fit and long-term visitor growth", () => {
     }
   });
 });
+
+
+describe("inline gallery fragment isolation", () => {
+  it("never shares a clip or built-in gradient/pattern identifier across 18 rendered cards", () => {
+    const ids = new Set<string>();
+    let total = 0;
+    for (const theme of CARD_THEMES) {
+      for (const count of [12_847, 999_999_999_999]) {
+        const svg = renderSvg(clonePreset(theme), count);
+        const local = new Set<string>();
+        for (const [, id] of svg.matchAll(/\bid="([^"]+)"/g)) {
+          expect(id).toMatch(/^[a-zA-Z0-9_-]+$/);
+          expect(ids.has(id)).toBe(false);
+          expect(local.has(id)).toBe(false);
+          ids.add(id);
+          local.add(id);
+          total++;
+        }
+        for (const [, refId] of svg.matchAll(/url\(#([a-zA-Z0-9_-]+)\)/g)) {
+          expect(local.has(refId)).toBe(true);
+        }
+        expect(svg).not.toContain('id="clip-heading"');
+        expect([...svg.matchAll(/<clipPath\b/g)]).toHaveLength(3);
+      }
+    }
+    expect(total).toBeGreaterThanOrEqual(54);
+  });
+
+  it("keeps SVG fragment targets distinct when a user moves a layer", () => {
+    const initial = clonePreset("pixel-card");
+    const moved = moveLayer(initial, "visits", 15, 0);
+    const a = renderSvg(initial, 125);
+    const b = renderSvg(moved, 125);
+    const idsA = [...a.matchAll(/\bid="(clip-[^"]+)"/g)].map(v => v[1]);
+    const idsB = [...b.matchAll(/\bid="(clip-[^"]+)"/g)].map(v => v[1]);
+    expect(idsA).toHaveLength(3);
+    expect(idsB).toHaveLength(3);
+    expect(idsA.filter(x => idsB.includes(x))).toHaveLength(0);
+  });
+});
