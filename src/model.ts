@@ -6,6 +6,8 @@ export { CARD_THEMES } from "./card-art";
 export type { CardTheme } from "./card-art";
 export type Theme = "pixel" | "minimal" | "cyber" | CardTheme;
 export type LayerKind = "text" | "count" | "dot" | "panel";
+/** Shared public preview and Worker renderer limit (12 decimal digits). */
+export const MAX_VISITOR_COUNT = 999_999_999_999;
 
 export interface Layer {
   id: string;
@@ -212,9 +214,17 @@ function scopedCardArtwork(artwork: string, scope: string): string {
 
 export function renderSvg(input: unknown, visits: number): string {
   const d = sanitizeDesign(input);
-  const count = Number.isFinite(visits) ? Math.floor(Math.max(0, Math.min(999999999999, visits))) : 0;
+  const count = Number.isFinite(visits) ? Math.floor(Math.max(0, Math.min(MAX_VISITOR_COUNT, visits))) : 0;
   const counter = count.toLocaleString("en-US");
   const scope = svgInstanceScope(d, counter);
+  // The approved raster has one special, cleaned numeral slot. An added
+  // secondary count is still an ordinary editable overlay, never silently
+  // swallowed by the raster compositor. Prefer the historical "visits" ID;
+  // accept the first count as a fallback for older saved designs.
+  const approvedMainCount = isApprovedTheme(d.theme)
+    ? d.layers.find(layer => layer.kind === "count" && layer.id === "visits")
+      ?? d.layers.find(layer => layer.kind === "count")
+    : undefined;
   const parts = [
     '<svg xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Profile visit counter" width="',
     String(d.width), '" height="', String(d.height),
@@ -223,7 +233,7 @@ export function renderSvg(input: unknown, visits: number): string {
   ];
   if (isApprovedTheme(d.theme)) {
     // Exact user-approved raster illustration; no redraw or external URL.
-    const countLayer = d.layers.find(layer => layer.kind === "count");
+    const countLayer = approvedMainCount;
     const pristine = approvedReferenceIsPristine(d.theme, counter, countLayer ?? null);
     parts.push(approvedBackdrop(d.theme, d.width, d.height, !pristine));
     parts.push(approvedCountMarkup(d.theme, counter, countLayer ?? null, scope));
@@ -240,7 +250,7 @@ export function renderSvg(input: unknown, visits: number): string {
   for (const layer of d.layers) {
     // Approved image card draws its one real count in the reference-specific
     // compositing pass. Do not duplicate it over the pristine raster digits.
-    if (isApprovedTheme(d.theme) && layer.kind === "count") continue;
+    if (isApprovedTheme(d.theme) && layer === approvedMainCount) continue;
     if (!layer.visible) continue;
     if (layer.kind === "dot") {
       parts.push('<circle cx="', String(layer.x + layer.width / 2),
