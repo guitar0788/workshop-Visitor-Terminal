@@ -180,6 +180,14 @@ node scripts/self-host-publish.mjs create --api https://YOUR-WORKER.YOUR-SUBDOMA
 node scripts/self-host-publish.mjs update --api https://YOUR-WORKER.YOUR-SUBDOMAIN.workers.dev --slug my-counter --design visitor-terminal.design.json --token-file .wvt-admin-token
 ```
 
+**找回遗失的计数器名称（管理员只读）：** 新版本支持 `list`，可从自托管账户的已有 D1 中列出最多 100 个计数器的 slug、访问次数和准确的公开 SVG Markdown。它**不会创建计数器、更新设计或增加访客记录**，无需先有成功的实机验收报告；但会产生自己的 D1 查询读取量，不是完全离线操作。
+
+```sh
+node scripts/self-host-publish.mjs list --api https://YOUR-WORKER.YOUR-SUBDOMAIN.workers.dev --token-file .wvt-admin-token
+```
+
+**兼容与保护：** 新建的独立部署会启用 `SELF_HOST_ADMIN_LIST_ENABLED = "true"`，同时必须保持 `PUBLISHING_ENABLED = "false"`。原有 OAuth 试点和未启用此开关的旧 Worker 均返回 HTTP 405。已有自托管配置即使缺少此新开关，也继续支持原有 `create/update/inspect`；不要为了取回计数器名称而擅自升级他人的 Worker、迁移 D1 或重建计数器，只有部署所有者明确同意后才可手动采用新版配置。
+
 查询次数（不会增加次数）：
 
 ```sh
@@ -192,7 +200,7 @@ node scripts/self-host-publish.mjs inspect --api https://YOUR-WORKER.YOUR-SUBDOM
 
 **网络错误保护：** 自托管发布工具的认证请求现在只输出经过筛选的错误，不回显网络异常、远程响应正文或管理员令牌。如果第一次 `create` 请求超时、断开或返回非预期数据，不能确认云端 D1 是否已成功插入；请先使用 `inspect` 检查原始 slug，确认后才考虑 `update`，不要直接更换 slug 或重复写入。此处不会自动重试创建。
 
-**发布前的匿名安全检查：** `create`、`update`、`inspect` 每次都会先调用自己的 `/health`、`/v1/my/counters` 和匿名 `/v1/admin/usage`，确认目标确实表现为预期的 Workshop Worker、OAuth 公开发布关闭且管理员接口拒绝匿名请求。只有这三项检查通过后，工具才会读取并发送管理员密钥。这能阻止误连到不兼容的服务，**不能证明目标服务器归自己所有**：恶意服务器仍可能伪装上述接口，请务必自行核对 `--api` 和 Cloudflare 控制台中的 Worker 名称。认证请求禁止跳转。若本地已有 `wrangler.selfhost.toml`，工具还会对 `*.workers.dev` 地址检查 Worker 主机名前缀与本地配置一致；配置损坏或名称不一致时拒绝发布。**自定义域名无法通过这个名称检查验证所有权**，请在 Cloudflare 中亲自确认绑定。
+**发布前的匿名安全检查：** `create`、`update`、`inspect`、`list` 每次都会先调用自己的 `/health`、`/v1/my/counters` 和匿名 `/v1/admin/usage`，确认目标确实表现为预期的 Workshop Worker、OAuth 公开发布关闭且管理员接口拒绝匿名请求。只有这三项检查通过后，工具才会读取并发送管理员密钥。这能阻止误连到不兼容的服务，**不能证明目标服务器归自己所有**：恶意服务器仍可能伪装上述接口，请务必自行核对 `--api` 和 Cloudflare 控制台中的 Worker 名称。认证请求禁止跳转。若本地已有 `wrangler.selfhost.toml`，工具还会对 `*.workers.dev` 地址检查 Worker 主机名前缀与本地配置一致；配置损坏或名称不一致时拒绝发布。**自定义域名无法通过这个名称检查验证所有权**，请在 Cloudflare 中亲自确认绑定。
 
 
 

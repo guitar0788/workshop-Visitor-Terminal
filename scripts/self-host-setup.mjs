@@ -120,6 +120,9 @@ export function validateConfig(contents) {
       !occurrences(/^SVG_RATE_LIMIT_ENABLED = "true"$/gm) ||
       !occurrences(/^PUBLISHING_ENABLED\s*=/gm) ||
       !occurrences(/^SVG_RATE_LIMIT_ENABLED\s*=/gm) ||
+      (contents.includes("SELF_HOST_ADMIN_LIST_ENABLED") &&
+        (!occurrences(/^SELF_HOST_ADMIN_LIST_ENABLED = "true"$/gm) ||
+         !occurrences(/^SELF_HOST_ADMIN_LIST_ENABLED\s*=/gm))) ||
       !occurrences(/^crons = \["17 \* \* \* \*"\]$/gm) ||
       !occurrences(/^limit = \d+$/gm, 2) ||
       !occurrences(/^period = \d+$/gm, 2) ||

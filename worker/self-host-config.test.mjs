@@ -9,6 +9,7 @@ test("public self-host template uses a new isolated DB and never enables central
   assert.match(template, /database_id = "REPLACE_WITH_YOUR_NEW_D1_DATABASE_ID"/);
   assert.match(template, /PUBLISHING_ENABLED = "false"/);
   assert.match(template, /SVG_RATE_LIMIT_ENABLED = "true"/);
+  assert.match(template, /SELF_HOST_ADMIN_LIST_ENABLED = "true"/);
   assert.match(template, /name = "SVG_GLOBAL_RATE_LIMITER"/);
   assert.match(template, /name = "SVG_RATE_LIMITER"/);
   assert.match(ignore, /wrangler\.selfhost\.toml/);

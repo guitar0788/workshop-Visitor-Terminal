@@ -159,6 +159,14 @@ export async function smokeSelfHostedCounter() {
     });
     assert.match(published, /!\[Visitor counter\]\(http:\/\/127\.0\.0\.1:/);
     assert(!published.includes(ADMIN_TOKEN), "Admin secret must never appear in CLI output");
+    // A real disposable local Worker/D1 must list existing counters without writes.
+    const listing = await execute({
+      command: "list", api: origin, "token-file": tokenPath
+    });
+    assert(listing.includes(SLUG), "Read-only list must recover the real slug");
+    assert.match(listing, /upstream requests/);
+    assert(!listing.includes(ADMIN_TOKEN));
+    assert.equal((await api("/v1/admin/counters")).status, 401);
 
     smokeStage = "verify-read-only-deployment-health";
     const readiness = await verifySelfHost({

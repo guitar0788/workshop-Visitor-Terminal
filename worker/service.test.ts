@@ -29,6 +29,12 @@ class MemoryD1 implements D1Binding {
         throw Error("Unrecognized SELECT: " + query);
       },
       async all<T>() {
+        if (query === "SELECT slug, hits FROM counters ORDER BY slug LIMIT 101") {
+          return { results: [...db.counters.values()]
+            .sort((a, b) => a.slug.localeCompare(b.slug))
+            .slice(0, 101).map(row => ({ slug: row.slug, hits: row.hits }))
+            as unknown as T[], success: true };
+        }
         return { results: [] as T[], success: true };
       },
       async run() {
@@ -129,6 +135,59 @@ describe("Cloudflare D1 counter Worker", () => {
       edgeLimitPerMinutePerLocation: 120
     });
     expect(response.headers.get("Cache-Control")).toBe("no-store");
+  });
+
+
+  it("recovers own self-host slugs with an explicit opt-in, but never exposes pilot counters", async () => {
+    const env = setup();
+    await register(env, "known-slug");
+    env.DB.counters.get("known-slug")!.hits = 14;
+    const path = "/v1/admin/counters";
+    const list = () => handleRequest(adminRequest(path, undefined, TOKEN, "GET"), env, NOW);
+    expect((await list()).status).toBe(405);
+    env.SELF_HOST_ADMIN_LIST_ENABLED = "true";
+    expect((await list()).status).toBe(405);
+    env.PUBLISHING_ENABLED = "false";
+    expect((await handleRequest(publicRequest(path), env, NOW)).status).toBe(401);
+    expect((await handleRequest(adminRequest(path, undefined, "wrong", "GET"), env, NOW)).status).toBe(401);
+    expect((await handleRequest(adminRequest(path, undefined, TOKEN, "PUT"), env, NOW)).status).toBe(405);
+    const before = env.DB.windows.size;
+    const response = await list();
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
+    expect(await response.json()).toEqual({
+      counters: [{ slug: "known-slug", hits: 14 }], truncated: false
+    });
+    expect(env.DB.windows.size).toBe(before);
+    expect(env.DB.counters.get("known-slug")?.hits).toBe(14);
+    env.PUBLISHING_ENABLED = "true";
+    expect((await list()).status).toBe(405);
+  });
+
+  it("bounds read-only listing to 100 sorted counters without designs or owners", async () => {
+    const env = setup();
+    env.PUBLISHING_ENABLED = "false";
+    env.SELF_HOST_ADMIN_LIST_ENABLED = "true";
+    for (let i = 110; i >= 0; i--) {
+      const slug = "test-" + String(i).padStart(3, "0");
+      env.DB.counters.set(slug, {
+        slug, owner: "private-owner", hits: i, design_json: "PRIVATE-DESIGN",
+        created_at: "2026-11-01", baseline_hits: 0, baseline_source: null,
+        baseline_captured_at: null, baseline_applied_at: null
+      });
+    }
+    const response = await handleRequest(adminRequest(
+      "/v1/admin/counters", undefined, TOKEN, "GET"), env, NOW);
+    expect(response.status).toBe(200);
+    const raw = await response.text();
+    expect(raw).not.toContain("PRIVATE-DESIGN");
+    expect(raw).not.toContain("private-owner");
+    const parsed = JSON.parse(raw) as { counters: Array<{slug: string; hits: number}>; truncated: boolean };
+    expect(parsed.truncated).toBe(true);
+    expect(parsed.counters).toHaveLength(100);
+    expect(parsed.counters[0].slug).toBe("test-000");
+    expect(parsed.counters[99].slug).toBe("test-099");
+    expect(env.DB.counters.size).toBe(111);
   });
 
   it("responds to health without secrets or a database", async () => {

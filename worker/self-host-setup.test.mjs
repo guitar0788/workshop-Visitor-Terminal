@@ -53,6 +53,7 @@ test("generated config uses unique binding namespaces and refuses malformed inpu
     assert.equal(info.worker, options.worker);
     assert.match(result, /PUBLISHING_ENABLED = "false"/);
     assert.match(result, /SVG_RATE_LIMIT_ENABLED = "true"/);
+    assert.match(result, /SELF_HOST_ADMIN_LIST_ENABLED = "true"/);
     assert(!result.includes("REPLACE_WITH_"));
     assert.throws(() => makeConfig(template, options, [1, 1]));
     assert.throws(() => makeConfig(template, options, [0, 2]));
@@ -136,6 +137,8 @@ test("tampered Worker entry, extra D1 bindings and altered rate limits fail clos
       original + '\n[[d1_databases]]\nbinding = "MORE"\n',
       original + '\nPUBLISHING_ENABLED = "true"\n',
       original + '\nSVG_RATE_LIMIT_ENABLED = "false"\n',
+      original.replace('SELF_HOST_ADMIN_LIST_ENABLED = "true"', 'SELF_HOST_ADMIN_LIST_ENABLED = "false"'),
+      original + '\nSELF_HOST_ADMIN_LIST_ENABLED = "true"\n',
       original.replace('my-visitor-worker', 'my-visitor-worker-')
     ];
     for (const unsafe of bad) assert.throws(() => validateConfig(unsafe), /unsafe/);

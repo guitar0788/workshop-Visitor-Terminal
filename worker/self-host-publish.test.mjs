@@ -51,7 +51,10 @@ test("parses complete options and rejects duplicates, unknown actions and incomp
     ["inspect", "--api", origin, "--slug", "a", "--design", "a.json"],
     ["inspect", "--api", origin, "--slug", "a", "--owner", "bob"],
     ["inspect", "--api", origin, "--slug", "a", "--api", origin],
-    ["delete", "--api", origin, "--slug", "a"]
+    ["delete", "--api", origin, "--slug", "a"],
+    ["list", "--api", origin, "--slug", "x"],
+    ["list", "--api", origin, "--design", "x.json"],
+    ["list", "--api", origin, "--owner", "bob"]
   ]) assert.throws(() => parseArgs(args));
 });
 
@@ -252,4 +255,49 @@ test("uncertain counter creation tells the operator to inspect, not blindly crea
     });
     assert.equal(attempts, 1, "Never retry a possibly committed create automatically");
   });
+});
+
+test("self-host list recovers an existing slug without making a write or SVG request", async () => {
+  const seen = [];
+  const fetchImpl = safeFetch(async (url, init) => {
+    seen.push({ url, method: init.method, auth: init.headers.Authorization });
+    assert.equal(new URL(url).pathname, "/v1/admin/counters");
+    assert.equal(init.method, "GET");
+    return response(200, {
+      counters: [{ slug: "livecheck-11223344556677", hits: 17 }],
+      truncated: false
+    });
+  });
+  const args = parseArgs(["list", "--api", origin]);
+  const result = await execute(args, {
+    environment: { WVT_ADMIN_TOKEN: token }, fetchImpl
+  });
+  assert.equal(seen.length, 1);
+  assert.equal(seen[0].auth, "Bearer " + token);
+  assert.match(result, /livecheck-11223344556677: 17 upstream requests/);
+  assert.match(result, /\/v1\/counters\/livecheck-11223344556677\.svg/);
+  assert(!result.includes(token));
+  assert(!seen.some(x => x.url.includes(".svg")));
+});
+
+test("self-host list rejects malformed and untrusted API results and old unsupported deployments", async () => {
+  const invalid = [
+    { counters: "not array", truncated: false },
+    { counters: [], truncated: "false" },
+    { counters: [{ slug: "../../evil", hits: 1 }], truncated: false },
+    { counters: [{ slug: "okay", hits: -1 }], truncated: false },
+    { counters: [{ slug: "okay", hits: 2 }, { slug: "okay", hits: 3 }], truncated: false },
+    { counters: [{ slug: "okay", hits: 1.5 }], truncated: false },
+    { counters: Array.from({ length: 101 }, (_, i) => ({ slug: "slug-" + i, hits: i })), truncated: true }
+  ];
+  for (const payload of invalid) {
+    await assert.rejects(() => execute({ command: "list", api: origin }, {
+      environment: { WVT_ADMIN_TOKEN: token },
+      fetchImpl: safeFetch(async () => response(200, payload))
+    }), /invalid|duplicate|oversized/);
+  }
+  await assert.rejects(() => execute({ command: "list", api: origin }, {
+    environment: { WVT_ADMIN_TOKEN: token },
+    fetchImpl: safeFetch(async () => response(405, { error: "Method not allowed" }))
+  }), /HTTP 405/);
 });

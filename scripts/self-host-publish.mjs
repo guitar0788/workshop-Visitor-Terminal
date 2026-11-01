@@ -23,6 +23,7 @@ Usage:
   node scripts/self-host-publish.mjs create --api https://YOUR-WORKER.YOUR-SUBDOMAIN.workers.dev --slug my-counter --owner YOUR_GITHUB_NAME --design visitor-terminal.design.json [--token-file .wvt-admin-token]
   node scripts/self-host-publish.mjs update --api https://YOUR-WORKER.YOUR-SUBDOMAIN.workers.dev --slug my-counter --design visitor-terminal.design.json [--token-file .wvt-admin-token]
   node scripts/self-host-publish.mjs inspect --api https://YOUR-WORKER.YOUR-SUBDOMAIN.workers.dev --slug my-counter [--token-file .wvt-admin-token]
+  node scripts/self-host-publish.mjs list --api https://YOUR-WORKER.YOUR-SUBDOMAIN.workers.dev [--token-file .wvt-admin-token] (read-only; new self-host Worker)
 
 Set WVT_API_URL once in the terminal to omit repeated --api on macOS/Linux/Windows.
 Use an administrator token stored in WVT_ADMIN_TOKEN or an ignored --token-file.
@@ -33,7 +34,7 @@ The CLI runs three unauthenticated safety checks before it reads/sends the token
 export function parseArgs(argv, environment = process.env) {
   if (argv.length === 1 && ["--help", "-h", "help"].includes(argv[0])) return { command: "help" };
   const [command, ...rest] = argv;
-  if (!["create", "update", "inspect"].includes(command)) throw Error("Expected create, update, inspect or --help");
+  if (!["create", "update", "inspect", "list"].includes(command)) throw Error("Expected create, update, inspect, list or --help");
   if (rest.length % 2 !== 0) throw Error("Every option must have a value");
   const options = { command };
   for (let i = 0; i < rest.length; i += 2) {
@@ -45,6 +46,12 @@ export function parseArgs(argv, environment = process.env) {
     options[name] = value;
   }
   options.api = validateApiOrigin(resolveSelfHostApi(options.api, environment));
+  if (command === "list") {
+    if (options.slug || options.owner || options.design) {
+      throw Error("List accepts only --api and optional --token-file");
+    }
+    return options;
+  }
   if (!options.slug || !SLUG.test(options.slug)) {
     throw Error("Provide a valid lowercase --slug (1–40 characters)");
   }
@@ -231,6 +238,30 @@ export async function execute(options, { fetchImpl = fetch, environment = proces
   await assertLocalWorkerHostname(origin);
   await assertSafePublishingTarget(origin, fetchImpl);
   const token = await readAdminToken({ tokenFile: options["token-file"], environment });
+  if (options.command === "list") {
+    const data = await requestJson(origin, token,
+      "/v1/admin/counters", "GET", undefined, fetchImpl);
+    if (!Array.isArray(data.counters) || data.counters.length > 100 ||
+        typeof data.truncated !== "boolean") {
+      throw Error("Worker returned an invalid self-host counter list");
+    }
+    const names = new Set();
+    for (const row of data.counters) {
+      if (!row || typeof row !== "object" || !SLUG.test(row.slug ?? "") ||
+          !Number.isSafeInteger(row.hits) || row.hits < 0 ||
+          row.hits > 999_999_999_999 || names.has(row.slug)) {
+        throw Error("Worker returned an invalid or duplicate counter entry");
+      }
+      names.add(row.slug);
+    }
+    const lines = data.counters.map(row =>
+      row.slug + ": " + row.hits + " upstream requests\n" +
+      "![Visitor counter](" + origin + "/v1/counters/" + row.slug + ".svg)");
+    return "Existing counters (read-only, no visit increments):\n" +
+      (lines.length ? lines.join("\n") : "None found.") + "\n" +
+      (data.truncated ? "Showing first 100 only; inspect a known slug for details.\n" : "") +
+      "Worker URLs are derived from your confirmed origin; remote rendering is NOT verified.\n";
+  }
   const slug = options.slug;
   const resource = `/v1/admin/counters/${slug}`;
   if (options.command === "inspect") {
