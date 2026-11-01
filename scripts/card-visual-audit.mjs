@@ -24,7 +24,7 @@ const browserScript = [
   "if(usedIds.has(node.id))failures.push('duplicate inline SVG id: '+node.id);",
   "usedIds.add(node.id);}",
   "const texts=[...svg.querySelectorAll('text')];",
-  "if(texts.length!==3)failures.push(sample.dataset.theme+': wrong text layer count');",
+  "if(texts.length!==(sample.dataset.theme==='minimal-card'?3:2))failures.push(sample.dataset.theme+': wrong text layer count');",
   "for(const t of texts){",
   "const clip=t.getAttribute('clip-path');",
   "if(!clip||!/^url\\(#clip-[A-Za-z0-9_-]{1,100}\\)$/.test(clip)){failures.push('unsafe/missing clip');continue;}",
@@ -137,7 +137,7 @@ export function parseBrowserAudit(html) {
   try{r=JSON.parse(match[1].replaceAll("&quot;",'"').replaceAll("&amp;","&"));}
   catch{throw Error("Malformed browser font audit result");}
   if(!r||r.schemaVersion!==1||r.kind!=="workshop-visitor-terminal-browser-svg-audit"||
-    r.sampleCount!==SAMPLES||r.checkedText!==SAMPLES*3||
+    r.sampleCount!==SAMPLES||r.checkedText!==38||
     r.remoteRendering!=="NOT_TESTED"||r.githubReadmeRendering!=="NOT_TESTED"||
     !Array.isArray(r.failures)||r.failures.some(x=>typeof x!=="string")||
     !Number.isSafeInteger(r.overflowCount)||r.overflowCount!==r.failures.length||

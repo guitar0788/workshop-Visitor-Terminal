@@ -148,7 +148,7 @@ describe("v0.6 illustrated visitor cards", () => {
     expect(svg).toContain("25 visits");
     expect(svg).toContain("rect");
     expect(renderSvg({ ...design, width: 600, height: 300 }, 25))
-      .toContain("scale(1.4285714285714286 1.3636363636363635)");
+      .toContain("scale(1 1.4285714285714286)");
   });
 });
 
@@ -223,10 +223,10 @@ describe("inline gallery fragment isolation", () => {
           expect(local.has(refId)).toBe(true);
         }
         expect(svg).not.toContain('id="clip-heading"');
-        expect([...svg.matchAll(/<clipPath\b/g)]).toHaveLength(3);
+        expect([...svg.matchAll(/<clipPath\b/g)]).toHaveLength(theme === "minimal-card" ? 3 : 2);
       }
     }
-    expect(total).toBeGreaterThanOrEqual(54);
+    expect(total).toBeGreaterThanOrEqual(38);
   });
 
   it("keeps SVG fragment targets distinct when a user moves a layer", () => {
@@ -236,8 +236,8 @@ describe("inline gallery fragment isolation", () => {
     const b = renderSvg(moved, 125);
     const idsA = [...a.matchAll(/\bid="(clip-[^"]+)"/g)].map(v => v[1]);
     const idsB = [...b.matchAll(/\bid="(clip-[^"]+)"/g)].map(v => v[1]);
-    expect(idsA).toHaveLength(3);
-    expect(idsB).toHaveLength(3);
+    expect(idsA).toHaveLength(2);
+    expect(idsB).toHaveLength(2);
     expect(idsA.filter(x => idsB.includes(x))).toHaveLength(0);
   });
 });

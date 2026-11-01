@@ -73,13 +73,13 @@ const CARD_CONFIG: Record<CardTheme, {
   "cozy-card": { accent:"#72432e", background:"#fff1df", heading:"WORKSHOP VISITORS", caption:"THANK YOU FOR VISITING",
     titleX:248,titleY:65,titleWidth:263,titleSize:21,countX:244,countY:104,countWidth:266,countSize:52,labelX:253,labelY:171,captionSize:9,captionWidth:238 },
   "rpg-card": { accent:"#f9e7b6", background:"#1a3460", heading:"WORKSHOP VISITORS", caption:"LEVEL UP · THANK YOU",
-    titleX:245,titleY:61,titleWidth:330,titleSize:20,countX:246,countY:102,countWidth:311,countSize:55,labelX:248,labelY:172,captionSize:9,captionWidth:320 },
+    titleX:245,titleY:61,titleWidth:330,titleSize:20,countX:246,countY:102,countWidth:311,countSize:48,labelX:248,labelY:172,captionSize:9,captionWidth:320 },
   "space-card": { accent:"#fff7ff", background:"#171a50", heading:"WORKSHOP VISITORS", caption:"EXPLORING THE STARS",
-    titleX:99,titleY:63,titleWidth:350,titleSize:22,countX:99,countY:105,countWidth:347,countSize:53,labelX:101,labelY:174,captionSize:9,captionWidth:300 },
+    titleX:99,titleY:63,titleWidth:350,titleSize:22,countX:99,countY:105,countWidth:347,countSize:48,labelX:101,labelY:174,captionSize:9,captionWidth:300 },
   "notebook-card": { accent:"#67432d", background:"#fff8ec", heading:"WORKSHOP VISITORS", caption:"MY VISITOR NOTES",
-    titleX:107,titleY:57,titleWidth:337,titleSize:23,countX:117,countY:100,countWidth:344,countSize:55,labelX:111,labelY:174,captionSize:9,captionWidth:260 },
+    titleX:107,titleY:57,titleWidth:337,titleSize:23,countX:117,countY:100,countWidth:344,countSize:48,labelX:111,labelY:174,captionSize:9,captionWidth:260 },
   "neon-card": { accent:"#f4ecff", background:"#141336", heading:"WORKSHOP VISITORS", caption:"DIGITAL SIGNAL · ACTIVE",
-    titleX:235,titleY:62,titleWidth:322,titleSize:23,countX:238,countY:102,countWidth:314,countSize:54,labelX:239,labelY:175,captionSize:9,captionWidth:302 },
+    titleX:235,titleY:62,titleWidth:322,titleSize:23,countX:238,countY:102,countWidth:314,countSize:48,labelX:239,labelY:175,captionSize:9,captionWidth:302 },
   "minimal-card": { accent:"#1e583d", background:"#ecfff2", heading:"WORKSHOP", caption:"VISITORS",
     titleX:233,titleY:76,titleWidth:191,titleSize:22,countX:443,countY:89,countWidth:128,countSize:31,labelX:234,labelY:111,captionSize:22,captionWidth:180 }
 };
@@ -91,7 +91,7 @@ function makeCardPreset(theme: CardTheme): TerminalDesign {
     { id:"visits", kind:"count", x:c.countX, y:c.countY, width:c.countWidth,
       height:61, text:"", fontSize:c.countSize, color:c.accent, visible:true },
     { id:"caption", kind:"text", x:c.labelX, y:c.labelY, width:c.captionWidth,
-      height:28, text:c.caption, fontSize:c.captionSize, color:c.accent, visible:true }
+      height:28, text:c.caption, fontSize:c.captionSize, color:c.accent, visible:theme === "minimal-card" }
   ];
   return { schemaVersion:1, theme, width:600, height:210,
     background:c.background, accent:c.accent, layers };
