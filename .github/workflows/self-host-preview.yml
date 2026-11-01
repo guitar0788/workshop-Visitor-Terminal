@@ -19,6 +19,11 @@ on:
 permissions:
   contents: read
 
+# Keep stale commits from publishing outdated preview archives.
+concurrency:
+  group: selfhost-preview-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 jobs:
   package:
     # Only the reviewed in-repository preview branch may publish a test ZIP.
@@ -27,6 +32,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
@@ -34,8 +42,8 @@ jobs:
         run: npm ci
       - name: Audit all locked npm dependencies including development tooling
         run: npm audit --audit-level=moderate
-      - name: Verify ZIP encoding, file allowlist, checksums and no private files
-        run: node --test worker/self-host-package.test.mjs
+      - name: Check archive encoding and manifest no-go gates
+        run: node --test worker/self-host-package.test.mjs worker/self-host-release-manifest.test.mjs
       - name: Build ZIP and SHA256 from explicit source file allowlist
         run: node scripts/build-selfhost-package.mjs
       - name: Check built ZIP digest
@@ -56,7 +64,7 @@ jobs:
       - name: Upload only the reviewed ZIP and SHA256 (no database backups)
         uses: actions/upload-artifact@v4
         with:
-          name: Workshop-SelfHost-Preview
+          name: Workshop-SelfHost-CI-Input
           path: |
             dist/Workshop-Visitor-Terminal-Self-Host.zip
             dist/Workshop-Visitor-Terminal-Self-Host.zip.sha256
@@ -71,7 +79,7 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: Workshop-SelfHost-Preview
+          name: Workshop-SelfHost-CI-Input
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
@@ -91,3 +99,40 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Windows Wrangler --dry-run failed" }
           node worker/self-host-smoke.mjs
           if ($LASTEXITCODE -ne 0) { throw "Windows local Worker/D1 smoke failed" }
+
+  validated-preview:
+    name: Publish validated PREVIEW only (not a Release)
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'feat/v06-independent-self-hosting'
+    needs: [package, windows-zip-smoke]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: actions/download-artifact@v4
+        with:
+          name: Workshop-SelfHost-CI-Input
+          path: .wvt-validated-input
+      - name: Confirm ZIP digest and create explicit not-yet-released preview manifest
+        env:
+          WVT_EXPECT_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          WVT_WORKFLOW_RUN_ID: ${{ github.run_id }}
+        run: |
+          node scripts/self-host-release-manifest.mjs .wvt-validated-input
+          node -e 'const fs=require("node:fs");const m=JSON.parse(fs.readFileSync(".wvt-validated-input/Workshop-SelfHost-Preview-Manifest.json","utf8"));if(m.status!=="VALIDATED_CI_PREVIEW_NOT_A_RELEASE"||m.notVerified.realRemoteWorkerDeployment!=="NOT_TESTED"||m.notVerified.separateCloudflareAccountOwnership!=="NOT_TESTED")process.exit(1)'
+      - name: Upload pre-release archive, checksum and transparent provenance
+        uses: actions/upload-artifact@v4
+        with:
+          name: Workshop-SelfHost-Validated-Preview
+          path: |
+            .wvt-validated-input/Workshop-Visitor-Terminal-Self-Host.zip
+            .wvt-validated-input/Workshop-Visitor-Terminal-Self-Host.zip.sha256
+            .wvt-validated-input/Workshop-SelfHost-Preview-Manifest.json
+          retention-days: 7
+          if-no-files-found: error
