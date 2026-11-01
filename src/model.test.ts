@@ -423,3 +423,63 @@ describe("selectable Minecraft styles and retired-card compatibility", () => {
     }
   });
 });
+
+describe("six illustrated-card editing and exported-design parity", () => {
+  it("keeps custom labels and a live count through design JSON round trips", () => {
+    for (const theme of CARD_THEMES) {
+      const base = clonePreset(theme);
+      const decorated = addLayer(base, "text", "personal_title");
+      const edited = sanitizeDesign({
+        ...decorated,
+        layers: decorated.layers.map(layer => layer.id === "personal_title"
+          ? { ...layer, text: "MY WORLD & WORKSHOP", color: "#abcd12", x: 12, y: 12 }
+          : layer)
+      });
+      const restored = sanitizeDesign(JSON.parse(JSON.stringify(edited)));
+      expect(restored).toEqual(edited);
+      const original = renderSvg(base, 12_848);
+      const rendered = renderSvg(restored, 12_848);
+      expect(rendered).toContain("MY WORLD &amp; WORKSHOP");
+      expect(rendered).toContain('fill="#abcd12"');
+      expect(rendered).toContain(">12,848</text>");
+      expect(rendered).not.toContain('<script');
+      if (isApprovedTheme(theme)) {
+        // Editing text overlays must preserve the approved raster plate.
+        const image = (svg: string) =>
+          svg.match(/<image\\b[^>]*href="(data:image\\/avif;base64,[^"]+)"/)?.[1];
+        expect(image(rendered)).toBe(image(original));
+      } else {
+        expect(rendered).toContain('shape-rendering="crispEdges"');
+      }
+    }
+  });
+
+  it("does not silently discard extra count layers on approved raster cards", () => {
+    for (const theme of ["pixel-card", "terminal-card", "rpg-card"] as const) {
+      const original = clonePreset(theme);
+      const withSecondCount = addLayer(original, "count", "custom_second_count");
+      const restored = sanitizeDesign(JSON.parse(JSON.stringify(withSecondCount)));
+      const rendered = renderSvg(restored, 12_848);
+      expect([...rendered.matchAll(/>12,848<\\/text>/g)]).toHaveLength(2);
+      expect([...rendered.matchAll(/<clipPath\\b/g)]).toHaveLength(2);
+
+      // Hiding the original slot must not also hide the extra count.
+      const hiddenMain = sanitizeDesign({
+        ...restored, layers: restored.layers.map(layer =>
+          layer.id === "visits" ? { ...layer, visible: false } : layer)
+      });
+      const hiddenSvg = renderSvg(hiddenMain, 12_848);
+      expect([...hiddenSvg.matchAll(/>12,848<\\/text>/g)]).toHaveLength(1);
+      expect(hiddenSvg).not.toContain('>12,847</text>');
+      expect(hiddenSvg).not.toContain('href="https://');
+    }
+  });
+
+  it("supports the same 12-digit visit count bound in all illustrated cards", () => {
+    for (const theme of CARD_THEMES) {
+      const design = clonePreset(theme);
+      expect(renderSvg(design, 999_999_999_999)).toContain('>999,999,999,999</text>');
+      expect(renderSvg(design, 1_000_000_000_000)).toContain('>999,999,999,999</text>');
+    }
+  });
+});
