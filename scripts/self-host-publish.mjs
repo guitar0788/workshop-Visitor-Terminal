@@ -7,6 +7,7 @@
 import { readFile } from "node:fs/promises";
 import { resolve, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { resolveSelfHostApi } from "./self-host-api.mjs";
 import { validateConfig } from "./self-host-setup.mjs";
 
 const SLUG = /^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?$/;
@@ -28,7 +29,7 @@ Never use the repository owner's staging Worker or expose this token in a browse
 The CLI runs three unauthenticated safety checks before it reads/sends the token.
 `;
 
-export function parseArgs(argv) {
+export function parseArgs(argv, environment = process.env) {
   if (argv.length === 1 && ["--help", "-h", "help"].includes(argv[0])) return { command: "help" };
   const [command, ...rest] = argv;
   if (!["create", "update", "inspect"].includes(command)) throw Error("Expected create, update, inspect or --help");
@@ -42,7 +43,8 @@ export function parseArgs(argv) {
     }
     options[name] = value;
   }
-  if (!options.api || !options.slug || !SLUG.test(options.slug)) {
+  options.api = resolveSelfHostApi(options.api, environment);
+  if (!options.slug || !SLUG.test(options.slug)) {
     throw Error("Provide --api and a valid lowercase --slug (1–40 characters)");
   }
   if (command === "create" && (!options.owner || !OWNER.test(options.owner))) {
@@ -204,7 +206,7 @@ async function requestJson(origin, token, path, method, payload, fetchImpl) {
 
 export async function execute(options, { fetchImpl = fetch, environment = process.env } = {}) {
   if (options.command === "help") return HELP;
-  const origin = validateApiOrigin(options.api);
+  const origin = validateApiOrigin(resolveSelfHostApi(options.api, environment));
   await assertLocalWorkerHostname(origin);
   await assertSafePublishingTarget(origin, fetchImpl);
   const token = await readAdminToken({ tokenFile: options["token-file"], environment });
