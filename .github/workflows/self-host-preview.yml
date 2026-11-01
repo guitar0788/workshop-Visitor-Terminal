@@ -60,3 +60,32 @@ jobs:
             dist/Workshop-Visitor-Terminal-Self-Host.zip.sha256
           retention-days: 7
           if-no-files-found: error
+
+  windows-zip-smoke:
+    name: Windows standalone ZIP / Worker+D1
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'feat/v06-independent-self-hosting'
+    needs: package
+    runs-on: windows-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: Workshop-SelfHost-Preview
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Verify ZIP checksum, extract and run independent Windows D1
+        shell: pwsh
+        run: |
+          $zip = "Workshop-Visitor-Terminal-Self-Host.zip"
+          $expected = ((Get-Content "$zip.sha256" -Raw).Split(" ")[0]).ToLowerInvariant()
+          $actual = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($expected -ne $actual) { throw "Self-host ZIP SHA256 mismatch" }
+          New-Item -ItemType Directory -Path ".wvt-windows-package-ci" | Out-Null
+          Expand-Archive -LiteralPath $zip -DestinationPath ".wvt-windows-package-ci"
+          Set-Location ".wvt-windows-package-ci/Workshop-Visitor-Terminal-Self-Host"
+          npm ci
+          if ($LASTEXITCODE -ne 0) { throw "Windows npm ci failed" }
+          node worker/self-host-dryrun.mjs
+          if ($LASTEXITCODE -ne 0) { throw "Windows Wrangler --dry-run failed" }
+          node worker/self-host-smoke.mjs
+          if ($LASTEXITCODE -ne 0) { throw "Windows local Worker/D1 smoke failed" }
