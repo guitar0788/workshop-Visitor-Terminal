@@ -32,6 +32,11 @@ jobs:
           node-version: "22"
       - name: Install project dependencies
         run: npm ci
+      - name: Inventory npm development advisories (informational, not a clean audit)
+        shell: bash
+        run: |
+          npm audit --json > "$RUNNER_TEMP/wvt-npm-audit.json" || true
+          node -e 'const fs=require("node:fs"); const a=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+"/wvt-npm-audit.json","utf8")); if(!a.metadata || !a.vulnerabilities) throw Error("npm audit inventory missing"); console.log("npm full dependency audit:",JSON.stringify(a.metadata.vulnerabilities)); for(const [name,v] of Object.entries(a.vulnerabilities)){console.log("AUDIT",JSON.stringify({package:name,severity:v.severity,range:v.range,fixAvailable:v.fixAvailable,via:v.via.filter(x=>typeof x==="object").map(x=>({title:x.title,url:x.url}))}));}'
       - name: Verify ZIP encoding, file allowlist, checksums and no private files
         run: node --test worker/self-host-package.test.mjs
       - name: Build ZIP and SHA256 from explicit source file allowlist
