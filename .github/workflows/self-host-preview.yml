@@ -60,6 +60,7 @@ jobs:
           node worker/self-host-dryrun.mjs
           node worker/self-host-smoke.mjs
           node scripts/self-host-setup.mjs init --worker preview-ci-own-worker --database preview-ci-own-d1 --database-id 11111111-2222-4333-8444-555555555555
+          node scripts/self-host-doctor.mjs --account-subdomain preview-ci-account
           node scripts/self-host-readiness.mjs check --report selfhost-ci-report.json
           node -e 'const r=require("./selfhost-ci-report.json"); if(r.local!=="PASS" || r.releaseGate!=="PENDING_INDEPENDENT_CLOUDFLARE_TEST" || Object.values(r.live).some(x=>x!=="NOT_TESTED")) process.exit(1)'
       - name: Upload only the reviewed ZIP and SHA256 (no database backups)

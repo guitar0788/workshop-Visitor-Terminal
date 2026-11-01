@@ -165,6 +165,34 @@ node scripts/self-host-url.mjs --account-subdomain YOUR_ACCOUNT_SUBDOMAIN --slug
 
 **如果出现 `Counter not found`：** 检查是否把指南里的 `my-counter` 示例值误当成真实 slug。已完成实机验收的诊断记录应以 `livecheck-...` 为准；如果记录丢失，新部署可用 `self-host-publish.mjs list` 通过管理员权限**只读**列出真实 slug（注意会产生 D1 查询用量）。旧部署如不支持 `list`，不能为排查而重复 `create`、重新运行带写入的 `live-check` 或擅自迁移数据库。离线工具拼出的图片链接**不代表**该计数器确实存在。
 
+### 3.2 一条命令完成本地自托管检查
+
+如果不想分别执行配置检查、Worker 域名生成、报告恢复和 README 图片核对，可以使用**离线诊断工具**，它会重复利用已经存在的安全检查和原有资源，而不是创建一套新部署流程：
+
+```sh
+node scripts/self-host-doctor.mjs
+```
+
+上面检查 Node.js 版本、本地 Worker/D1 配置、独立随机密钥、限流、Git 忽略规则、锁定依赖及数据库迁移文件；输出不包含管理员密钥、D1 UUID 或其他私人配置内容。如已在 Cloudflare 控制台亲自确认账户级 workers.dev 子域名：
+
+```sh
+node scripts/self-host-doctor.mjs --account-subdomain YOUR_ACCOUNT_SUBDOMAIN
+```
+
+如已有确切的计数器 slug，可进一步同时检查**自己的本地 README**：
+
+```sh
+node scripts/self-host-doctor.mjs --account-subdomain YOUR_ACCOUNT_SUBDOMAIN --slug YOUR_EXISTING_COUNTER_SLUG --readme README.md
+```
+
+如已保留先前完成的独立云端诊断报告，也可省略 slug，改用：
+
+```sh
+node scripts/self-host-doctor.mjs --account-subdomain YOUR_ACCOUNT_SUBDOMAIN --report selfhost-live-result.json --readme README.md
+```
+
+README 检查只报告 `MATCH`、`DIFFERENT_COUNTER_URL` 或 `MISSING_COUNTER_IMAGE`，**绝不自动编辑文件**；报告中的成功标志并不是密码学签名，也不能证明链接目前仍能被访问。诊断工具不会发出网络请求、运行 Wrangler、部署或修改 D1；仅在本地读取并检查密钥内容是否符合要求，不在输出中回显。即使全部通过，**Issue #22 的真实独立云端、GitHub 图片渲染及账单验收仍未完成**。如果没有已知 slug 或报告，工具只会给出使用 `list` 的独立只读命令，不会尝试新建计数器；该 `list` 命令如手动执行，仍会产生自己的 D1 读取用量。
+
 ### 在 Mac 终端中一次保存 Worker 地址（无需重复填写）
 
 由真实 Mac 试用反馈创建的 [Issue #23](https://github.com/guitar0788/workshop-Visitor-Terminal/issues/23) 已对应到统一的 `WVT_API_URL` 支持。先从**自己的** Cloudflare 控制台核对完整地址，其格式为 `https://<Worker 名称>.<账户 workers.dev 子域名>.workers.dev`，它与 **D1 数据库名称无关**。两段恰好重名也完全正常。
