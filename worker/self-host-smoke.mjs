@@ -18,14 +18,12 @@ import { makeConfig } from "../scripts/self-host-setup.mjs";
 import { execute } from "../scripts/self-host-publish.mjs";
 import { verifySelfHost } from "../scripts/self-host-verify.mjs";
 import { runLiveCheck } from "../scripts/self-host-live-check.mjs";
+import { wranglerInvocation } from "./self-host-wrangler.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const CONFIG_NAME = "wrangler.selfhost.smoke.toml";
 const CONFIG = join(ROOT, CONFIG_NAME);
 const DEV_VARS = join(ROOT, ".dev.vars");
-const WRANGLER = process.platform === "win32"
-  ? join(ROOT, "node_modules", ".bin", "wrangler.cmd")
-  : join(ROOT, "node_modules", ".bin", "wrangler");
 let smokeStage = "preflight";
 const LOCAL_ENV = {
   ...process.env, CI: "true", WRANGLER_SEND_METRICS: "false",
@@ -59,10 +57,13 @@ async function shutdown(child) {
 
 async function start(port, persistence) {
   let logs = "";
-  const child = spawn(WRANGLER, [
+  const invocation = wranglerInvocation(ROOT, [
     "dev", "--local", "--config", CONFIG, "--persist-to", persistence,
     "--ip", "127.0.0.1", "--port", String(port)
-  ], { cwd: ROOT, stdio: ["ignore", "pipe", "pipe"], env: LOCAL_ENV });
+  ]);
+  const child = spawn(invocation.executable, invocation.args, {
+    cwd: ROOT, stdio: ["ignore", "pipe", "pipe"], env: LOCAL_ENV
+  });
   const capture = data => { logs = (logs + String(data)).slice(-6000); };
   child.stdout.on("data", capture);
   child.stderr.on("data", capture);
@@ -124,10 +125,13 @@ export async function smokeSelfHostedCounter() {
     // All database operations use --local AND isolated --persist-to.
     // Deliberately DO NOT accept dynamic/remote migration flags.
     smokeStage = "local-d1-migrations";
-    execFileSync(WRANGLER, [
+    const migration = wranglerInvocation(ROOT, [
       "d1", "migrations", "apply", "DB", "--local", "--config", CONFIG,
       "--persist-to", persistence
-    ], { cwd: ROOT, env: LOCAL_ENV, stdio: "pipe", timeout: 90000 });
+    ]);
+    execFileSync(migration.executable, migration.args, {
+      cwd: ROOT, env: LOCAL_ENV, stdio: "pipe", timeout: 90000
+    });
 
     const port = randomInt(18000, 45000);
     smokeStage = "local-worker-startup";
