@@ -630,7 +630,7 @@ function App() {
                 aria-label={cardLabels[index]}
                 title={cardLabels[index]}
                 onClick={() => changePreset(theme)}>
-                <img alt="" loading="lazy" draggable={false} width={420} height={220}
+                <img alt="" loading="lazy" draggable={false} width={600} height={210}
                   src={src}/>
                 <span>{cardLabels[index]}</span>
               </button>

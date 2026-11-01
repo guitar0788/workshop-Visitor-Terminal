@@ -557,7 +557,7 @@ button, a, input, select { -webkit-tap-highlight-color: transparent; }
 .template-choice:hover { background: #1d3040; border-color: #81b99a; }
 .template-choice.active { background: #1f372f; border: 2px solid #78dca3; padding: 6px; color: #f1fff6; }
 .template-choice img {
-  width: 100%; height: auto; aspect-ratio: 420 / 220;
+  width: 100%; height: auto; aspect-ratio: 600 / 210;
   display: block; object-fit: contain; border-radius: 5px;
   background: #0d1721; pointer-events: none;
 }
@@ -597,3 +597,8 @@ button, a, input, select { -webkit-tap-highlight-color: transparent; }
   .template-gallery.compact .template-choice { flex-basis: 146px; }
   .gallery-expand { padding: 7px 9px; font-size: 10px; }
 }
+
+/* Reference cards use the original wide banner proportions, not 420x220 tiles. */
+.template-gallery.compact .template-choice { flex-basis: clamp(165px, 74%, 245px); }
+.template-gallery.expanded { grid-template-columns: repeat(2,minmax(0,1fr)); }
+@media (max-width: 560px) { .template-gallery.expanded { grid-template-columns: 1fr; } }

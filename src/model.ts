@@ -62,39 +62,38 @@ const CARD_CONFIG: Record<CardTheme, {
   accent: string; background: string; heading: string; caption: string;
   titleX: number; titleY: number; titleWidth: number; titleSize: number;
   countX: number; countY: number; countWidth: number; countSize: number;
-  labelX: number; labelY: number;
+  labelX: number; labelY: number; captionSize: number; captionWidth: number;
 }> = {
-  "pixel-card": { accent:"#243b4d", background:"#81cafa", heading:"WORKSHOP VISITORS", caption:"PIXEL GARDEN",
-    titleX:158,titleY:54,titleWidth:236,titleSize:16,countX:172,countY:102,countWidth:220,countSize:44,labelX:175,labelY:153 },
-  "modern-card": { accent:"#233665", background:"#ecf2ff", heading:"WORKSHOP VISITORS", caption:"TOTAL VISITS",
-    titleX:168,titleY:56,titleWidth:238,titleSize:17,countX:168,countY:101,countWidth:231,countSize:47,labelX:170,labelY:157 },
-  "terminal-card": { accent:"#5ef9ab", background:"#081e18", heading:"WORKSHOP VISITORS", caption:"SYSTEM ONLINE",
-    titleX:57,titleY:82,titleWidth:337,titleSize:22,countX:57,countY:121,countWidth:234,countSize:46,labelX:58,labelY:184 },
-  "cozy-card": { accent:"#754932", background:"#fff0de", heading:"WORKSHOP VISITORS", caption:"THANK YOU FOR VISITING",
-    titleX:165,titleY:58,titleWidth:228,titleSize:17,countX:158,countY:105,countWidth:185,countSize:45,labelX:164,labelY:165 },
-  "rpg-card": { accent:"#f6d78d", background:"#233968", heading:"WORKSHOP VISITORS", caption:"LEVEL UP · THANK YOU",
-    titleX:173,titleY:54,titleWidth:213,titleSize:16,countX:173,countY:107,countWidth:215,countSize:45,labelX:174,labelY:165 },
-  "space-card": { accent:"#f4eaff", background:"#1b1b56", heading:"WORKSHOP VISITORS", caption:"EXPLORING THE STARS",
-    titleX:47,titleY:59,titleWidth:259,titleSize:18,countX:47,countY:106,countWidth:255,countSize:45,labelX:48,labelY:167 },
-  "notebook-card": { accent:"#614432", background:"#fff5e4", heading:"WORKSHOP VISITORS", caption:"MY VISITOR NOTES",
-    titleX:64,titleY:58,titleWidth:239,titleSize:19,countX:66,countY:101,countWidth:231,countSize:47,labelX:68,labelY:175 },
-  "neon-card": { accent:"#e9e2ff", background:"#131737", heading:"WORKSHOP VISITORS", caption:"DIGITAL SIGNAL · ACTIVE",
-    titleX:166,titleY:60,titleWidth:227,titleSize:17,countX:165,countY:109,countWidth:229,countSize:44,labelX:167,labelY:170 },
-  "minimal-card": { accent:"#1a4a3d", background:"#f1fff6", heading:"WORKSHOP VISITORS", caption:"HELLO THERE",
-    titleX:174,titleY:61,titleWidth:224,titleSize:16,countX:173,countY:104,countWidth:216,countSize:44,labelX:176,labelY:158 }
+  "pixel-card": { accent:"#263b4f", background:"#84d4ff", heading:"WORKSHOP VISITORS", caption:"PIXEL GARDEN",
+    titleX:246,titleY:48,titleWidth:276,titleSize:19,countX:258,countY:92,countWidth:258,countSize:50,labelX:258,labelY:162,captionSize:9,captionWidth:235 },
+  "modern-card": { accent:"#223663", background:"#f4f8ff", heading:"WORKSHOP VISITORS", caption:"TOTAL VISITS",
+    titleX:220,titleY:57,titleWidth:297,titleSize:21,countX:219,countY:99,countWidth:300,countSize:52,labelX:222,labelY:172,captionSize:9,captionWidth:235 },
+  "terminal-card": { accent:"#42f99e", background:"#0b2420", heading:"WORKSHOP VISITORS", caption:"SYSTEM ONLINE",
+    titleX:86,titleY:80,titleWidth:458,titleSize:22,countX:86,countY:122,countWidth:397,countSize:52,labelX:86,labelY:179,captionSize:9,captionWidth:285 },
+  "cozy-card": { accent:"#72432e", background:"#fff1df", heading:"WORKSHOP VISITORS", caption:"THANK YOU FOR VISITING",
+    titleX:248,titleY:65,titleWidth:263,titleSize:21,countX:244,countY:104,countWidth:266,countSize:52,labelX:253,labelY:171,captionSize:9,captionWidth:238 },
+  "rpg-card": { accent:"#f9e7b6", background:"#1a3460", heading:"WORKSHOP VISITORS", caption:"LEVEL UP · THANK YOU",
+    titleX:245,titleY:61,titleWidth:330,titleSize:20,countX:246,countY:102,countWidth:311,countSize:55,labelX:248,labelY:172,captionSize:9,captionWidth:320 },
+  "space-card": { accent:"#fff7ff", background:"#171a50", heading:"WORKSHOP VISITORS", caption:"EXPLORING THE STARS",
+    titleX:99,titleY:63,titleWidth:350,titleSize:22,countX:99,countY:105,countWidth:347,countSize:53,labelX:101,labelY:174,captionSize:9,captionWidth:300 },
+  "notebook-card": { accent:"#67432d", background:"#fff8ec", heading:"WORKSHOP VISITORS", caption:"MY VISITOR NOTES",
+    titleX:107,titleY:57,titleWidth:337,titleSize:23,countX:117,countY:100,countWidth:344,countSize:55,labelX:111,labelY:174,captionSize:9,captionWidth:260 },
+  "neon-card": { accent:"#f4ecff", background:"#141336", heading:"WORKSHOP VISITORS", caption:"DIGITAL SIGNAL · ACTIVE",
+    titleX:235,titleY:62,titleWidth:322,titleSize:23,countX:238,countY:102,countWidth:314,countSize:54,labelX:239,labelY:175,captionSize:9,captionWidth:302 },
+  "minimal-card": { accent:"#1e583d", background:"#ecfff2", heading:"WORKSHOP", caption:"VISITORS",
+    titleX:233,titleY:76,titleWidth:191,titleSize:22,countX:443,countY:89,countWidth:128,countSize:31,labelX:234,labelY:111,captionSize:22,captionWidth:180 }
 };
-
 function makeCardPreset(theme: CardTheme): TerminalDesign {
   const c = CARD_CONFIG[theme];
   const layers: Layer[] = [
     { id:"heading", kind:"text", x:c.titleX, y:c.titleY, width:c.titleWidth,
-      height:theme === "terminal-card" ? 30 : 26, text:c.heading, fontSize:c.titleSize, color:c.accent, visible:true },
+      height:30, text:c.heading, fontSize:c.titleSize, color:c.accent, visible:true },
     { id:"visits", kind:"count", x:c.countX, y:c.countY, width:c.countWidth,
       height:61, text:"", fontSize:c.countSize, color:c.accent, visible:true },
-    { id:"caption", kind:"text", x:c.labelX, y:c.labelY, width:216,
-      height:19, text:c.caption, fontSize:11, color:c.accent, visible:true }
+    { id:"caption", kind:"text", x:c.labelX, y:c.labelY, width:c.captionWidth,
+      height:28, text:c.caption, fontSize:c.captionSize, color:c.accent, visible:true }
   ];
-  return { schemaVersion:1, theme, width:420, height:220,
+  return { schemaVersion:1, theme, width:600, height:210,
     background:c.background, accent:c.accent, layers };
 }
 
@@ -204,7 +203,7 @@ export function renderSvg(input: unknown, visits: number): string {
   if (isCardTheme(d.theme)) {
     // Canonical vector art scales to any configured canvas dimensions.
     // These elements are bundled constants, not user-controlled SVG markup.
-    parts.push('<g transform="scale(', String(d.width / 420), ' ', String(d.height / 220),
+    parts.push('<g transform="scale(', String(d.width / 600), ' ', String(d.height / 210),
       ')">', scopedCardArtwork(cardArtwork(d.theme), scope), '</g>');
   } else {
     parts.push('<rect x="2" y="2" width="', String(d.width - 4),

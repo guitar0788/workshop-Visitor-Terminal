@@ -373,8 +373,8 @@ export function createLocalizedPreset(theme: Theme, language: Language): Termina
   if (language !== "zh-CN") return design;
   if (isCardTheme(theme)) {
     return { ...design, layers: design.layers.map(layer =>
-      layer.id === "heading" ? { ...layer, text: "工坊访客" } :
-      layer.id === "caption" ? { ...layer, text: "累计访问 · 谢谢你" } : layer
+      layer.id === "heading" ? { ...layer, text: theme === "minimal-card" ? "工坊" : "工坊访客" } :
+      layer.id === "caption" ? { ...layer, text: theme === "minimal-card" ? "访客" : "累计访问 · 谢谢你" } : layer
     ) };
   }
   const title = theme === "pixel" ? "工坊访客终端" : theme === "cyber" ? "赛博访客终端" : "主页访问统计";

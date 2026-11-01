@@ -241,3 +241,39 @@ describe("inline gallery fragment isolation", () => {
     expect(idsA.filter(x => idsB.includes(x))).toHaveLength(0);
   });
 });
+
+
+describe("visual reference fidelity — nine wide illustrated cards", () => {
+  it("uses the original wide-banner canvas instead of old tall placeholder proportions", () => {
+    for (const theme of CARD_THEMES) {
+      const card = clonePreset(theme);
+      expect(card.width).toBe(600);
+      expect(card.height).toBe(210);
+      expect(card.layers.filter(l => l.kind === "count")).toHaveLength(1);
+      expect(card.layers[0].visible).toBe(true);
+      const actual = renderSvg(card, 12_847);
+      expect(actual).toContain('width="600" height="210" viewBox="0 0 600 210"');
+      expect(actual).toContain('scale(1 1)');
+      expect(actual).toContain('>12,847</text>');
+      expect(actual).not.toContain('>999,999,999,999</text>');
+    }
+    const old = clonePreset("pixel");
+    expect(old.width).toBe(420);
+    expect(old.height).toBe(220);
+  });
+
+  it("renders distinct actual vector scenes rather than switching only colors or text", () => {
+    const scenes = CARD_THEMES.map(theme => renderSvg(clonePreset(theme), 12_847));
+    expect(new Set(scenes).size).toBe(9);
+    for (const svg of scenes) {
+      expect(svg.match(/<(?:path|rect|circle|ellipse)\b/g)?.length ?? 0).toBeGreaterThan(8);
+      expect(svg).not.toMatch(/<image\b|<script\b|<foreignObject\b|\shref\s*=/i);
+      expect(svg).toContain("<defs>");
+    }
+    expect(scenes[0]).toContain('shape-rendering="crispEdges"');
+    expect(scenes[2]).toContain("termGlow");
+    expect(scenes[5]).toContain("planet");
+    expect(scenes[6]).toContain("paperLines");
+    expect(scenes[7]).toContain("neonGlow");
+  });
+});
