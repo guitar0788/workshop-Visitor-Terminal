@@ -129,7 +129,7 @@ export function approvedCountMarkup(theme: ApprovedTheme, counter: string,
     Math.floor((layer.width - 5) / (counter.length * 0.65)),
     Math.floor(layer.height * .78)));
   const x = layer.x;
-  const y = layer.y + Math.ceil(font * .10);
+  const y = layer.y + Math.ceil(font * .24);
   const shadow = theme === "rpg-card" ? ' stroke="#79401a" stroke-width="1.8" paint-order="stroke"' :
     theme === "terminal-card" ? ' stroke="#11522c" stroke-width="1" paint-order="stroke"' : "";
   return patch + clip + '<text clip-path="url(#' + clipId + ')" x="' + x + '" y="' + y +
