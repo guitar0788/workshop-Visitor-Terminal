@@ -118,6 +118,8 @@ export function validateConfig(contents) {
       !occurrences(/^migrations_dir = "worker\/migrations"$/gm) ||
       !occurrences(/^PUBLISHING_ENABLED = "false"$/gm) ||
       !occurrences(/^SVG_RATE_LIMIT_ENABLED = "true"$/gm) ||
+      !occurrences(/^PUBLISHING_ENABLED\s*=/gm) ||
+      !occurrences(/^SVG_RATE_LIMIT_ENABLED\s*=/gm) ||
       !occurrences(/^crons = \["17 \* \* \* \*"\]$/gm) ||
       !occurrences(/^limit = \d+$/gm, 2) ||
       !occurrences(/^period = \d+$/gm, 2) ||
