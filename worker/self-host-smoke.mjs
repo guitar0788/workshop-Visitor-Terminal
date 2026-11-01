@@ -19,6 +19,7 @@ import { execute } from "../scripts/self-host-publish.mjs";
 import { verifySelfHost } from "../scripts/self-host-verify.mjs";
 import { runLiveCheck } from "../scripts/self-host-live-check.mjs";
 import { wranglerInvocation } from "./self-host-wrangler.mjs";
+import { build as esbuildBuild } from "esbuild";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const CONFIG_NAME = "wrangler.selfhost.smoke.toml";
@@ -91,6 +92,119 @@ async function start(port, persistence) {
 async function checked(response, status) {
   assert.equal(response.status, status, "Unexpected local Worker HTTP status");
   return response.json();
+}
+
+
+// Exercise the real Worker+D1 path for EVERY active Studio card and all six
+// retired styles (which must remain openable after removal from the picker).
+// Load the exact versioned TypeScript model using the locked local bundler:
+// no hand-written duplicate fixtures that could diverge from the editor.
+const ACTIVE_CARDS = [
+  "pixel-card", "terminal-card", "rpg-card",
+  "mc-overworld", "mc-nether", "mc-end"
+];
+const RETIRED_CARDS = [
+  "modern-card", "cozy-card", "space-card",
+  "notebook-card", "neon-card", "minimal-card"
+];
+async function catalogModel() {
+  const built = await esbuildBuild({
+    entryPoints: [join(ROOT, "src", "model.ts")],
+    bundle: true, platform: "node", format: "esm",
+    write: false, logLevel: "silent"
+  });
+  assert.equal(built.outputFiles?.length, 1, "One bundled shared model expected");
+  return import("data:text/javascript;base64," +
+    Buffer.from(built.outputFiles[0].text).toString("base64"));
+}
+async function publishAndVerifyCatalog(api) {
+  const model = await catalogModel();
+  assert.deepEqual([...model.CARD_THEMES], ACTIVE_CARDS,
+    "Catalog smoke must track EXACTLY the six selectable editor styles");
+  const all = [...ACTIVE_CARDS, ...RETIRED_CARDS];
+  const catalog = [];
+  for (const theme of all) {
+    const slug = "catalog-" + randomBytes(8).toString("hex");
+    const design = model.clonePreset(theme);
+    assert.equal(design.theme, theme);
+    const create = await api("/v1/admin/counters", {
+      method: "POST",
+      headers: {
+        Authorization: "Bearer " + ADMIN_TOKEN,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ slug, owner: "self-host-tester", design })
+    });
+    assert.equal(create.status, 201, "Real D1 creation failed for " + theme);
+    assert.equal((await create.json()).hits, 0);
+    const path = "/v1/counters/" + slug + ".svg";
+    const head = await api(path, { method: "HEAD" });
+    assert.equal(head.status, 200, "HEAD failed for " + theme);
+    assert.equal(head.headers.get("content-type")?.startsWith("image/svg+xml"), true);
+    const initial = await checked(await api("/v1/admin/counters/" + slug, {
+      headers: { Authorization: "Bearer " + ADMIN_TOKEN }
+    }), 200);
+    assert.equal(initial.hits, 0, "HEAD must not increment " + theme);
+    const ip = "203.0.113.99";
+    const image = await api(path, { headers: { "CF-Connecting-IP": ip } });
+    assert.equal(image.status, 200, "SVG request failed for " + theme);
+    const svg = await image.text();
+    assert.match(svg, /<svg\b/);
+    assert(svg.includes(">1</text>"), "Live increment absent in SVG for " + theme);
+    if (theme.startsWith("mc-")) {
+      assert(svg.includes('shape-rendering="crispEdges"'),
+        "Voxel scene missing after D1 publish: " + theme);
+      assert(!svg.includes("<image "), "Voxel templates must remain standalone vector SVG");
+    } else if (ACTIVE_CARDS.includes(theme)) {
+      assert(svg.includes("data:image/avif;base64,"),
+        "Original approved artwork lost during publish: " + theme);
+    }
+    const duplicate = await api(path, { headers: { "CF-Connecting-IP": ip } });
+    assert.equal(duplicate.status, 200);
+    const state = await checked(await api("/v1/admin/counters/" + slug, {
+      headers: { Authorization: "Bearer " + ADMIN_TOKEN }
+    }), 200);
+    assert.equal(state.hits, 1, "Deduplication failed on " + theme);
+    catalog.push({ slug, theme, ip, svgMarker: theme === "mc-overworld" ? "ovsky" :
+      theme === "mc-nether" ? "nsky" : theme === "mc-end" ? "esky" : null });
+  }
+  // Updating the design must not reset the D1 visit counter.
+  const nether = catalog.find(row => row.theme === "mc-nether");
+  const updatedDesign = model.clonePreset("mc-nether");
+  updatedDesign.layers = updatedDesign.layers.map(layer =>
+    layer.id === "heading" ? { ...layer, text: "PERSISTED NETHER CARD" } : layer);
+  const updated = await api("/v1/admin/counters/" + nether.slug + "/design", {
+    method: "POST",
+    headers: { Authorization: "Bearer " + ADMIN_TOKEN, "Content-Type": "application/json" },
+    body: JSON.stringify({ design: updatedDesign })
+  });
+  assert.equal(updated.status, 200, "Minecraft design update failed in real local D1");
+  return catalog;
+}
+async function verifyCatalogAfterRestart(api, catalog) {
+  assert.equal(catalog.length, 12);
+  for (const { slug, theme, ip, svgMarker } of catalog) {
+    const state = await checked(await api("/v1/admin/counters/" + slug, {
+      headers: { Authorization: "Bearer " + ADMIN_TOKEN }
+    }), 200);
+    assert.equal(state.hits, 1, "D1 count lost on restart for " + theme);
+    const response = await api("/v1/counters/" + slug + ".svg", {
+      headers: { "CF-Connecting-IP": ip }
+    });
+    assert.equal(response.status, 200, "Persisted SVG failed for " + theme);
+    const svg = await response.text();
+    assert(svg.includes(">1</text>"), "Counter lost from persisted SVG: " + theme);
+    if (svgMarker) assert(svg.includes(svgMarker), "Scene lost after restart: " + theme);
+    if (theme === "mc-nether") assert(svg.includes("PERSISTED NETHER CARD"));
+    if (ACTIVE_CARDS.includes(theme) && !theme.startsWith("mc-")) {
+      assert(svg.includes("data:image/avif;base64,"),
+        "Approved raster artwork lost after restart: " + theme);
+    }
+    const again = await checked(await api("/v1/admin/counters/" + slug, {
+      headers: { Authorization: "Bearer " + ADMIN_TOKEN }
+    }), 200);
+    assert.equal(again.hits, 1, "Restart reread must not double-count " + theme);
+  }
 }
 
 export async function smokeSelfHostedCounter() {
@@ -193,6 +307,8 @@ export async function smokeSelfHostedCounter() {
     assert.match(await cli("inspect"), /Recorded upstream requests: 1/,
       "Deduplication must not increment on repeated requests");
 
+    smokeStage = "publish-active-and-retired-card-catalog-in-local-D1";
+    const catalog = await publishAndVerifyCatalog(api);
     smokeStage = "update-design";
     const modified = { ...DESIGN, layers: DESIGN.layers.map(
       layer => layer.id === "heading" ? { ...layer, text: "UPDATED AND PERSISTED" } : layer
@@ -208,6 +324,8 @@ export async function smokeSelfHostedCounter() {
     await shutdown(running.child);
     running = undefined;
     running = await start(port, persistence);
+    smokeStage = "verify-twelve-card-catalog-after-worker-restart";
+    await verifyCatalogAfterRestart(api, catalog);
     smokeStage = "post-restart-count-check";
     assert.match(await cli("inspect"), /Recorded upstream requests: 1/,
       "Counts must persist after restart in the same local D1");
@@ -237,7 +355,7 @@ export async function smokeSelfHostedCounter() {
     assert.equal(liveReport.independentCloudflareAccountOwnership, "NOT_VERIFIED");
 
     console.log("PASS: self-hosted Wrangler local migrations, private CLI publishing, " +
-      "SVG, deduplication, design update, restart persistence, closed OAuth, and opt-in live acceptance in local simulation.");
+      "all 6 active/6 retired D1 designs, SVG, deduplication, updates, restart persistence, closed OAuth and local acceptance simulation.");
   } finally {
     if (running) await shutdown(running.child);
     if (devVarsCreated) await rm(DEV_VARS, { force: true });
