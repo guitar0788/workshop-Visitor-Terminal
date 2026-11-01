@@ -15,3 +15,4 @@ wrangler.selfhost.toml
 .wvt-visit-secret
 wrangler.selfhost.ci.toml
 wrangler.selfhost.smoke.toml
+.wvt-package-ci/
