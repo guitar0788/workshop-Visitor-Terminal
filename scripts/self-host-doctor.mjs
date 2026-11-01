@@ -127,35 +127,36 @@ export function explainDoctorFailure(error) {
 function manualSteps(origin = null) {
   const lines = [
     "MANUAL NEXT STEPS (PRINT-ONLY; NO COMMANDS EXECUTED):",
-    "1. Run: node scripts/self-host-setup.mjs check",
-    "2. Run: node scripts/self-host-readiness.mjs check",
-    "3. Run: node worker/self-host-smoke.mjs (disposable local D1 only)",
-    "4. Run: npx wrangler whoami (NETWORK; verify YOUR account before using any resource)"
+    "1. Run: npm ci (NETWORK: locked npm packages only; no Cloudflare account changes)",
+    "2. Run: node scripts/self-host-setup.mjs check",
+    "3. Run: node scripts/self-host-readiness.mjs check",
+    "4. Run: node worker/self-host-smoke.mjs (disposable local D1 only)",
+    "5. Run: npx wrangler whoami (NETWORK; verify YOUR account before using any resource)"
   ];
   if (!origin) {
     lines.push(
-      "5. Find your OWN Cloudflare account workers.dev subdomain in the dashboard.",
-      "6. Re-run doctor with --account-subdomain YOUR_ACCOUNT_LABEL --steps.",
+      "6. Find your OWN Cloudflare account workers.dev subdomain in the dashboard.",
+      "7. Re-run doctor with --account-subdomain YOUR_ACCOUNT_LABEL --steps.",
       "No remote migration/deployment commands are shown before an account label is supplied."
     );
     return lines;
   }
   lines.push(
-    "5. ONLY IF the named Worker/D1 are YOUR disposable resources and you accept usage:",
+    "6. ONLY IF the named Worker/D1 are YOUR disposable resources and you accept usage:",
     "   npx wrangler d1 migrations apply DB --remote --config wrangler.selfhost.toml",
     "   npx wrangler deploy --config wrangler.selfhost.toml",
     "   npx wrangler secret put ADMIN_TOKEN --config wrangler.selfhost.toml",
     "   npx wrangler secret put VISIT_HASH_SECRET --config wrangler.selfhost.toml",
     "   For the two secret put prompts, supply the corresponding ignored files",
     "   interactively. NEVER include their values in shell arguments or GitHub.",
-    "6. READ-ONLY remote verification (only after confirming the exact origin):",
+    "7. READ-ONLY remote verification (only after confirming the exact origin):",
     "   node scripts/self-host-verify.mjs --api " + origin +
       " --token-file .wvt-admin-token",
-    "7. If a counter already exists, recover its slug WITHOUT creating another:",
+    "8. If a counter already exists, recover its slug WITHOUT creating another:",
     "   node scripts/self-host-publish.mjs list --api " + origin +
       " --token-file .wvt-admin-token",
     "   Note: list makes remote D1 reads and may return 405 for older Workers.",
-    "8. Create/update counters only after separately opting in to a real D1 write.",
+    "9. Create/update counters only after separately opting in to a real D1 write.",
     "   GitHub caching means image requests are NOT accurate profile views.",
     "Manual commands above do not verify ownership, remote counters or billing."
   );
