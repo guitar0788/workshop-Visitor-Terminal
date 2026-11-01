@@ -71,7 +71,7 @@ export function createMobileQA(){
     '<style>body{margin:0;background:#0e1520;color:white;font:13px system-ui;padding:12px}'+
     'iframe{display:block;width:390px;height:800px;border:1px solid #31514d;border-radius:15px;max-width:100%}'+
     'output{display:block;max-width:380px;overflow-wrap:anywhere;white-space:pre-wrap}'+
-    '</style></head><body><iframe id="studio" src="/" title="Mobile Studio UI"></iframe>'+
+    '</style></head><body><iframe id="studio" src="./" title="Mobile Studio UI"></iframe>'+
     '<output id="mobile-qa">RUNNING</output><script>'+code+'</script></body></html>';
 }
 export function parseMobileAudit(html){

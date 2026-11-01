@@ -113,14 +113,14 @@ jobs:
             --disable-dev-shm-usage --disable-extensions \
             --virtual-time-budget=20000 \
             --window-size=440,940 \
-            --dump-dom http://127.0.0.1:4173/WVT-Mobile-Studio-QA.html \
+            --dump-dom http://127.0.0.1:4173/workshop-Visitor-Terminal/WVT-Mobile-Studio-QA.html \
             > dist/mobile-studio-dom.html 2> /dev/null
           node scripts/studio-mobile-qa.mjs check dist/mobile-studio-dom.html
           google-chrome --headless=new --no-sandbox --disable-gpu \
             --disable-dev-shm-usage --disable-extensions --hide-scrollbars \
             --virtual-time-budget=18000 --window-size=440,940 \
             --screenshot="$PWD/dist/WVT-Studio-Phone-Preview.png" \
-            http://127.0.0.1:4173/WVT-Mobile-Studio-QA.html 2> /dev/null
+            http://127.0.0.1:4173/workshop-Visitor-Terminal/WVT-Mobile-Studio-QA.html 2> /dev/null
           test -s dist/WVT-Studio-Phone-Preview.png
       - name: Capture public GitHub-rendered diagnostic README (read-only)
         # This is a best-effort external compatibility observation, not a

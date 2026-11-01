@@ -4,7 +4,7 @@ import { createMobileQA, parseMobileAudit } from "../scripts/studio-mobile-qa.mj
 
 test("mobile browser integration page exercises real app tabs and six current styles",()=>{
   const html=createMobileQA();
-  assert.match(html,/<iframe id="studio" src="\/"/);
+  assert.match(html,/<iframe id="studio" src="\.\/"/);
   for(const theme of ["pixel-card","terminal-card","rpg-card","mc-overworld","mc-nether","mc-end"])
     assert(html.includes(theme));
   assert(html.includes("scrollWidth<=long.clientWidth"));
