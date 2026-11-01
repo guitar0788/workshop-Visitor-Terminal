@@ -152,7 +152,24 @@ node scripts/self-host-publish.mjs inspect --api https://YOUR-WORKER.YOUR-SUBDOM
 
 如果首次 `create` 已写入记录但设计上传失败，请使用 `update` 重试，而不是再次创建或清空数据库。管理员令牌只从本地忽略文件或 `WVT_ADMIN_TOKEN` 环境变量读取，不通过命令行参数传入。
 
-### 6. 费用与安全
+**发布前的匿名安全检查：** `create`、`update`、`inspect` 每次都会先调用自己的 `/health`、`/v1/my/counters` 和匿名 `/v1/admin/usage`，确认目标确实表现为预期的 Workshop Worker、OAuth 公开发布关闭且管理员接口拒绝匿名请求。只有这三项检查通过后，工具才会读取并发送管理员密钥。这能阻止误连到不兼容的服务，**不能证明目标服务器归自己所有**：恶意服务器仍可能伪装上述接口，请务必自行核对 `--api` 和 Cloudflare 控制台中的 Worker 名称。认证请求禁止跳转。
+
+
+
+### 6. 费用、安全与云端账户隔离
+
+**最重要的隔离规则：** 每位自托管者使用自己的 Cloudflare 账户、新建 Worker 和 D1，以及自己生成的管理员密钥。不要将维护者的 Worker URL、D1 UUID、Cloudflare API Token、GitHub OAuth 密钥复制给其他用户。发布包不会自动连到维护者账号，也不会替用户选择套餐。
+
+**用量不能被项目中的 20,000 上限完全控制：**
+
+- `visit_day_budget` 每 UTC 日最多接受 20,000 条新的去重计数记录，它并非 D1 读行数、D1 写行数、Worker 请求数或云端账单的统一限制。未增加次数的 SVG `HEAD` /重复 `GET` 也可能消耗 Worker 请求及部分 D1 读取。
+- Worker 的 60 次/分钟每计数器、120 次/分钟每机房两级限流为**近似且各地独立**，不会把全球流量严格限制在 120 次/分钟。大量访问 `/health` 或其他非 SVG 路由也不属于这两个 SVG 限流器。
+- Cloudflare D1 免费计划当前公开的日额度为 500 万行读取、10 万行写入。自 2026-09-01 起，免费账户超出日额度后 D1 查询会失败（通常直到 UTC 午夜重置）；这不是本项目提供的“防止任何费用”保证。
+- 如需监控，请在自己的 Cloudflare Dashboard 中检查 **Workers 请求数、D1 Metrics → Row Metrics、存储量、账户套餐与 Billing**。若达到预算阈值，应由账户所有者主动停用自己的 Worker、调整访问规则或移除公开 SVG 引用；本工具不会在后台替用户暂停云服务。
+
+相关文档：[Cloudflare D1 计费](https://developers.cloudflare.com/d1/platform/pricing/)、[Workers 费率和限额](https://developers.cloudflare.com/workers/platform/pricing/)、[Workers Rate Limiting（机房级近似限流）](https://developers.cloudflare.com/workers/runtime-apis/bindings/rate-limit/)、[D1 免费额度执行公告](https://developers.cloudflare.com/changelog/post/2026-09-01-d1-free-tier-limit-enforcement/)。
+
+
 
 - 自托管用户负责自己的 Cloudflare 额度、费用报警、备份、秘密轮换和 Worker/D1 生命周期；本项目不会承担这些用量。
 - 模板设置了每机房近似的两级 SVG 限流。数据库还有全局 UTC 日最多接纳 20,000 条新去重访问记录的机制。**它们不能彻底限制所有 Worker 请求或全部 D1 读取量**。
