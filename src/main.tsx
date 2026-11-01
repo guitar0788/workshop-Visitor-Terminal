@@ -443,8 +443,12 @@ function App() {
   function changePreset(theme: Theme) {
     edit(() => createLocalizedPreset(theme, language));
     setDemoCount(isApprovedTheme(theme) ? APPROVED_PREVIEW_COUNT : PREVIEW_COUNT);
-    setSelectedId(isApprovedTheme(theme) ? "visits" : "heading");
+    setSelectedId(isApprovedTheme(theme) || theme.startsWith("mc-") ? "visits" : "heading");
     setCleanPreview(false);
+    // On phones the picker lives in the Layers sheet: immediately show the
+    // selected card, rather than leaving the new design hidden behind a sheet.
+    setMobileTab("preview");
+    setGalleryExpanded(false);
     setNoticeKey("noticeTemplate");
   }
 
@@ -613,7 +617,7 @@ function App() {
                 <option key={theme} value={theme}>{cardLabels[index]}</option>)}
               {!CARD_THEMES.includes(design.theme as typeof CARD_THEMES[number]) &&
                 !["pixel", "cyber", "minimal"].includes(design.theme) && (
-                  <option value={design.theme}>{t.legacyTemplate}</option>
+                  <option value={design.theme}>{t.legacyTemplate} · {design.theme}</option>
                 )}
             </optgroup>
             <optgroup label={t.classicTemplates}>
@@ -631,6 +635,7 @@ function App() {
             {galleryExpanded ? t.galleryCollapse : t.galleryExpand}
           </button>
         </div>
+        <p className="template-gallery-hint">{t.galleryHint}</p>
         <div className={"template-gallery" + (galleryExpanded ? " expanded" : " compact")}
           aria-label={t.cardTemplates}>
           {cardPreviews.map(({ theme, src }, index) => {

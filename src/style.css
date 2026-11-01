@@ -544,6 +544,7 @@ button, a, input, select { -webkit-tap-highlight-color: transparent; }
 /* v0.6 illustrated card gallery: real inline SVG thumbnails, no image service. */
 .template-picker { display: grid; gap: 13px; min-width: 0; }
 .template-gallery-head { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 5px; }
+.template-gallery-hint { margin: -5px 0 1px; color: #9cb2c5; font-size: 11px; line-height: 1.45; }
 .template-gallery-head strong { color: #d7e7f3; font-size: 12px; }
 .template-gallery-head span { color: #93a5b3; font-size: 10px; line-height: 1.4; }
 .template-gallery { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; min-width: 0; }
@@ -571,7 +572,7 @@ button, a, input, select { -webkit-tap-highlight-color: transparent; }
 
 
 /* Compact by default: swipe one row of cards without pushing editing tools
-   five screens below the picker; expand deliberately to see all nine. */
+   five screens below the picker; expand deliberately to see all six. */
 .gallery-expand {
   min-height: 38px; flex-shrink: 0; border-radius: 8px;
   border: 1px solid #436054; background: #21392d; color: #ddffed;
