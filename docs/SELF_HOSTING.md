@@ -165,7 +165,25 @@ node scripts/self-host-publish.mjs inspect --api https://YOUR-WORKER.YOUR-SUBDOM
 
 
 
-### 5. 费用、安全与云端账户隔离
+### 5. 自愿进行独立 Cloudflare 实机测试（会写入自己的 D1）
+
+前面的 `self-host-verify.mjs` 是**只读检查**，无法证明真实的访问计数、五分钟去重与设计更新已经在自己的 Cloudflare 账户里正确执行。为此，本项目提供**需要明确授权才运行**的实机验收工具。只有已经使用自己的账户新建 D1、完成远程迁移与 Worker/密钥部署，并准备接受一次永久性测试记录的人才应运行：
+
+```sh
+node scripts/self-host-live-check.mjs --api https://YOUR-WORKER.YOUR-SUBDOMAIN.workers.dev --owner YOUR_GITHUB_NAME --confirm-worker YOUR-WORKER --allow-persistent-test-record --token-file .wvt-admin-token --report selfhost-live-result.json
+```
+
+运行前请逐项核对：Worker 地址来自**自己的 Cloudflare 控制台**；`--confirm-worker` 完全等于本地 `wrangler.selfhost.toml` 的 Worker 名称；管理员密钥来自自己的 `.wvt-admin-token`。不支持自定义域名、HTTP 公网地址、维护者 staging Worker 或隐藏的自动部署模式。
+
+此测试先用匿名请求验证后端身份、OAuth 关闭和管理接口权限，再读取当日 D1 预算并要求至少 3 条剩余额度。确认后在**自己的 D1 中永久创建一个随机 `livecheck-...` 计数器**，进行一次不计数的 `HEAD`、首次公开 SVG `GET` 加一、同来源第二次 `GET` 去重、更新设计，以及确认次数不被清零。它仅执行所述写入和少量请求；**不会自动删除诊断计数器、修改其他计数器、部署 Worker、迁移数据库或管理 Cloudflare 账户**。
+
+- 这不是零成本检查；会消耗少量 Worker 请求和 D1 读写额度。不要在已有大量流量、限额耗尽或其他用户共享的数据库上运行。
+- 网络中断可能发生在远端已经写入之后，遇到错误时应根据输出的诊断 `slug` 检查情况，**不要反复运行**以免留下多个永久测试计数器。
+- 工具不能从外部证明 D1 与 Cloudflare 账户属于谁，也不能测试真实账单、套餐、GitHub 代理缓存、跨机房限流、定时清理或长期运行可靠性。这些仍需要账户所有者在 Cloudflare 控制台里人工确认。
+- `--report` 是可选的本地 JSON 文件，只写新文件、不会覆盖已有报告，也不会记录管理密钥、D1 UUID 或 Worker URL；报告将账户所有权和计费隔离明确保留为 `NOT_VERIFIED`。如果需要分享，请先自行检查报告内容。
+- 项目 CI **绝不运行公网实机模式**；它只在一次性本地 Worker/D1 中调用同一套验收逻辑，验证流程而不产生云端用量。
+
+### 6. 费用、安全与云端账户隔离
 
 **最重要的隔离规则：** 每位自托管者使用自己的 Cloudflare 账户、新建 Worker 和 D1，以及自己生成的管理员密钥。不要将维护者的 Worker URL、D1 UUID、Cloudflare API Token、GitHub OAuth 密钥复制给其他用户。发布包不会自动连到维护者账号，也不会替用户选择套餐。
 
@@ -190,6 +208,6 @@ node scripts/self-host-publish.mjs inspect --api https://YOUR-WORKER.YOUR-SUBDOM
 
 Get the CI-tested source-only preview ZIP from the latest successful PR #21 Build Self-Host Preview run (GitHub Actions Artifacts). Unzip the Actions artifact and then its inner `Workshop-Visitor-Terminal-Self-Host.zip` into a NEW folder. Check the included SHA256, run `npm ci`, then create a new D1 in your own Cloudflare account. This is not an official GitHub Release and the PR artifact is retained for seven days.\n\nUse **your own** Cloudflare account and create a new D1 database. Run `node scripts/self-host-setup.mjs init --worker ... --database ... --database-id ...` and then `node scripts/self-host-setup.mjs check` to generate and validate a private local Wrangler config and two secrets without network access. The self-host template disables GitHub OAuth and reuses the existing counter backend. Run the disposable local end-to-end test `node worker/self-host-smoke.mjs` first, then use `node scripts/self-host-readiness.mjs check` to create a network-free local readiness gate before running migrations and explicitly opting into remote D1 migrations and deployment. The optional `--report` JSON excludes credentials and marks all remote checks NOT_TESTED. After deployment, run the read-only `node scripts/self-host-verify.mjs --api YOUR_WORKER_URL --token-file .wvt-admin-token` check (optionally `--slug` for an existing published counter). It verifies the Worker's identity, closed OAuth, private admin access, D1 budget and SVG HEAD without writing counts. Export a Studio `schemaVersion: 1` design JSON, and run `node scripts/self-host-publish.mjs create|update|inspect` against **your own HTTPS Worker** with a private `--token-file`. Success prints the dynamic SVG Markdown; it does not update a GitHub profile automatically.
 
-This is a technical preview, not a hosted service or promise of free Cloudflare capacity. Image cache effects mean counts represent qualifying upstream requests, not unique people.
+Optional remote write acceptance: after manually deploying YOUR OWN Worker/D1, run `node scripts/self-host-live-check.mjs --api YOUR_WORKER_URL --owner YOUR_GITHUB_NAME --confirm-worker YOUR-WORKER --allow-persistent-test-record --token-file .wvt-admin-token`. This explicitly creates a **permanent** diagnostic counter and tests real SVG counting, deduplication and design updates. CI only simulates this on disposable local D1; a passing local simulation does not prove an independent Cloudflare account deployment.\n\nThis is a technical preview, not a hosted service or promise of free Cloudflare capacity. Image cache effects mean counts represent qualifying upstream requests, not unique people.
 
 Official Cloudflare references: [D1 Wrangler commands](https://developers.cloudflare.com/d1/wrangler-commands/) and [Workers rate limiting](https://developers.cloudflare.com/workers/runtime-apis/bindings/rate-limit/).
