@@ -65,11 +65,16 @@ export function approvedBackdrop(
   const c = REGION[theme];
   const sx = width / REFERENCE_WIDTH;
   const sy = height / REFERENCE_HEIGHT;
+  // A nested SVG viewport is mandatory: otherwise the full 2090px reference
+  // image overflows neighboring inline gallery cards despite their viewBoxes.
   return '<g transform="scale(' + sx + ' ' + sy + ')">' +
+    '<svg x="0" y="0" width="' + REFERENCE_WIDTH + '" height="' +
+    REFERENCE_HEIGHT + '" viewBox="0 0 ' + REFERENCE_WIDTH + ' ' +
+    REFERENCE_HEIGHT + '" overflow="hidden">' +
     '<image x="' + (-c.cropX) + '" y="0" width="' +
     APPROVED_SOURCE_WIDTH + '" height="' + APPROVED_SOURCE_HEIGHT +
     '" preserveAspectRatio="none" href="' + APPROVED_THREE_CARD_IMAGE + '"/>' +
-    '</g>';
+    '</svg></g>';
 }
 
 export interface ApprovedCountLayer {
