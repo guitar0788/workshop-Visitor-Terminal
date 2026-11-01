@@ -133,6 +133,8 @@ node scripts/self-host-verify.mjs --api https://YOUR-WORKER.YOUR-SUBDOMAIN.worke
 
 首次实际创建自己的计数器之后，可以进一步检查它的 SVG 是否已公开可读（同样只发送 HEAD，不增加次数）：
 
+新版本还会在已知计数器的 `HEAD` 响应中严格检查 `Content-Type: image/svg+xml`、公开且有界的缓存 TTL、`nosniff`、CORS/CORP 跨域图片访问，以及禁止 Cookie／附件下载等不安全响应头。缺少这些条件会直接报告失败；**本检查不会发出 SVG GET，不会增加访问记录，也不能证明 GitHub 图片代理实际加载或按 60 秒刷新**。没有提供真实 `--slug` 时仍只验证随机不存在的 SVG 返回 404，不会凭空声称响应头已通过。
+
 ```sh
 node scripts/self-host-verify.mjs --api https://YOUR-WORKER.YOUR-SUBDOMAIN.workers.dev --token-file .wvt-admin-token --slug my-counter
 ```

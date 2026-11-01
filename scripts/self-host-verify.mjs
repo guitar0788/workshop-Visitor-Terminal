@@ -65,6 +65,43 @@ export function validateUsage(value) {
   return { utcDay: value.utcDay, admitted: value.admitted, remaining: value.remaining };
 }
 
+/**
+ * A HEAD response is the only safe way to inspect a real public SVG without
+ * generating an extra visitor receipt. These headers make the SVG embeddable,
+ * but do not prove GitHub Camo will fetch it or refresh its cached version.
+ */
+export function validateSvgHeadHeaders(headers) {
+  if (!(headers instanceof Headers)) throw Error("SVG HEAD headers are invalid");
+  const mime = (headers.get("content-type") ?? "").toLowerCase().trim();
+  if (!/^image\/svg\+xml(?:\s*;|$)/.test(mime)) {
+    throw Error("SVG HEAD must return image/svg+xml");
+  }
+  const cache = (headers.get("cache-control") ?? "").toLowerCase();
+  const age = cache.match(/(?:^|,)\s*max-age\s*=\s*(\d+)\s*(?:,|$)/);
+  if (!/(?:^|,)\s*public\s*(?:,|$)/.test(cache) ||
+      /(?:^|,)\s*(?:private|no-store|no-cache)\s*(?:,|$)/.test(cache) ||
+      !age || !Number.isSafeInteger(Number(age[1])) ||
+      Number(age[1]) < 1 || Number(age[1]) > 3600) {
+    throw Error("SVG HEAD caching must be public with a bounded positive max-age");
+  }
+  if ((headers.get("x-content-type-options") ?? "").toLowerCase() !== "nosniff") {
+    throw Error("SVG HEAD must include X-Content-Type-Options: nosniff");
+  }
+  if (headers.get("access-control-allow-origin") !== "*") {
+    throw Error("SVG HEAD must allow public cross-origin image access");
+  }
+  if ((headers.get("cross-origin-resource-policy") ?? "").toLowerCase() !== "cross-origin") {
+    throw Error("SVG HEAD must allow cross-origin resource embedding");
+  }
+  if (headers.has("set-cookie") ||
+      /\battachment\b/i.test(headers.get("content-disposition") ?? "") ||
+      /\b(?:authorization|cookie)\b/i.test(headers.get("vary") ?? "")) {
+    throw Error("SVG HEAD has private or download-only response metadata");
+  }
+  return { contentType: "image/svg+xml", cacheMaxAgeSeconds: Number(age[1]),
+    embeddableResponseHeaders: true };
+}
+
 async function probe(fetchImpl, origin, path, { method = "GET", token } = {}) {
   let response;
   try {
@@ -153,13 +190,12 @@ export async function verifySelfHost(args, {
     throw Error("Read-only SVG HEAD check returned HTTP " + image.status +
       " instead of " + expectedStatus);
   }
-  if (args.slug && !image.headers.get("content-type")?.includes("image/svg+xml")) {
-    throw Error("Counter HEAD did not return an SVG image");
-  }
+  const svgHeaders = args.slug ? validateSvgHeadHeaders(image.headers) : null;
   return {
     origin,
     checkedSlug: args.slug ?? null,
     budget: usage,
+    svgHeaders,
     noDatabaseWrites: true
   };
 }
@@ -175,9 +211,11 @@ async function main() {
       "UTC day " + result.budget.utcDay + ": " +
       result.budget.admitted + "/20000 admitted, " +
       result.budget.remaining + " remaining.\n" +
-      (result.checkedSlug ? "Checked existing SVG: " + result.checkedSlug + "\n" :
-        "Checked random, missing SVG with HEAD (expected 404).\n") +
-      "No database writes were requested. This does NOT confirm hosting costs or full Cloudflare billing limits.\n"
+      (result.checkedSlug ? "Checked existing SVG: " + result.checkedSlug +
+        " (public caching, nosniff and cross-origin headers: PASS; max-age " +
+        result.svgHeaders.cacheMaxAgeSeconds + "s).\n" :
+        "Checked random, missing SVG with HEAD (expected 404; SVG headers NOT TESTED).\n") +
+      "No database writes were requested. GitHub image proxy/cache, billing and account ownership NOT VERIFIED.\n"
     );
   } catch (error) {
     process.stderr.write("Self-host verification failed: " +

@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  parseVerifyArgs, validateUsage, verifySelfHost
+  parseVerifyArgs, validateUsage, validateSvgHeadHeaders, verifySelfHost
 } from "../scripts/self-host-verify.mjs";
 
 const ORIGIN = "https://test-own-worker.example.workers.dev";
@@ -11,8 +11,16 @@ const usage = {
   remaining: 19_958, edgeRateLimitsEnabled: true,
   edgeLimitPerMinutePerCounter: 60, edgeLimitPerMinutePerLocation: 120
 };
+const SAFE_SVG_HEADERS = {
+  "Content-Type": "image/svg+xml; charset=utf-8",
+  "Cache-Control": "public, max-age=60",
+  "X-Content-Type-Options": "nosniff",
+  "Access-Control-Allow-Origin": "*",
+  "Cross-Origin-Resource-Policy": "cross-origin"
+};
 function responses({ publishing = 503, adminAnonymous = 401,
-  budget = usage, image = 404, health = 200, errorOnRequest = false } = {}) {
+  budget = usage, image = 404, imageHeaders = SAFE_SVG_HEADERS,
+  health = 200, errorOnRequest = false } = {}) {
   const calls = [];
   const fetchImpl = async (url, init) => {
     calls.push({ url, init });
@@ -33,7 +41,7 @@ function responses({ publishing = 503, adminAnonymous = 401,
     if (path.endsWith(".svg")) {
       return new Response(null, {
         status: image,
-        headers: image === 200 ? { "Content-Type": "image/svg+xml" } : {}
+        headers: image === 200 ? imageHeaders : {}
       });
     }
     throw Error("Unexpected path: " + path);
@@ -82,6 +90,10 @@ test("optional known slug uses HEAD and verifies real SVG media type", async () 
   const result = await verifySelfHost({ api: ORIGIN, slug: "my-counter" },
     { ...auth, ...mock });
   assert.equal(result.checkedSlug, "my-counter");
+  assert.deepEqual(result.svgHeaders, {
+    contentType: "image/svg+xml", cacheMaxAgeSeconds: 60,
+    embeddableResponseHeaders: true
+  });
   assert.equal(mock.calls.at(-1).init.method, "HEAD");
   assert.equal(new URL(mock.calls.at(-1).url).pathname,
     "/v1/counters/my-counter.svg");
@@ -154,4 +166,47 @@ test("validates exact budget shape and allows legitimate exhausted budget", () =
   assert.equal(validateUsage({ ...usage, admitted: 20_000, remaining: 0 }).remaining, 0);
   assert.throws(() => validateUsage(null));
   assert.throws(() => validateUsage({ ...usage, admitted: 1.2 }));
+});
+
+
+test("live README SVG HEAD gate fails closed on unsafe image proxy headers", async () => {
+  const invalid = [
+    ["missing MIME", { "Content-Type": "text/html" }],
+    ["private cache", { "Cache-Control": "private, max-age=60" }],
+    ["no-cache", { "Cache-Control": "no-store" }],
+    ["zero TTL", { "Cache-Control": "public, max-age=0" }],
+    ["excessive TTL", { "Cache-Control": "public, max-age=86400" }],
+    ["no nosniff", { "X-Content-Type-Options": "" }],
+    ["wrong CORS", { "Access-Control-Allow-Origin": "https://private.example" }],
+    ["wrong CORP", { "Cross-Origin-Resource-Policy": "same-origin" }],
+    ["cookie", { "Set-Cookie": "session=should-never-be-sent" }],
+    ["download", { "Content-Disposition": "attachment; filename=counter.svg" }],
+    ["sensitive vary", { "Vary": "Authorization" }]
+  ];
+  for (const [reason, changed] of invalid) {
+    const mock = responses({ image: 200, imageHeaders: {
+      ...SAFE_SVG_HEADERS, ...changed
+    } });
+    await assert.rejects(() => verifySelfHost({
+      api: ORIGIN, slug: "public-counter"
+    }, { ...auth, ...mock }), /SVG HEAD/,
+    "Reject unsafe image response: " + reason);
+    assert.equal(mock.calls.at(-1).init.method, "HEAD");
+    assert.equal(mock.calls.filter(x => x.init.headers.Authorization).length, 1);
+  }
+});
+
+test("SVG image metadata validation is local, deterministic and does not claim GitHub proxy acceptance", () => {
+  assert.deepEqual(validateSvgHeadHeaders(new Headers(SAFE_SVG_HEADERS)), {
+    contentType: "image/svg+xml", cacheMaxAgeSeconds: 60,
+    embeddableResponseHeaders: true
+  });
+  assert.throws(() => validateSvgHeadHeaders(null), /headers are invalid/);
+  for (const bad of [
+    { "Cache-Control": "public" },
+    { "Cache-Control": "public, max-age=not-a-number" },
+    { "Cache-Control": "public, max-age=60, private" }
+  ]) assert.throws(() => validateSvgHeadHeaders(new Headers({
+    ...SAFE_SVG_HEADERS, ...bad
+  })), /caching/);
 });
