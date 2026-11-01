@@ -58,6 +58,7 @@ export function createPreviewManifest({ sourceHeadSha, workflowRunId, digest, by
     tested: {
       linuxIndependentZipInstallAndWorkerD1: "PASS",
       windowsIndependentZipInstallAndWorkerD1: "PASS",
+      macosIndependentZipInstallAndWorkerD1: "PASS",
       isolatedSecurityAndPackagingChecks: "PASS"
     },
     notVerified: {
