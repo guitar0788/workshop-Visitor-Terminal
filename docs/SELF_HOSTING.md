@@ -141,6 +141,29 @@ node scripts/self-host-verify.mjs --api https://YOUR-WORKER.YOUR-SUBDOMAIN.worke
 
 
 
+### 在 Mac 终端中一次保存 Worker 地址（无需重复填写）
+
+由真实 Mac 试用反馈创建的 [Issue #23](https://github.com/guitar0788/workshop-Visitor-Terminal/issues/23) 已对应到统一的 `WVT_API_URL` 支持。先从**自己的** Cloudflare 控制台核对完整地址，其格式为 `https://<Worker 名称>.<账户 workers.dev 子域名>.workers.dev`，它与 **D1 数据库名称无关**。两段恰好重名也完全正常。
+
+在 Mac 的「终端」中执行一次（下方必须替换为使用者自己的地址）：
+
+```sh
+export WVT_API_URL="https://YOUR-WORKER.YOUR-SUBDOMAIN.workers.dev"
+printf 'Active Worker: %s\n' "$WVT_API_URL"
+```
+
+**同一个终端会话**接下来不必再写 `--api`，本版的三个工具自动读取这一变量，并保留之前的 HTTPS、`workers.dev`、私有 Worker 名称核验和管理员权限检查：
+
+```sh
+node scripts/self-host-verify.mjs --token-file .wvt-admin-token
+node scripts/self-host-publish.mjs inspect --slug YOUR_EXISTING_SLUG --token-file .wvt-admin-token
+node scripts/self-host-readme.mjs --report selfhost-live-result.json
+```
+
+第三条命令**只从本地已完成的报告中恢复 README 图片地址**，不会连接 Cloudflare，也不会更改任何计数。如果需要发布新设计，可对 `self-host-publish.mjs create` 或 `update` 使用同样的环境变量。实机写入验收也支持省略 `--api`，但**仍必须**提供 `--allow-persistent-test-record` 和 `--confirm-worker`，绝不自动授权或启动测试。
+
+打开新的终端窗口后，可以重新执行上面的 `export`；若用户想长期保存自己的**公开 Worker URL（不是密钥）**，可自行将这一行加入私人 `~/.zshrc`。本项目不会修改 shell 配置，也绝不把管理员密钥写入 `~/.zshrc`。不要保存或复用维护者的 staging 地址，Cloudflare 账号变更后务必重新核对 `WVT_API_URL`。
+
 ### 4. 发布离线 Studio 中设计的 JSON
 
 在 [Workshop Studio](https://guitar0788.github.io/workshop-Visitor-Terminal/) 或离线单文件编辑器选择「保存设计」，得到 `visitor-terminal.design.json`。把该文件放在本地仓库目录。**不要**使用账户数据快照或 HTML 文件充当设计 JSON。
@@ -235,7 +258,9 @@ node scripts/self-host-readme.mjs --report selfhost-live-result.json
 
 Get the CI-tested source-only preview ZIP from the latest successful PR #21 Build Self-Host Preview run (GitHub Actions Artifacts). Unzip the Actions artifact and then its inner `Workshop-Visitor-Terminal-Self-Host.zip` into a NEW folder. Check the included SHA256, run `npm ci`, then create a new D1 in your own Cloudflare account. This is not an official GitHub Release and the PR artifact is retained for seven days.\n\nUse **your own** Cloudflare account and create a new D1 database. Run `node scripts/self-host-setup.mjs init --worker ... --database ... --database-id ...` and then `node scripts/self-host-setup.mjs check` to generate and validate a private local Wrangler config and two secrets without network access. The self-host template disables GitHub OAuth and reuses the existing counter backend. Run the disposable local end-to-end test `node worker/self-host-smoke.mjs` first, then use `node scripts/self-host-readiness.mjs check` to create a network-free local readiness gate before running migrations and explicitly opting into remote D1 migrations and deployment. The optional `--report` JSON excludes credentials and marks all remote checks NOT_TESTED. After deployment, run the read-only `node scripts/self-host-verify.mjs --api YOUR_WORKER_URL --token-file .wvt-admin-token` check (optionally `--slug` for an existing published counter). It verifies the Worker's identity, closed OAuth, private admin access, D1 budget and SVG HEAD without writing counts. Export a Studio `schemaVersion: 1` design JSON, and run `node scripts/self-host-publish.mjs create|update|inspect` against **your own HTTPS Worker** with a private `--token-file`. Success prints the dynamic SVG Markdown; it does not update a GitHub profile automatically.
 
-A completed live-check now prints the exact counter SVG URL and full README Markdown; do not copy the placeholder `my-counter` when a real `livecheck-...` diagnostic slug was used. If the test has already finished, use `WVT_API_URL=https://YOUR-WORKER.YOUR-SUBDOMAIN.workers.dev node scripts/self-host-readme.mjs --report selfhost-live-result.json` to recover the correct Markdown **entirely offline**, without any remote requests, tokens, redeployment, writes, or guessing a slug.\n\nOptional remote write acceptance: after manually deploying YOUR OWN Worker/D1, run `node scripts/self-host-live-check.mjs --api YOUR_WORKER_URL --owner YOUR_GITHUB_NAME --confirm-worker YOUR-WORKER --allow-persistent-test-record --token-file .wvt-admin-token`. This explicitly creates a **permanent** diagnostic counter and tests real SVG counting, deduplication and design updates. CI only simulates this on disposable local D1; a passing local simulation does not prove an independent Cloudflare account deployment.\n\nWindows and macOS CI now install and test the extracted ZIP using Node.js 22 on a Windows GitHub runner. Use Node.js 22.12+ for the locked patched Vitest 5 tooling; Cloudflare officially supports Wrangler on Windows 11, not Windows 10. Release preview ZIPs are gated on a full `npm audit --audit-level=moderate` and real Windows and macOS Worker/D1 smoke, but this remains a technical preview.\n\n**Release gate remains open:** independent real-account Cloudflare operations and billing isolation are tracked in [Issue #22](https://github.com/guitar0788/workshop-Visitor-Terminal/issues/22). No live-account acceptance has been performed in project CI. 
+A completed live-check now prints the exact counter SVG URL and full README Markdown; do not copy the placeholder `my-counter` when a real `livecheck-...` diagnostic slug was used. If the test has already finished, use `WVT_API_URL=https://YOUR-WORKER.YOUR-SUBDOMAIN.workers.dev node scripts/self-host-readme.mjs --report selfhost-live-result.json` to recover the correct Markdown **entirely offline**, without any remote requests, tokens, redeployment, writes, or guessing a slug.\n\nOptional remote write acceptance: after manually deploying YOUR OWN Worker/D1, run `node scripts/self-host-live-check.mjs --api YOUR_WORKER_URL --owner YOUR_GITHUB_NAME --confirm-worker YOUR-WORKER --allow-persistent-test-record --token-file .wvt-admin-token`. This explicitly creates a **permanent** diagnostic counter and tests real SVG counting, deduplication and design updates. CI only simulates this on disposable local D1; a passing local simulation does not prove an independent Cloudflare account deployment.\n\nWindows and macOS CI now install and test the extracted ZIP using Node.js 22 on a Windows GitHub runner. Use Node.js 22.12+ for the locked patched Vitest 5 tooling; Cloudflare officially supports Wrangler on Windows 11, not Windows 10. Release preview ZIPs are gated on a full `npm audit --audit-level=moderate` and real Windows and macOS Worker/D1 smoke, but this remains a technical preview.\n\nFor a macOS terminal, set `export WVT_API_URL="https://YOUR-WORKER.YOUR-SUBDOMAIN.workers.dev"` once. The self-host publisher, read-only verifier and consented live-check can then omit repeated `--api`. Explicit CLI origins remain supported for local smoke tests; the implicit origin must be a strict HTTPS workers.dev root, and existing private config/credential protections remain in force. Only add this **public URL**, never any private token, to a personal `~/.zshrc` if the user wants it to persist.
+
+**Release gate remains open:** independent real-account Cloudflare operations and billing isolation are tracked in [Issue #22](https://github.com/guitar0788/workshop-Visitor-Terminal/issues/22). No live-account acceptance has been performed in project CI. 
 
 For download, choose only `Workshop-SelfHost-Validated-Preview` from a successful **Build Self-Host Preview** workflow. `Workshop-SelfHost-CI-Input` is a pre-cross-platform internal testing artifact. The validated preview includes the ZIP, `.sha256`, and a source-head manifest that explicitly states remote Cloudflare ownership, deployment, D1 usage and billing are `NOT_TESTED`. Also inspect `Verify` separately.\n\nThis is a technical preview, not a hosted service or promise of free Cloudflare capacity. Image cache effects mean counts represent qualifying upstream requests, not unique people.
 
