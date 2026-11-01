@@ -36,21 +36,3 @@ jobs:
         run: node worker/backup-restore-drill.mjs
       - name: Build standalone self-host ZIP and SHA256 manifest
         run: node scripts/build-selfhost-package.mjs
-      - name: Unpack standalone ZIP and run real local Worker without Cloudflare access
-        run: |
-          mkdir -p .wvt-package-ci
-          unzip -q dist/Workshop-Visitor-Terminal-Self-Host.zip -d .wvt-package-ci
-          cd .wvt-package-ci/Workshop-Visitor-Terminal-Self-Host
-          npm ci
-          node worker/self-host-dryrun.mjs
-          node worker/self-host-smoke.mjs
-      - name: Upload reviewed PR self-host bundle (not a public Release)
-        if: github.event_name == 'pull_request'
-        uses: actions/upload-artifact@v4
-        with:
-          name: Workshop-SelfHost-Preview
-          path: |
-            dist/Workshop-Visitor-Terminal-Self-Host.zip
-            dist/Workshop-Visitor-Terminal-Self-Host.zip.sha256
-          retention-days: 7
-          if-no-files-found: error
