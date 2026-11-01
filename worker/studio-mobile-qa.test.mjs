@@ -13,6 +13,9 @@ test("mobile browser integration page exercises real app tabs and six current st
   assert(html.includes("missing GitHub proxy count caveat"));
   assert(html.includes("Minecraft heading is not an editable layer"));
   assert(html.includes("MY CUSTOM NETHER"));
+  assert(html.includes("workshop-studio-draft-v1"));
+  assert(html.includes("frame.contentWindow.location.reload()"));
+  assert(html.includes("restored draft not announced"));
   assert(html.includes("preview count still capped below 12 digits"));
   assert(html.includes("no approved raster editing limitation on phone"));
   assert(html.includes("page.querySelector('.mobile-sheet .template-choice"));
