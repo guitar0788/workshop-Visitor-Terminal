@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFile, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { createHash } from "node:crypto";
 import { inflateRawSync } from "node:zlib";
 import {
   ALLOWED_FILES, PACKAGE_DIR, ROOT, archive, buildSelfHostPackage,
@@ -77,6 +78,10 @@ test("release preview ZIP contains ONLY reviewed project sources and never secre
     });
     assert(result.bytes < 6_000_000);
     assert.equal(result.members, ALLOWED_FILES.length);
+    const expectedHash = createHash("sha256").update(result.zip).digest("hex");
+    assert.equal(result.sha256, expectedHash);
+    assert.equal(await readFile(result.checksumPath, "utf8"),
+      expectedHash + "  Workshop-Visitor-Terminal-Self-Host.zip\\n");
     const extracted = extractZip(result.zip);
     assert.deepEqual([...extracted.keys()].sort(), [...ALLOWED_FILES].sort());
     assert(![...extracted.keys()].some(name =>
