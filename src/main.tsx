@@ -3,7 +3,7 @@ import { isApprovedTheme, approvedCanvasWidth } from "./approved-reference-cards
 import { isCardTheme } from "./card-art";
 import { createRoot } from "react-dom/client";
 import {
-  addLayer, CARD_THEMES, MAX_VISITOR_COUNT, moveLayer, reorderLayer, renderSvg, sanitizeDesign,
+  addLayer, CARD_THEMES, MAX_VISITOR_COUNT, moveLayer, reorderLayer, renderSvg, resizeCanvas, sanitizeDesign,
   type Layer, type LayerKind, type TerminalDesign, type Theme
 } from "./model";
 import {
@@ -430,7 +430,12 @@ function App() {
   }
 
   function updateDesign(patch: Partial<TerminalDesign>) {
-    edit(current => sanitizeDesign({ ...current, ...patch }));
+    edit(current => {
+      const next = patch.width !== undefined || patch.height !== undefined
+        ? resizeCanvas(current, patch.width ?? current.width, patch.height ?? current.height)
+        : current;
+      return sanitizeDesign({ ...next, ...patch, width: next.width, height: next.height });
+    });
   }
 
   function updateSelected(patch: Partial<Layer>) {
