@@ -21,7 +21,10 @@ import {
 } from "./publish-client";
 import "./style.css";
 
-const PREVIEW_COUNT = 12856;
+// Use the owner-approved reference count so initial thumbnails display the
+// unmodified original artwork. Editing the demo count still exercises the
+// separate cleaned-background + live numeral compositing path.
+const PREVIEW_COUNT = 12847;
 type MessageKey = keyof typeof translations.en;
 type MobileTab = "preview" | "layers" | "properties" | "export";
 type DragState = {

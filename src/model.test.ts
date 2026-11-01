@@ -330,3 +330,54 @@ describe("exact approved raster cards, and nothing else", () => {
     }
   });
 });
+
+
+describe("owner-approved 1 / 3 / 5 composition fidelity", () => {
+  const visualFamilies = {
+    "pixel-card": "Impact, Arial Black, sans-serif",
+    "terminal-card": "Consolas, Menlo, monospace",
+    "rpg-card": "Georgia, Times New Roman, serif"
+  } as const;
+
+  it("preserves exact source artwork at the approved 12,847 demo count", () => {
+    for (const theme of Object.keys(visualFamilies) as Array<keyof typeof visualFamilies>) {
+      const d = clonePreset(theme);
+      const original = renderSvg(d, 12_847);
+      const updated = renderSvg(d, 12_848);
+      expect(original).toContain('data:image/avif;base64,');
+      expect(original).toContain('data-count-layer="true"');
+      expect(original).toContain('opacity="0"');
+      expect(original).toContain('>12,847</text>');
+      expect(updated).toContain('data-count-layer="true"');
+      expect(updated).toContain('>12,848</text>');
+      expect(updated).not.toContain('>12,847</text>');
+      expect(updated).not.toContain('opacity="0"');
+      // The clean plate is a separate source image; the original reference
+      // pixels remain untouched at the approved demo count.
+      const imageOf = (svg: string) =>
+        svg.match(/<image\b[^>]*\shref="(data:image\/avif;base64,[^"]+)"/)?.[1];
+      expect(imageOf(original)).toBeTruthy();
+      expect(imageOf(updated)).toBeTruthy();
+      expect(imageOf(original)).not.toBe(imageOf(updated));
+      expect(updated).toContain('font-family="' + visualFamilies[theme] + '"');
+    }
+  });
+
+  it("keeps other six illustrated cards free of embedded reference art", () => {
+    for (const theme of CARD_THEMES.filter(theme => !isApprovedTheme(theme))) {
+      const svg = renderSvg(clonePreset(theme), 12_848);
+      expect(svg).not.toContain('data:image/avif;base64,');
+      expect(svg).not.toMatch(/<image\b/);
+    }
+  });
+
+  it("supports a real count of zero without ever displaying the original 12,847", () => {
+    for (const theme of Object.keys(visualFamilies) as Array<keyof typeof visualFamilies>) {
+      const svg = renderSvg(clonePreset(theme), 0);
+      expect(svg).toContain('>0</text>');
+      expect(svg).not.toContain('>12,847</text>');
+      expect(svg).toContain('data-count-layer="true"');
+      expect(svg).not.toContain('opacity="0"');
+    }
+  });
+});

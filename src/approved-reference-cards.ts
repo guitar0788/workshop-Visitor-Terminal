@@ -126,11 +126,23 @@ export function approvedCountMarkup(theme: ApprovedTheme, counter: string,
   // Keep resized counts vertically centered at the approved numeral row.
   const y = layer.y + Math.ceil(layer.fontSize * .24) +
     Math.round((layer.fontSize - font) / 2);
-  const shadow = theme === "rpg-card" ? ' stroke="#79401a" stroke-width="1.8" paint-order="stroke"' :
-    theme === "terminal-card" ? ' stroke="#11522c" stroke-width="1" paint-order="stroke"' : "";
+  // Match the APPROVED illustration's typographic families instead of
+  // giving the pixel cat, green CRT and gold fantasy plate the same font.
+  // Keep glyphs vector text so real visits remain selectable, live and honest.
+  const fontFamily = theme === "pixel-card"
+    ? "Impact, Arial Black, sans-serif"
+    : theme === "rpg-card"
+      ? "Georgia, Times New Roman, serif"
+      : "Consolas, Menlo, monospace";
+  const fontWeight = theme === "rpg-card" ? "700" : "800";
+  const shadow = theme === "rpg-card"
+    ? ' stroke="#844316" stroke-width="2.2" paint-order="stroke"'
+    : theme === "terminal-card"
+      ? ' stroke="#125634" stroke-width="1" paint-order="stroke"'
+      : ' stroke="#164579" stroke-width="1.2" paint-order="stroke"';
   return clip + '<text clip-path="url(#' + clipId + ')" x="' + x + '" y="' + y +
     '" fill="' + layer.color + '" font-size="' + font +
-    '" font-family="ui-monospace, Consolas, Menlo, monospace"' +
-    ' font-weight="800" dominant-baseline="hanging"' + shadow +
+    '" font-family="' + fontFamily + '"' +
+    ' font-weight="' + fontWeight + '" dominant-baseline="hanging"' + shadow +
     ' data-count-layer="true">' + counter + '</text>';
 }
