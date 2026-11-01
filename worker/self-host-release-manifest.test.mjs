@@ -36,6 +36,7 @@ test("preview JSON precisely distinguishes CI checks from unverified real cloud"
     assert.equal(manifest.artifact.sha256, hash);
     assert.equal(manifest.status, "VALIDATED_CI_PREVIEW_NOT_A_RELEASE");
     assert(Object.values(manifest.tested).every(v => v === "PASS"));
+    assert.equal(manifest.tested.macosIndependentZipInstallAndWorkerD1, "PASS");
     assert(Object.values(manifest.notVerified).every(v => v.startsWith("NOT_")));
     const raw = await readFile(join(dir, MANIFEST_NAME), "utf8");
     assert.deepEqual(JSON.parse(raw), manifest);
@@ -88,7 +89,8 @@ test("intermediate preview cannot be mistaken for post-Windows checked artifact"
   const source = await readFile(".github/workflows/self-host-preview.yml", "utf8");
   assert.match(source, /name: Workshop-SelfHost-CI-Input/);
   assert.match(source, /name: Workshop-SelfHost-Validated-Preview/);
-  assert.match(source, /needs: \[package, windows-zip-smoke\]/);
+  assert.match(source, /needs: \[package, windows-zip-smoke, macos-zip-smoke\]/);
+  assert.match(source, /name: macOS standalone ZIP \/ Worker\+D1/);
   assert.match(source, /WVT_EXPECT_HEAD_SHA: \${{ github\.event\.pull_request\.head\.sha }}/);
   assert.match(source, /node scripts\/self-host-release-manifest\.mjs/);
   assert.doesNotMatch(source, /CLOUDFLARE_API_TOKEN/);
