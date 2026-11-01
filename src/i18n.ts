@@ -1,4 +1,5 @@
 import { clonePreset, type TerminalDesign, type Theme } from "./model";
+import { isCardTheme } from "./card-art";
 
 export type Language = "zh-CN" | "en";
 export const LANGUAGE_STORAGE_KEY = "workshop-studio-language";
@@ -15,6 +16,18 @@ const english = {
   pixelTemplate: "🎮 Pixel Terminal",
   cyberTemplate: "✧ Cyber HUD",
   minimalTemplate: "◻ Minimal",
+  classicTemplates: "Classic styles",
+  cardTemplates: "Illustrated cards · 9",
+  galleryHint: "Select a card to preview and edit its layers.",
+  pixelCardTemplate: "Pixel Card · Garden",
+  modernCardTemplate: "Modern Card",
+  terminalCardTemplate: "Terminal",
+  cozyCardTemplate: "Cozy Cat",
+  rpgCardTemplate: "RPG Badge",
+  spaceCardTemplate: "Space Explorer",
+  notebookCardTemplate: "Notebook",
+  neonCardTemplate: "Neon Tech",
+  minimalCardTemplate: "Minimal Badge",
   addLayer: "Add a layer",
   maxLayers: "MAX 32",
   layerList: "Layers",
@@ -169,6 +182,18 @@ const chinese: TranslationCatalog = {
   pixelTemplate: "🎮 像素终端",
   cyberTemplate: "✧ 赛博仪表盘",
   minimalTemplate: "◻ 极简风格",
+  classicTemplates: "经典风格",
+  cardTemplates: "插画卡片 · 9 款",
+  galleryHint: "点击预览卡片，自动切换到可编辑模板。",
+  pixelCardTemplate: "像素卡片 · 花园",
+  modernCardTemplate: "现代卡片",
+  terminalCardTemplate: "终端风",
+  cozyCardTemplate: "萌系猫咪",
+  rpgCardTemplate: "RPG 徽章",
+  spaceCardTemplate: "太空探索",
+  notebookCardTemplate: "手账卡片",
+  neonCardTemplate: "霓虹科技",
+  minimalCardTemplate: "简约徽章",
   addLayer: "添加图层",
   maxLayers: "最多 32 层",
   layerList: "图层列表",
@@ -342,6 +367,12 @@ export function readPreferredLanguage(): Language {
 export function createLocalizedPreset(theme: Theme, language: Language): TerminalDesign {
   const design = clonePreset(theme);
   if (language !== "zh-CN") return design;
+  if (isCardTheme(theme)) {
+    return { ...design, layers: design.layers.map(layer =>
+      layer.id === "heading" ? { ...layer, text: "工坊访客" } :
+      layer.id === "caption" ? { ...layer, text: "累计访问 · 谢谢你" } : layer
+    ) };
+  }
   const title = theme === "pixel" ? "工坊访客终端" : theme === "cyber" ? "赛博访客终端" : "主页访问统计";
   return {
     ...design,

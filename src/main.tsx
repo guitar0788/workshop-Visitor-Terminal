@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
-  addLayer, moveLayer, reorderLayer, renderSvg, sanitizeDesign,
+  addLayer, CARD_THEMES, moveLayer, reorderLayer, renderSvg, sanitizeDesign,
   type Layer, type LayerKind, type TerminalDesign, type Theme
 } from "./model";
 import {
@@ -583,15 +583,48 @@ function App() {
   }
 
   function renderTemplates() {
+    const cardLabels = [
+      t.pixelCardTemplate, t.modernCardTemplate, t.terminalCardTemplate,
+      t.cozyCardTemplate, t.rpgCardTemplate, t.spaceCardTemplate,
+      t.notebookCardTemplate, t.neonCardTemplate, t.minimalCardTemplate
+    ];
     return (
-      <label className="field">{t.templateLabel}
-        <select value={design.theme}
-          onChange={event => changePreset(event.target.value as Theme)}>
-          <option value="pixel">{t.pixelTemplate}</option>
-          <option value="cyber">{t.cyberTemplate}</option>
-          <option value="minimal">{t.minimalTemplate}</option>
-        </select>
-      </label>
+      <div className="template-picker">
+        <label className="field">{t.templateLabel}
+          <select value={design.theme}
+            onChange={event => changePreset(event.target.value as Theme)}>
+            <optgroup label={t.cardTemplates}>
+              {CARD_THEMES.map((theme, index) =>
+                <option key={theme} value={theme}>{cardLabels[index]}</option>)}
+            </optgroup>
+            <optgroup label={t.classicTemplates}>
+              <option value="pixel">{t.pixelTemplate}</option>
+              <option value="cyber">{t.cyberTemplate}</option>
+              <option value="minimal">{t.minimalTemplate}</option>
+            </optgroup>
+          </select>
+        </label>
+        <div className="template-gallery-head">
+          <strong>{t.cardTemplates}</strong><span>{t.galleryHint}</span>
+        </div>
+        <div className="template-gallery" aria-label={t.cardTemplates}>
+          {CARD_THEMES.map((theme, index) => {
+            const svg = renderSvg(createLocalizedPreset(theme, language), PREVIEW_COUNT);
+            return (
+              <button key={theme} type="button"
+                className={"template-choice" + (design.theme === theme ? " active" : "")}
+                aria-pressed={design.theme === theme}
+                aria-label={cardLabels[index]}
+                title={cardLabels[index]}
+                onClick={() => changePreset(theme)}>
+                <img alt="" loading="lazy" draggable={false} width={420} height={220}
+                  src={"data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg)}/>
+                <span>{cardLabels[index]}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
     );
   }
 

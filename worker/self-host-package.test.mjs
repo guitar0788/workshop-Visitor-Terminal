@@ -95,6 +95,11 @@ test("release preview ZIP contains ONLY reviewed project sources and never secre
     const entry = extracted.get("worker/index.ts").toString("utf8");
     const service = extracted.get("worker/service.ts").toString("utf8");
     const publishing = extracted.get("worker/publishing.ts").toString("utf8");
+    const cardArt = extracted.get("src/card-art.ts").toString("utf8");
+    assert.match(cardArt, /pixel-card/);
+    assert.match(cardArt, /minimal-card/);
+    assert.match(service, /from "..\/src\/model"/);
+    assert.match(extracted.get("src/model.ts").toString("utf8"), /from ".\/card-art"/);
     const manifest = JSON.parse(extracted.get("package.json").toString("utf8"));
     const lock = JSON.parse(extracted.get("package-lock.json").toString("utf8"));
     assert(validateLockedDependencies(manifest, lock) > 200,

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  addLayer, clonePreset, escapeXml, moveLayer,
+  addLayer, CARD_THEMES, clonePreset, escapeXml, moveLayer,
   renderSvg, reorderLayer, sanitizeDesign
 } from "./model";
 
@@ -82,5 +82,71 @@ describe("visitor terminal SVG layer model", () => {
     const svg = renderSvg({ theme: "cyber", layers: "bad", width: "wrong" }, 10);
     expect(svg).toContain("<svg");
     expect(svg).toContain("10 visits");
+  });
+});
+
+
+describe("v0.6 illustrated visitor cards", () => {
+  it("delivers nine independent original card templates with editable live counts", () => {
+    expect(CARD_THEMES).toHaveLength(9);
+    expect(new Set(CARD_THEMES).size).toBe(9);
+    for (const theme of CARD_THEMES) {
+      const design = clonePreset(theme);
+      expect(design.theme).toBe(theme);
+      expect(design.layers.find(layer => layer.kind === "count")?.visible).toBe(true);
+      const first = renderSvg(design, 12_847);
+      const updated = renderSvg(design, 12_848);
+      expect(first).toContain("12,847 visits");
+      expect(first).toContain(">12,847</text>");
+      expect(updated).toContain(">12,848</text>");
+      expect(updated).not.toContain(">12,847</text>");
+      expect(first).toMatch(/<rect|<path|<circle/);
+      expect(first).toContain("scale(1 1)");
+      expect(first).not.toMatch(/<script|<foreignObject|<image|href=|url\(https?:/i);
+      expect(sanitizeDesign(JSON.parse(JSON.stringify(design)))).toEqual(design);
+    }
+  });
+
+  it("keeps old pixel, minimal and cyber presets and SVG rendering unchanged", () => {
+    for (const theme of ["pixel", "minimal", "cyber"] as const) {
+      const design = clonePreset(theme);
+      expect(design.layers).toHaveLength(5);
+      expect(design.layers[0].id).toBe("heading");
+      expect(renderSvg(design, 127)).toContain(">127</text>");
+      expect(renderSvg(design, 127)).not.toContain("scale(1 1)");
+    }
+  });
+
+  it("does not let imported designs inject SVG markup into card artwork or layers", () => {
+    for (const theme of CARD_THEMES) {
+      const design = clonePreset(theme);
+      const hostile = sanitizeDesign({
+        ...design,
+        theme,
+        accent: 'url("https://evil.example")',
+        layers: [{ ...design.layers[0], text: '<image href="https://evil.example"/>' },
+          design.layers[1]]
+      });
+      const output = renderSvg(hostile, 4);
+      expect(output).not.toContain('<image');
+      expect(output).not.toContain('https://evil.example');
+      expect(output).toContain("&lt;image");
+      expect(output).toContain(">4</text>");
+      expect(hostile.layers).toHaveLength(2);
+      expect(hostile.accent).toBe(design.accent);
+    }
+  });
+
+  it("changes customizable text/count layers without losing the illustrated scene", () => {
+    const design = clonePreset("pixel-card");
+    design.layers[0].text = "My Workshop";
+    design.layers[0].color = "#aabbcc";
+    const svg = renderSvg(design, 25);
+    expect(svg).toContain("My Workshop");
+    expect(svg).toContain('fill="#aabbcc"');
+    expect(svg).toContain("25 visits");
+    expect(svg).toContain("rect");
+    expect(renderSvg({ ...design, width: 600, height: 300 }, 25))
+      .toContain("scale(1.4285714285714286 1.3636363636363635)");
   });
 });

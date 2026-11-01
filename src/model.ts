@@ -1,4 +1,7 @@
-export type Theme = "pixel" | "minimal" | "cyber";
+import { CARD_THEMES, isCardTheme, cardArtwork, type CardTheme } from "./card-art";
+export { CARD_THEMES } from "./card-art";
+export type { CardTheme } from "./card-art";
+export type Theme = "pixel" | "minimal" | "cyber" | CardTheme;
 export type LayerKind = "text" | "count" | "dot" | "panel";
 
 export interface Layer {
@@ -25,7 +28,7 @@ export interface TerminalDesign {
 }
 
 const COLOR = /^#[0-9a-fA-F]{6}$/;
-const isTheme = (v: unknown): v is Theme => v === "pixel" || v === "minimal" || v === "cyber";
+const isTheme = (v: unknown): v is Theme => v === "pixel" || v === "minimal" || v === "cyber" || isCardTheme(v);
 const isKind = (v: unknown): v is LayerKind =>
   v === "text" || v === "count" || v === "dot" || v === "panel";
 const number = (value: unknown, fallback: number, min: number, max: number): number => {
@@ -37,7 +40,7 @@ const color = (value: unknown, fallback: string): string =>
 const text = (value: unknown, fallback: string, limit: number): string =>
   typeof value === "string" ? value.slice(0, limit) : fallback;
 
-function makePreset(theme: Theme): TerminalDesign {
+function makePreset(theme: "pixel" | "minimal" | "cyber"): TerminalDesign {
   const accent = theme === "cyber" ? "#22d3ee" : theme === "minimal" ? "#93c5fd" : "#7ee787";
   const background = theme === "cyber" ? "#0b1020" : theme === "minimal" ? "#111827" : "#101820";
   const minimal = theme === "minimal";
@@ -51,8 +54,54 @@ function makePreset(theme: Theme): TerminalDesign {
   return { schemaVersion: 1, theme, width: 420, height: 220, background, accent, layers };
 }
 
+
+/* Nine new fully rendered cards, separate from original editable v0.5 presets.
+ * The illustrations are built-in vectors; the same editable visitor-count
+ * layer is used by offline exports and the Cloudflare SVG endpoint. */
+const CARD_CONFIG: Record<CardTheme, {
+  accent: string; background: string; heading: string; caption: string;
+  titleX: number; titleY: number; titleWidth: number; titleSize: number;
+  countX: number; countY: number; countWidth: number; countSize: number;
+  labelX: number; labelY: number;
+}> = {
+  "pixel-card": { accent:"#243b4d", background:"#81cafa", heading:"WORKSHOP VISITORS", caption:"PIXEL GARDEN",
+    titleX:158,titleY:54,titleWidth:236,titleSize:16,countX:172,countY:102,countWidth:220,countSize:44,labelX:175,labelY:153 },
+  "modern-card": { accent:"#233665", background:"#ecf2ff", heading:"WORKSHOP VISITORS", caption:"TOTAL VISITS",
+    titleX:168,titleY:56,titleWidth:238,titleSize:17,countX:168,countY:101,countWidth:231,countSize:47,labelX:170,labelY:157 },
+  "terminal-card": { accent:"#5ef9ab", background:"#081e18", heading:"WORKSHOP VISITORS", caption:"SYSTEM ONLINE",
+    titleX:57,titleY:82,titleWidth:337,titleSize:22,countX:57,countY:121,countWidth:234,countSize:46,labelX:58,labelY:184 },
+  "cozy-card": { accent:"#754932", background:"#fff0de", heading:"WORKSHOP VISITORS", caption:"THANK YOU FOR VISITING",
+    titleX:165,titleY:58,titleWidth:228,titleSize:17,countX:165,countY:105,countWidth:220,countSize:45,labelX:164,labelY:165 },
+  "rpg-card": { accent:"#f6d78d", background:"#233968", heading:"WORKSHOP VISITORS", caption:"LEVEL UP · THANK YOU",
+    titleX:173,titleY:54,titleWidth:213,titleSize:16,countX:173,countY:107,countWidth:215,countSize:45,labelX:174,labelY:165 },
+  "space-card": { accent:"#f4eaff", background:"#1b1b56", heading:"WORKSHOP VISITORS", caption:"EXPLORING THE STARS",
+    titleX:47,titleY:59,titleWidth:259,titleSize:18,countX:47,countY:106,countWidth:255,countSize:45,labelX:48,labelY:167 },
+  "notebook-card": { accent:"#614432", background:"#fff5e4", heading:"WORKSHOP VISITORS", caption:"MY VISITOR NOTES",
+    titleX:64,titleY:58,titleWidth:239,titleSize:19,countX:66,countY:113,countWidth:231,countSize:49,labelX:68,labelY:169 },
+  "neon-card": { accent:"#e9e2ff", background:"#131737", heading:"WORKSHOP VISITORS", caption:"DIGITAL SIGNAL · ACTIVE",
+    titleX:166,titleY:60,titleWidth:227,titleSize:17,countX:165,countY:109,countWidth:229,countSize:44,labelX:167,labelY:170 },
+  "minimal-card": { accent:"#1a4a3d", background:"#f1fff6", heading:"WORKSHOP VISITORS", caption:"HELLO THERE",
+    titleX:174,titleY:61,titleWidth:224,titleSize:16,countX:173,countY:104,countWidth:216,countSize:44,labelX:176,labelY:158 }
+};
+
+function makeCardPreset(theme: CardTheme): TerminalDesign {
+  const c = CARD_CONFIG[theme];
+  const layers: Layer[] = [
+    { id:"heading", kind:"text", x:c.titleX, y:c.titleY, width:c.titleWidth,
+      height:26, text:c.heading, fontSize:c.titleSize, color:c.accent, visible:true },
+    { id:"visits", kind:"count", x:c.countX, y:c.countY, width:c.countWidth,
+      height:61, text:"", fontSize:c.countSize, color:c.accent, visible:true },
+    { id:"caption", kind:"text", x:c.labelX, y:c.labelY, width:216,
+      height:19, text:c.caption, fontSize:11, color:c.accent, visible:true }
+  ];
+  return { schemaVersion:1, theme, width:420, height:220,
+    background:c.background, accent:c.accent, layers };
+}
+
 export const presets: Record<Theme, TerminalDesign> = {
-  pixel: makePreset("pixel"), minimal: makePreset("minimal"), cyber: makePreset("cyber")
+  pixel: makePreset("pixel"), minimal: makePreset("minimal"), cyber: makePreset("cyber"),
+  ...Object.fromEntries(CARD_THEMES.map(theme => [theme, makeCardPreset(theme)])) as
+    Record<CardTheme, TerminalDesign>
 };
 
 export function clonePreset(theme: Theme): TerminalDesign {
@@ -110,11 +159,18 @@ export function renderSvg(input: unknown, visits: number): string {
     String(d.width), '" height="', String(d.height),
     '" viewBox="0 0 ', String(d.width), ' ', String(d.height), '">',
     '<title>Workshop visitor counter: ', counter, ' visits</title>',
-    '<rect x="2" y="2" width="', String(d.width - 4),
-    '" height="', String(d.height - 4), '" rx="', d.theme === "pixel" ? "2" : "12",
-    '" fill="', d.background, '" stroke="', d.accent,
-    '" stroke-width="', d.theme === "minimal" ? "1" : "3", '"/>'
   ];
+  if (isCardTheme(d.theme)) {
+    // Canonical vector art scales to any configured canvas dimensions.
+    // These elements are bundled constants, not user-controlled SVG markup.
+    parts.push('<g transform="scale(', String(d.width / 420), ' ', String(d.height / 220),
+      ')">', cardArtwork(d.theme), '</g>');
+  } else {
+    parts.push('<rect x="2" y="2" width="', String(d.width - 4),
+      '" height="', String(d.height - 4), '" rx="', d.theme === "pixel" ? "2" : "12",
+      '" fill="', d.background, '" stroke="', d.accent,
+      '" stroke-width="', d.theme === "minimal" ? "1" : "3", '"/>');
+  }
   for (const layer of d.layers) {
     if (!layer.visible) continue;
     if (layer.kind === "dot") {

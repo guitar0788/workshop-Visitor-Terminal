@@ -25,6 +25,7 @@ export const ALLOWED_FILES = Object.freeze([
   "package.json",
   "package-lock.json",
   "src/model.ts",
+  "src/card-art.ts",
   "worker/index.ts",
   "worker/service.ts",
   "worker/publishing.ts",
