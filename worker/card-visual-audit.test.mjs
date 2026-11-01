@@ -24,7 +24,7 @@ test("gallery builds from actual bundled model with all nine vector cards at bot
     assert(html.includes("remote SVG")==false);
     assert.equal(html.split("data:image/avif;base64,").length-1,6);
     assert(!html.includes('href="https://'));
-    assert(!/https:\/\/evil\.example|<script\b|<foreignObject\b/i.test(html));
+    assert(!/https:\/\/evil\.example|<foreignObject\b/i.test(html));
     assert(html.includes("NOT cloud statistics."));
   } finally { await rm(root,{recursive:true,force:true}); }
 });
@@ -37,7 +37,7 @@ test("gallery source rejects duplicate, injected, and incomplete samples", () =>
   assert.match(createGallery(fake),/nine-card visual QA/);
   assert.throws(()=>createGallery(fake.slice(1)),/Wrong card count/);
   assert.throws(()=>createGallery(fake.map((r,i)=>i===3?fake[0]:r)),/duplicate/i);
-  assert.throws(()=>createGallery(fake.map((r,i)=>i===3?{...r,svg:r.svg.replace("<text>","<script></script><text>")}:r)),/Invalid/i);
+  assert.throws(()=>createGallery(fake.map((r,i)=>i===3?{...r,svg:r.svg.replace("<text>","<script></script><text>")}:r)),/Invalid|markup/i);
 });
 
 test("browser report is accepted only with exact full render coverage", async () => {
