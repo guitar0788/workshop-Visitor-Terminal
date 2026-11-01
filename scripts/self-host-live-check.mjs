@@ -21,6 +21,7 @@ import {
 import { validateConfig } from "./self-host-setup.mjs";
 import { verifySelfHost } from "./self-host-verify.mjs";
 import { writeReadinessReport } from "./self-host-readiness.mjs";
+import { createReadmeSnippet } from "./self-host-readme.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const OWNER = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$/;
@@ -280,6 +281,10 @@ async function main() {
     process.stdout.write("PASS: " + result.runtime + " counter create, HEAD, " +
       "one qualifying GET, same-client deduplication and design update.\n" +
       "Permanent diagnostic counter: " + result.diagnosticCounter + "\n" +
+      "Direct SVG URL: " + createReadmeSnippet(args.api, result.diagnosticCounter).url + "\n" +
+      "GitHub README (copy the entire line):\n" +
+      createReadmeSnippet(args.api, result.diagnosticCounter).markdown + "\n" +
+      "This diagnostic is NOT the illustrative my-counter slug. Do not change the slug.\n" +
       "Cloudflare account ownership and billing isolation still require manual confirmation.\n" +
       (args.report ? "Sanitized live-check report saved without overwrite.\n" : ""));
   } catch (error) {
