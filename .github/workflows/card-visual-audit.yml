@@ -91,6 +91,20 @@ jobs:
             --screenshot="$PWD/dist/WVT-Three-Approved-External-Image-Mode.png" \
             "file://$PWD/dist/Approved-Three-External-Image-Review.html" 2> /dev/null
           test -s dist/WVT-Three-Approved-External-Image-Mode.png
+      - name: Capture public GitHub-rendered diagnostic README (read-only)
+        # This is a best-effort external compatibility observation, not a
+        # release check. Public GitHub may throttle anonymous CI browsers.
+        continue-on-error: true
+        timeout-minutes: 2
+        run: |
+          set -euo pipefail
+          url="https://github.com/guitar0788/workshop-Visitor-Terminal/blob/feat/v06-independent-self-hosting/docs/qa/README.md"
+          google-chrome --headless=new --no-sandbox --disable-gpu \
+            --disable-dev-shm-usage --disable-extensions --hide-scrollbars \
+            --virtual-time-budget=9000 --window-size=1480,2350 \
+            --screenshot="$PWD/dist/WVT-GitHub-Actual-README-Proxy-Preview.png" \
+            "$url" 2> /dev/null
+          test -s dist/WVT-GitHub-Actual-README-Proxy-Preview.png
       - name: Upload browser preview image and self-contained HTML (not a release)
         if: always()
         uses: actions/upload-artifact@v4
@@ -101,5 +115,6 @@ jobs:
             dist/Card-Visual-Review.html
             dist/Approved-Three-External-Image-Review.html
             dist/WVT-Three-Approved-External-Image-Mode.png
+            dist/WVT-GitHub-Actual-README-Proxy-Preview.png
           retention-days: 7
           if-no-files-found: warn
