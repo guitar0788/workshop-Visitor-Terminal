@@ -1,12 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, writeFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, writeFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import {
   parseArgs, validateApiOrigin, readDesign, readAdminToken, execute,
-  assertSafePublishingTarget
+  assertSafePublishingTarget, assertLocalWorkerHostname
 } from "../scripts/self-host-publish.mjs";
+import { makeConfig } from "../scripts/self-host-setup.mjs";
 
 const origin = "https://my-worker.example.workers.dev";
 const token = "s".repeat(64);
@@ -178,4 +179,32 @@ test("preflight is anonymous, rejects unsafe network errors and never echoes the
     environment: { WVT_ADMIN_TOKEN: token },
     fetchImpl: async () => response(200, { service: "unknown" })
   }), /safety preflight/);
+});
+
+test("local self-host configuration prevents wrong workers.dev hostname before reading a secret", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "wvt-local-host-"));
+  const configPath = join(dir, "wrangler.selfhost.toml");
+  try {
+    assert.equal(await assertLocalWorkerHostname(origin, { configPath }), false,
+      "Old or read-only usage without a generated local config is supported");
+    const template = await readFile("wrangler.selfhost.example.toml", "utf8");
+    const config = makeConfig(template, {
+      worker: "my-worker", database: "private-test-db",
+      "database-id": "11111111-2222-4333-8444-555555555555"
+    }, [80091, 80092]);
+    await writeFile(configPath, config);
+    assert.equal(await assertLocalWorkerHostname(origin, { configPath }), true);
+    await assert.rejects(
+      () => assertLocalWorkerHostname("https://someone-else.example.workers.dev", { configPath }),
+      /hostname does not match/);
+    // User-owned custom domains cannot be identified from the Worker name.
+    // Their Cloudflare binding must be checked manually.
+    assert.equal(await assertLocalWorkerHostname("https://counter.example.com", { configPath }), true);
+    await writeFile(configPath,
+      config.replace('PUBLISHING_ENABLED = "false"', 'PUBLISHING_ENABLED = "true"'));
+    await assert.rejects(() => assertLocalWorkerHostname(origin, { configPath }),
+      /configuration is invalid/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 });
