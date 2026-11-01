@@ -121,3 +121,24 @@ test("preflight refuses changing protective flags, missing tokens or duplicate s
     await assert.rejects(() => checkSetup({ root }), /unsafe/);
   });
 });
+
+test("tampered Worker entry, extra D1 bindings and altered rate limits fail closed", async () => {
+  await fixture(async (_root, template) => {
+    const original = makeConfig(template, options, [120111, 120112]);
+    const bad = [
+      original.replace('main = "worker/index.ts"', 'main = "worker/other.ts"'),
+      original.replace('workers_dev = true', 'workers_dev = false'),
+      original.replace('limit = 60', 'limit = 999999'),
+      original.replace('limit = 120', 'limit = 999999'),
+      original.replace('period = 60', 'period = 10'),
+      original.replace('crons = ["17 * * * *"]', 'crons = []'),
+      original.replace('name = "SVG_RATE_LIMITER"', 'name = "UNLIMITED"'),
+      original + '\n[[d1_databases]]\nbinding = "MORE"\n',
+      original + '\nPUBLISHING_ENABLED = "true"\n',
+      original + '\nSVG_RATE_LIMIT_ENABLED = "false"\n',
+      original.replace('my-visitor-worker', 'my-visitor-worker-')
+    ];
+    for (const unsafe of bad) assert.throws(() => validateConfig(unsafe), /unsafe/);
+    assert.equal(validateConfig(original).worker, options.worker);
+  });
+});
