@@ -29,24 +29,19 @@ npx wrangler whoami
 npx wrangler d1 create my-visitor-counter-db
 ```
 
-将仓库中的 `wrangler.selfhost.example.toml` 复制成 `wrangler.selfhost.toml`。编辑其中：
-
-1. `name`：填入自己的独立 Worker 名称，如 `my-visitor-counter-worker`，不能使用维护者的 staging 名称。
-2. `database_name`：自己刚创建的 D1 名称，如 `my-visitor-counter-db`。
-3. `database_id`：上一步命令返回的**真实 D1 UUID**。
-4. `ratelimits`：使用自己账户内不与其他 Worker 冲突的两个 `namespace_id`。
-
-保留 `PUBLISHING_ENABLED = "false"` 和 `SVG_RATE_LIMIT_ENABLED = "true"`，避免意外开放 OAuth 注册或关闭流量防护。`wrangler.selfhost.toml` 已加入 `.gitignore`，不可将其提交到仓库。
-
-### 2. 生成并保存两份不同的密钥
-
-下面一行同时适用于 Windows CMD、PowerShell 和常见 Unix Shell。它不会在终端显示私钥，且不会覆盖已存在的密钥文件。
+运行 **本地配置生成器**。将下方名称与上一步得到的真实 D1 UUID 替换成自己的值：
 
 ```sh
-node -e "const fs=require('node:fs');const {randomBytes}=require('node:crypto');for(const f of ['.wvt-admin-token','.wvt-visit-secret'])fs.writeFileSync(f,randomBytes(48).toString('hex'),{flag:'wx',mode:0o600});"
+node scripts/self-host-setup.mjs init --worker my-visitor-worker --database my-visitor-counter-db --database-id YOUR_NEW_D1_UUID
+node scripts/self-host-setup.mjs check
 ```
 
-`.wvt-admin-token` 是管理员凭据，`.wvt-visit-secret` 用于匿名访客指纹 HMAC。请保存在自己的安全目录中，不要截图、分享或提交。两者已经纳入 `.gitignore`；共用电脑还应检查文件访问权限。
+该命令仅在电脑本地生成 `wrangler.selfhost.toml`、`.wvt-admin-token` 和 `.wvt-visit-secret`，**不会访问 Cloudflare、部署 Worker 或修改远程 D1**。会生成两份不同的随机密钥和互不相同的限流命名空间 ID；每个命名空间还应检查不与自己的其他 Worker 冲突。
+
+- 重复运行 `init` 不会覆盖现有文件或密钥。重新安装前请先安全备份它们，否则可能无法管理已有计数器。
+- `check` 会核对 Worker/D1 名称、UUID、关闭 OAuth 的标志、限流标志以及两份不同的密钥；不验证 Cloudflare 账户身份，也不会发出网络请求。
+- `wrangler.selfhost.toml` 与两份密钥文件均由 `.gitignore` 排除，不可上传到 GitHub。Windows 上还需注意所在文件夹的 NTFS 共享权限。
+- **仅首次初始化时使用新建的 D1 数据库**；本工具不是从其他账户迁移或接管已有计数器的工具。
 
 ### 3. 本地检查后，再自行部署
 
@@ -67,9 +62,11 @@ npx wrangler dev --local --config wrangler.selfhost.toml
 ```sh
 npx wrangler d1 migrations apply DB --remote --config wrangler.selfhost.toml
 npx wrangler deploy --config wrangler.selfhost.toml
-npx wrangler secret put ADMIN_TOKEN --config wrangler.selfhost.toml < .wvt-admin-token
-npx wrangler secret put VISIT_HASH_SECRET --config wrangler.selfhost.toml < .wvt-visit-secret
+npx wrangler secret put ADMIN_TOKEN --config wrangler.selfhost.toml
+npx wrangler secret put VISIT_HASH_SECRET --config wrangler.selfhost.toml
 ```
+
+上述两次 `secret put` 会提示输入密钥：分别从本机 `.wvt-admin-token` 和 `.wvt-visit-secret` 文件**复制完整的单行值**粘贴，不要把密钥放入命令行参数、截图或公开日志。使用 Windows CMD、PowerShell、macOS Terminal 或 Linux Shell 时均可采用此交互方式；不要在 PowerShell 中使用 `< 文件名` 重定向。
 
 只有创建者明确选择执行上述命令时才会进行远程部署。第一次部署后、秘密尚未设置完整时，计数功能应返回 HTTP 503。完成后测试自己的 `https://<your-worker>.<your-subdomain>.workers.dev/health`；注意 `/health` 只检查基本路由，不证明数据库已经就绪。
 
@@ -109,7 +106,7 @@ node scripts/self-host-publish.mjs inspect --api https://YOUR-WORKER.YOUR-SUBDOM
 
 ## English summary
 
-Use **your own** Cloudflare account, Worker, D1 database, separate strong Worker secrets and independent rate-limit namespace IDs. The provided `wrangler.selfhost.example.toml` disables GitHub OAuth and uses existing server-side counting logic. Run local migrations first, then manually opt in to remote D1 migrations and deployment. Export a Studio `schemaVersion: 1` design JSON, and run `node scripts/self-host-publish.mjs create|update|inspect` against **your own HTTPS Worker** with a private `--token-file`. Success prints the dynamic SVG Markdown; it does not update a GitHub profile automatically.
+Use **your own** Cloudflare account and create a new D1 database. Run `node scripts/self-host-setup.mjs init --worker ... --database ... --database-id ...` and then `node scripts/self-host-setup.mjs check` to generate and validate a private local Wrangler config and two secrets without network access. The self-host template disables GitHub OAuth and reuses the existing counter backend. Run local migrations first, then manually opt in to remote D1 migrations and deployment. Export a Studio `schemaVersion: 1` design JSON, and run `node scripts/self-host-publish.mjs create|update|inspect` against **your own HTTPS Worker** with a private `--token-file`. Success prints the dynamic SVG Markdown; it does not update a GitHub profile automatically.
 
 This is a technical preview, not a hosted service or promise of free Cloudflare capacity. Image cache effects mean counts represent qualifying upstream requests, not unique people.
 
