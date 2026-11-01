@@ -90,7 +90,7 @@ export function validateConfig(contents) {
   const ns = values(/^namespace_id = "([^"]+)"$/gm);
   const rateBlocks = contents.split(/^\[\[ratelimits\]\]$/m);
   const rateLimits = rateBlocks.slice(1).map(block => {
-    const simple = block.match(/^\[ratelimits\.simple\]([\s\S]*?)(?=^\[|$)/m)?.[1];
+    const simple = block.split(/^\[ratelimits\.simple\]$/m)[1];
     return {
       limit: simple?.match(/^limit = (\d+)$/m)?.[1],
       period: simple?.match(/^period = (\d+)$/m)?.[1]
