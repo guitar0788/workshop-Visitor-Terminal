@@ -18,6 +18,8 @@
 ```sh
 git clone https://github.com/guitar0788/workshop-Visitor-Terminal.git
 cd workshop-Visitor-Terminal
+# PR #21 is still a Draft; this branch contains the preview tools.
+git switch feat/v06-independent-self-hosting
 npm install
 npx wrangler login
 npx wrangler whoami
@@ -43,7 +45,22 @@ node scripts/self-host-setup.mjs check
 - `wrangler.selfhost.toml` 与两份密钥文件均由 `.gitignore` 排除，不可上传到 GitHub。Windows 上还需注意所在文件夹的 NTFS 共享权限。
 - **仅首次初始化时使用新建的 D1 数据库**；本工具不是从其他账户迁移或接管已有计数器的工具。
 
-### 3. 本地检查后，再自行部署
+### 3. 先执行无需 Cloudflare 账户的端到端测试
+
+在执行任何远程部署之前，使用本仓库自带的**一次性本地自托管测试**：
+
+```sh
+node worker/self-host-smoke.mjs
+```
+
+此脚本会临时创建**另一份测试配置与临时 D1**，用真实本地 Wrangler 启动后端，自动模拟创建计数器、通过本地 CLI 发布、访问计数、去重、修改设计、停止和重新启动，再检查是否保留同一 URL、样式和累计次数。
+
+- 测试全程使用 `--local` 及独立临时数据库目录，**不会使用或迁移你的真实云端 D1**。
+- 采用随机、临时的测试密钥；测试完成后删除创建的临时配置、测试密钥及数据库。不影响 `wrangler.selfhost.toml`、`.wvt-admin-token`、`.wvt-visit-secret`。
+- 如果项目根目录已有 `.dev.vars` 或 `wrangler.selfhost.smoke.toml`，脚本会拒绝运行，以防覆盖它们。此时请使用干净的项目副本进行测试，不要删除已有用户密钥。
+- 测试通过不代表 Cloudflare 账户身份、真实 D1、公开访问和费用控制已经完成实机验收。
+
+### 4. 本地检查后，再自行部署
 
 先对自己的**本地**数据库执行迁移：
 
@@ -70,7 +87,7 @@ npx wrangler secret put VISIT_HASH_SECRET --config wrangler.selfhost.toml
 
 只有创建者明确选择执行上述命令时才会进行远程部署。第一次部署后、秘密尚未设置完整时，计数功能应返回 HTTP 503。完成后测试自己的 `https://<your-worker>.<your-subdomain>.workers.dev/health`；注意 `/health` 只检查基本路由，不证明数据库已经就绪。
 
-### 4. 发布离线 Studio 中设计的 JSON
+### 5. 发布离线 Studio 中设计的 JSON
 
 在 [Workshop Studio](https://guitar0788.github.io/workshop-Visitor-Terminal/) 或离线单文件编辑器选择「保存设计」，得到 `visitor-terminal.design.json`。把该文件放在本地仓库目录。**不要**使用账户数据快照或 HTML 文件充当设计 JSON。
 
@@ -96,7 +113,7 @@ node scripts/self-host-publish.mjs inspect --api https://YOUR-WORKER.YOUR-SUBDOM
 
 如果首次 `create` 已写入记录但设计上传失败，请使用 `update` 重试，而不是再次创建或清空数据库。管理员令牌只从本地忽略文件或 `WVT_ADMIN_TOKEN` 环境变量读取，不通过命令行参数传入。
 
-### 5. 费用与安全
+### 6. 费用与安全
 
 - 自托管用户负责自己的 Cloudflare 额度、费用报警、备份、秘密轮换和 Worker/D1 生命周期；本项目不会承担这些用量。
 - 模板设置了每机房近似的两级 SVG 限流。数据库还有全局 UTC 日最多接纳 20,000 条新去重访问记录的机制。**它们不能彻底限制所有 Worker 请求或全部 D1 读取量**。
@@ -106,7 +123,7 @@ node scripts/self-host-publish.mjs inspect --api https://YOUR-WORKER.YOUR-SUBDOM
 
 ## English summary
 
-Use **your own** Cloudflare account and create a new D1 database. Run `node scripts/self-host-setup.mjs init --worker ... --database ... --database-id ...` and then `node scripts/self-host-setup.mjs check` to generate and validate a private local Wrangler config and two secrets without network access. The self-host template disables GitHub OAuth and reuses the existing counter backend. Run local migrations first, then manually opt in to remote D1 migrations and deployment. Export a Studio `schemaVersion: 1` design JSON, and run `node scripts/self-host-publish.mjs create|update|inspect` against **your own HTTPS Worker** with a private `--token-file`. Success prints the dynamic SVG Markdown; it does not update a GitHub profile automatically.
+Use **your own** Cloudflare account and create a new D1 database. Run `node scripts/self-host-setup.mjs init --worker ... --database ... --database-id ...` and then `node scripts/self-host-setup.mjs check` to generate and validate a private local Wrangler config and two secrets without network access. The self-host template disables GitHub OAuth and reuses the existing counter backend. Run the disposable local end-to-end test `node worker/self-host-smoke.mjs` first, then run local migrations and explicitly opt in to remote D1 migrations and deployment. Export a Studio `schemaVersion: 1` design JSON, and run `node scripts/self-host-publish.mjs create|update|inspect` against **your own HTTPS Worker** with a private `--token-file`. Success prints the dynamic SVG Markdown; it does not update a GitHub profile automatically.
 
 This is a technical preview, not a hosted service or promise of free Cloudflare capacity. Image cache effects mean counts represent qualifying upstream requests, not unique people.
 
