@@ -69,7 +69,7 @@ export function createMobileQA(){
     "page=frame.contentDocument;",
     "nav=page.querySelectorAll('nav.mobile-nav button');",
     "setter=Object.getOwnPropertyDescriptor(frame.contentWindow.HTMLInputElement.prototype,'value').set;",
-    "const restored=page.querySelector('[role=status]');",
+    "const restored=page.querySelector('.notice[role=status]');",
     "if(restored&&!/(restored|恢复)/i.test(restored.textContent))errors.push('restored draft not announced');",
     "nav[1].click();",
     "await until(()=>page.querySelectorAll('.mobile-sheet .template-choice').length===6);",
