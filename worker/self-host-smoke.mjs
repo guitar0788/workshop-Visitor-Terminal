@@ -185,12 +185,19 @@ export async function smokeSelfHostedCounter() {
     await shutdown(running.child);
     running = undefined;
     running = await start(port, persistence);
-    smokeStage = "post-restart-data-check";
+    smokeStage = "post-restart-count-check";
     assert.match(await cli("inspect"), /Recorded upstream requests: 1/,
       "Counts must persist after restart in the same local D1");
-    const afterRestart = await api(imagePath, { method: "GET" });
+    smokeStage = "post-restart-svg-check";
+    // Wrangler's local proxy may inject a source IP for a bare GET. Reuse
+    // the already-counted test IP rather than adding a new visit to our
+    // counter while verifying only the design persisted.
+    const afterRestart = await api(imagePath, {
+      method: "GET", headers: { "CF-Connecting-IP": "203.0.113.17" }
+    });
     assert.equal(afterRestart.status, 200);
     assert.match(await afterRestart.text(), /UPDATED AND PERSISTED/);
+    smokeStage = "post-restart-no-double-count";
     assert.match(await cli("inspect"), /Recorded upstream requests: 1/);
     console.log("PASS: self-hosted Wrangler local migrations, private CLI publishing, " +
       "SVG, deduplication, design update, restart persistence, and closed OAuth.");
