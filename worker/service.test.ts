@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { clonePreset } from "../src/model";
+import { addLayer, CARD_THEMES, clonePreset, sanitizeDesign } from "../src/model";
 import {
   fingerprint, handleRequest, pruneReceipts,
   type CounterRow, type D1Binding, type D1Statement, type WorkerEnv
@@ -375,6 +375,45 @@ describe("Cloudflare D1 counter Worker", () => {
     expect(svg).not.toContain("<script>");
     expect(svg).not.toContain("javascript:bad");
     expect(svg).toContain('width="800"');
+  });
+
+
+  it("publishes all six edited card designs with unchanged artwork and live counts", async () => {
+    for (const theme of CARD_THEMES) {
+      const env = setup();
+      expect((await register(env, "edited-test")).status).toBe(201);
+      const base = clonePreset(theme);
+      const titled = addLayer(base, "text", "custom_note");
+      const withCounts = ["pixel-card", "terminal-card", "rpg-card"].includes(theme)
+        ? addLayer(titled, "count", "custom_count") : titled;
+      const edited = sanitizeDesign({
+        ...withCounts,
+        layers: withCounts.layers.map(layer => layer.id === "custom_note"
+          ? { ...layer, text: "My cards & worlds", x: 12, y: 12 } : layer)
+      });
+      const saved = await handleRequest(adminRequest(
+        "/v1/admin/counters/edited-test/design", { design: edited }
+      ), env, NOW);
+      expect(saved.status).toBe(200);
+      const response = await handleRequest(
+        publicRequest("/v1/counters/edited-test.svg", "203.0.113.222"), env, NOW
+      );
+      expect(response.status).toBe(200);
+      const svg = await response.text();
+      expect(svg).toContain("My cards &amp; worlds");
+      expect(svg).toContain(">1</text>");
+      if (["pixel-card", "terminal-card", "rpg-card"].includes(theme)) {
+        expect(svg.split(">1</text>").length - 1).toBe(2);
+        expect(svg).toContain('href="data:image/avif;base64,');
+      } else {
+        expect(svg).toContain('shape-rendering="crispEdges"');
+        expect(svg).not.toContain("<image");
+      }
+      const raw = env.DB.counters.get("edited-test")?.design_json;
+      expect(raw).toBeTruthy();
+      expect(JSON.parse(raw!) as unknown).toEqual(edited);
+      expect(env.DB.counters.get("edited-test")?.hits).toBe(1);
+    }
   });
 
   it("expires short-term receipts without erasing persistent counters", async () => {
