@@ -122,7 +122,7 @@ node scripts/self-host-verify.mjs --api https://YOUR-WORKER.YOUR-SUBDOMAIN.worke
 node scripts/self-host-verify.mjs --api https://YOUR-WORKER.YOUR-SUBDOMAIN.workers.dev --token-file .wvt-admin-token --slug my-counter
 ```
 
-**安全提醒：** 工具不会自动发现自己的 Cloudflare 地址；请手动核对 `--api` 确实指向自己的 Worker。管理员密钥仅会发送至这个明确指定且通过地址校验的 HTTPS 目标，禁止重定向，也禁止维护者的 staging 地址。它无法核验 Cloudflare 账号的实际所有权、收费额度、域名 DNS、其他 Worker 的流量、真实跨机房限流或 GitHub 图片缓存行为。它验证的是现有服务端接口的可观察状态，不是完整生产环境安全审计。
+**安全提醒：** 工具不会自动发现自己的 Cloudflare 地址；请手动核对 `--api` 确实指向自己的 Worker。管理员密钥仅会发送至这个明确指定且通过地址校验的 HTTPS 目标，禁止重定向，也禁止维护者的 staging 地址。已有本地自托管配置时，验收工具也会验证 `workers.dev` 地址的 Worker 名称与本地配置一致；对自定义域名仍无法确认归属。它无法核验 Cloudflare 账号的实际所有权、收费额度、域名 DNS、其他 Worker 的流量、真实跨机房限流或 GitHub 图片缓存行为。它验证的是现有服务端接口的可观察状态，不是完整生产环境安全审计。
 
 
 
