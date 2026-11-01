@@ -24,6 +24,7 @@ Usage:
 
 Use an administrator token stored in WVT_ADMIN_TOKEN or an ignored --token-file.
 Never use the repository owner's staging Worker or expose this token in a browser.
+The CLI runs three unauthenticated safety checks before it reads/sends the token.
 `;
 
 export function parseArgs(argv) {
@@ -95,6 +96,52 @@ export async function readAdminToken({ tokenFile, environment = process.env }) {
   return token;
 }
 
+/**
+ * Authenticate the service type BEFORE reading or transmitting any token.
+ * This is a compatibility/safety gate, not cryptographic proof of hostname
+ * ownership: a malicious server could imitate these unauthenticated replies.
+ * Users must still verify their Cloudflare target in the dashboard.
+ */
+export async function assertSafePublishingTarget(origin, fetchImpl = fetch) {
+  const checks = [
+    { path: "/health", status: 200, matches: data =>
+      data.status === "ok" && data.service === "workshop-visitor-terminal" &&
+      data.api === "v1" },
+    { path: "/v1/my/counters", status: 503, matches: data =>
+      data.error === "Publishing is not enabled" },
+    { path: "/v1/admin/usage", status: 401, matches: data =>
+      data.error === "Unauthorized" }
+  ];
+  for (const { path, status, matches } of checks) {
+    let response;
+    try {
+      response = await fetchImpl(origin + path, {
+        method: "GET", redirect: "error",
+        headers: { Accept: "application/json" },
+        signal: AbortSignal.timeout(12_000)
+      });
+    } catch {
+      throw Error("Public Worker safety preflight failed: unreachable or redirected");
+    }
+    if (!(response instanceof Response) || response.status !== status ||
+        !response.headers.get("content-type")?.toLowerCase().includes("application/json")) {
+      throw Error("Public Worker safety preflight failed at " + path);
+    }
+    let data;
+    try {
+      const body = await response.text();
+      if (body.length > 4096) throw Error("Oversized preflight JSON");
+      data = JSON.parse(body);
+    } catch {
+      throw Error("Public Worker safety preflight returned invalid JSON at " + path);
+    }
+    if (!data || typeof data !== "object" || Array.isArray(data) || !matches(data)) {
+      throw Error("Public Worker safety preflight returned unsafe identity at " + path);
+    }
+  }
+  return true;
+}
+
 async function requestJson(origin, token, path, method, payload, fetchImpl) {
   const response = await fetchImpl(origin + path, {
     method,
@@ -124,6 +171,7 @@ async function requestJson(origin, token, path, method, payload, fetchImpl) {
 export async function execute(options, { fetchImpl = fetch, environment = process.env } = {}) {
   if (options.command === "help") return HELP;
   const origin = validateApiOrigin(options.api);
+  await assertSafePublishingTarget(origin, fetchImpl);
   const token = await readAdminToken({ tokenFile: options["token-file"], environment });
   const slug = options.slug;
   const resource = `/v1/admin/counters/${slug}`;
