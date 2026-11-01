@@ -24,6 +24,7 @@ const DEV_VARS = join(ROOT, ".dev.vars");
 const WRANGLER = process.platform === "win32"
   ? join(ROOT, "node_modules", ".bin", "wrangler.cmd")
   : join(ROOT, "node_modules", ".bin", "wrangler");
+let smokeStage = "preflight";
 const LOCAL_ENV = {
   ...process.env, CI: "true", WRANGLER_SEND_METRICS: "false",
   CLOUDFLARE_API_TOKEN: "", CLOUDFLARE_ACCOUNT_ID: ""
@@ -101,6 +102,7 @@ export async function smokeSelfHostedCounter() {
   const designPath = join(designDir, "design.json");
   let configCreated = false, devVarsCreated = false, running;
   try {
+    smokeStage = "generate-test-config";
     const template = await readFile(join(ROOT, "wrangler.selfhost.example.toml"), "utf8");
     const config = makeConfig(template, {
       worker: "wvt-selfhost-disposable",
@@ -109,6 +111,7 @@ export async function smokeSelfHostedCounter() {
     }, [randomInt(100_000, 999_999), randomInt(1_000_000, 2_000_000)]);
     await writeFile(CONFIG, config, { flag: "wx", mode: 0o600 });
     configCreated = true;
+    smokeStage = "create-fake-secrets";
     await writeFile(DEV_VARS,
       "ADMIN_TOKEN=" + ADMIN_TOKEN + "\nVISIT_HASH_SECRET=" + VISIT_SECRET + "\n",
       { flag: "wx", mode: 0o600 });
@@ -118,12 +121,14 @@ export async function smokeSelfHostedCounter() {
 
     // All database operations use --local AND isolated --persist-to.
     // Deliberately DO NOT accept dynamic/remote migration flags.
+    smokeStage = "local-d1-migrations";
     execFileSync(WRANGLER, [
       "d1", "migrations", "apply", "DB", "--local", "--config", CONFIG,
       "--persist-to", persistence
     ], { cwd: ROOT, env: LOCAL_ENV, stdio: "pipe", timeout: 90000 });
 
     const port = randomInt(18000, 45000);
+    smokeStage = "local-worker-startup";
     running = await start(port, persistence);
     const origin = running.origin;
     const api = (path, init) => fetch(origin + path, {
@@ -142,6 +147,7 @@ export async function smokeSelfHostedCounter() {
     const cli = (command, other = {}) => execute({
       command, api: origin, slug: SLUG, "token-file": tokenPath, ...other
     });
+    smokeStage = "publish-with-local-cli";
     const published = await cli("create", {
       owner: "self-host-tester", design: designPath
     });
@@ -151,6 +157,7 @@ export async function smokeSelfHostedCounter() {
     const imagePath = "/v1/counters/" + SLUG + ".svg";
     assert.equal((await api(imagePath, { method: "HEAD" })).status, 200);
     assert.match(await cli("inspect"), /Recorded upstream requests: 0/);
+    smokeStage = "image-count-and-dedupe";
     const first = await api(imagePath, {
       headers: { "CF-Connecting-IP": "203.0.113.17" }
     });
@@ -163,6 +170,7 @@ export async function smokeSelfHostedCounter() {
     assert.match(await cli("inspect"), /Recorded upstream requests: 1/,
       "Deduplication must not increment on repeated requests");
 
+    smokeStage = "update-design";
     const modified = { ...DESIGN, layers: DESIGN.layers.map(
       layer => layer.id === "heading" ? { ...layer, text: "UPDATED AND PERSISTED" } : layer
     ) };
@@ -173,9 +181,11 @@ export async function smokeSelfHostedCounter() {
     const updated = await api(imagePath, { method: "HEAD" });
     assert.equal(updated.status, 200, "HEAD must never add a visit");
 
+    smokeStage = "restart-local-worker";
     await shutdown(running.child);
     running = undefined;
     running = await start(port, persistence);
+    smokeStage = "post-restart-data-check";
     assert.match(await cli("inspect"), /Recorded upstream requests: 1/,
       "Counts must persist after restart in the same local D1");
     const afterRestart = await api(imagePath, { method: "GET" });
@@ -194,7 +204,8 @@ export async function smokeSelfHostedCounter() {
 }
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   smokeSelfHostedCounter().catch(() => {
-    console.error("Self-hosted local smoke failed. No remote Cloudflare resource was touched.");
+    console.error("Self-hosted local smoke failed at " + smokeStage +
+      ". No remote Cloudflare resource was touched.");
     process.exitCode = 1;
   });
 }
