@@ -16,6 +16,7 @@ import { resolve, join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { makeConfig } from "../scripts/self-host-setup.mjs";
 import { execute } from "../scripts/self-host-publish.mjs";
+import { verifySelfHost } from "../scripts/self-host-verify.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const CONFIG_NAME = "wrangler.selfhost.smoke.toml";
@@ -153,6 +154,15 @@ export async function smokeSelfHostedCounter() {
     });
     assert.match(published, /!\[Visitor counter\]\(http:\/\/127\.0\.0\.1:/);
     assert(!published.includes(ADMIN_TOKEN), "Admin secret must never appear in CLI output");
+
+    smokeStage = "verify-read-only-deployment-health";
+    const readiness = await verifySelfHost({
+      api: origin, "token-file": tokenPath, slug: SLUG
+    });
+    assert.equal(readiness.checkedSlug, SLUG);
+    assert.equal(readiness.budget.admitted, 0,
+      "Read-only verification must not record any visits");
+    assert.equal(readiness.noDatabaseWrites, true);
 
     const imagePath = "/v1/counters/" + SLUG + ".svg";
     assert.equal((await api(imagePath, { method: "HEAD" })).status, 200);
