@@ -141,6 +141,30 @@ node scripts/self-host-verify.mjs --api https://YOUR-WORKER.YOUR-SUBDOMAIN.worke
 
 
 
+### 3.1 离线核对双层 workers.dev 地址（不需要重复测试）
+
+Cloudflare 的完整 Worker 地址由 **Worker 名称**、**账户的 workers.dev 子域名**和固定的 `workers.dev` 后缀构成。D1 数据库的名称**不是**网址的一部分。例如，如果 Worker 名称和账户子域名都叫 `wvt-friend-mac-01`，那么完整地址就是：
+
+```text
+https://wvt-friend-mac-01.wvt-friend-mac-01.workers.dev
+```
+
+不应擅自删除其中一个名称，也不应把 Cloudflare 控制台显示的账户子域名当作完整的 Worker 地址。新版 ZIP 提供一个**完全离线**工具，根据本地私有 `wrangler.selfhost.toml` 读取 Worker 名称，并结合你在 Cloudflare Dashboard 中**亲自确认**的账户级子域名拼出完整网址：
+
+```sh
+node scripts/self-host-url.mjs --account-subdomain YOUR_ACCOUNT_SUBDOMAIN
+```
+
+如已确实知道该 D1 中存在的计数器 slug，可用如下命令直接获得精确的 SVG 和 README Markdown：
+
+```sh
+node scripts/self-host-url.mjs --account-subdomain YOUR_ACCOUNT_SUBDOMAIN --slug YOUR_EXISTING_COUNTER_SLUG
+```
+
+**严格限制：** 这里的 `--account-subdomain` 只能填账户级的一段名称，不能填写完整 URL、D1 名称或 `<Worker>.<账户>.workers.dev`。不会自动从 Cloudflare 获取该值。此工具只读取本地 Worker 配置，**不读取密钥、不联网、不部署、不访问 D1 或 GitHub**；当环境变量 `WVT_API_URL` 与计算结果不一致时拒绝输出，避免把令牌发向旧地址。它无法证明账户所有权或真实 DNS 状态。
+
+**如果出现 `Counter not found`：** 检查是否把指南里的 `my-counter` 示例值误当成真实 slug。已完成实机验收的诊断记录应以 `livecheck-...` 为准；如果记录丢失，新部署可用 `self-host-publish.mjs list` 通过管理员权限**只读**列出真实 slug（注意会产生 D1 查询用量）。旧部署如不支持 `list`，不能为排查而重复 `create`、重新运行带写入的 `live-check` 或擅自迁移数据库。离线工具拼出的图片链接**不代表**该计数器确实存在。
+
 ### 在 Mac 终端中一次保存 Worker 地址（无需重复填写）
 
 由真实 Mac 试用反馈创建的 [Issue #23](https://github.com/guitar0788/workshop-Visitor-Terminal/issues/23) 已对应到统一的 `WVT_API_URL` 支持。先从**自己的** Cloudflare 控制台核对完整地址，其格式为 `https://<Worker 名称>.<账户 workers.dev 子域名>.workers.dev`，它与 **D1 数据库名称无关**。两段恰好重名也完全正常。

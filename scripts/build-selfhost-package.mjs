@@ -34,6 +34,7 @@ export const ALLOWED_FILES = Object.freeze([
   "worker/migrations/0004_visit_budget.sql",
   "wrangler.selfhost.example.toml",
   "scripts/self-host-api.mjs",
+  "scripts/self-host-url.mjs",
   "scripts/self-host-setup.mjs",
   "scripts/self-host-publish.mjs",
   "scripts/self-host-verify.mjs",

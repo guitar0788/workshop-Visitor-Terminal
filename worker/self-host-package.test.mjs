@@ -83,6 +83,7 @@ test("release preview ZIP contains ONLY reviewed project sources and never secre
     assert.equal(await readFile(result.checksumPath, "utf8"),
       expectedHash + "  Workshop-Visitor-Terminal-Self-Host.zip\n");
     const extracted = extractZip(result.zip);
+    assert(extracted.has("scripts/self-host-url.mjs"), "Offline URL tool is included in independent self-host ZIP");
     assert.deepEqual([...extracted.keys()].sort(), [...ALLOWED_FILES].sort());
     assert(![...extracted.keys()].some(name =>
       /\.dev\.vars|\.env|\.wvt-admin-token|\.wvt-visit-secret|wrangler\.toml|\.sqlite|node_modules|dist\//i.test(name)));
