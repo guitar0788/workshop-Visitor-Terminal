@@ -11,9 +11,38 @@
 - 统计的是到达 Worker 的合格图片请求，不是 GitHub 主页的精确浏览人数，也不是独立访客；GitHub 的图片代理会缓存 SVG。
 - 不要把管理员密钥放进 HTML、GitHub README 或任何前端 JavaScript。
 
-### 1. 安装工具并创建独立数据库
+### 1. 取得自托管文件并创建独立数据库
 
-要求安装 Node.js 20+、Git，并拥有自己的 Cloudflare 账户。 当前 PR #21 仍处于 Draft 预览阶段，因此下面命令临时切换到开发分支；正式合并后可省略 `git switch`。
+**方法 A：下载独立自托管 ZIP（预览阶段推荐）**
+
+打开 [PR #21](https://github.com/guitar0788/workshop-Visitor-Terminal/pull/21)，找到最近一次 **成功** 的 `Verify` 检查，打开其 GitHub Actions 页面。在页面下方 `Artifacts` 下载 `Workshop-SelfHost-Preview`（GitHub 可能要求登录）。请注意：Actions 自动下载的是外层 ZIP，解压后有 `Workshop-Visitor-Terminal-Self-Host.zip` 与对应的 `.sha256` 校验文件；再次解压内层 ZIP，即得到独立项目目录 `Workshop-Visitor-Terminal-Self-Host`。**不要解压到已存放真实密钥或 Cloudflare 配置的旧目录。**
+
+该预览附件由 CI 自动生成，包含 Worker 原始代码、D1 迁移、安装/发布/只读检查工具、依赖锁定文件和本指南，**不包含编辑器 React 源码、任何账户密钥或真实 D1 数据**。它还会在完全独立的解压目录内运行 `npm ci`、Wrangler 无部署编译和真实的本地 D1 计数流程；这不能替代独立云端实机验收。PR 预览附件仅保留 **7 天**，并非正式 GitHub Release。
+
+Windows 可用 `certutil -hashfile Workshop-Visitor-Terminal-Self-Host.zip SHA256` 对比旁边的 `.sha256` 文件内容，确认下载未损坏；macOS/Linux 可以使用 `sha256sum -c Workshop-Visitor-Terminal-Self-Host.zip.sha256`。
+
+在解压后的自托管目录打开 CMD、PowerShell 或终端，安装 Node.js 20+，然后运行：
+
+```sh
+npm ci
+npx wrangler login
+npx wrangler whoami
+```
+
+**方法 B：从 GitHub 克隆整个开发仓库**
+
+如果需要修改源代码，请安装 Node.js 20+ 和 Git，并执行：
+
+```sh
+git clone https://github.com/guitar0788/workshop-Visitor-Terminal.git
+cd workshop-Visitor-Terminal
+git switch feat/v06-independent-self-hosting
+npm ci
+npx wrangler login
+npx wrangler whoami
+```
+
+当前 PR #21 仍为 Draft；合并正式发行之后才能直接从 main 获取上述新功能。无论使用哪种方式，**都必须使用自己的 Cloudflare 账户**。
 
 ```sh
 git clone https://github.com/guitar0788/workshop-Visitor-Terminal.git
@@ -142,7 +171,7 @@ node scripts/self-host-publish.mjs inspect --api https://YOUR-WORKER.YOUR-SUBDOM
 
 ## English summary
 
-Use **your own** Cloudflare account and create a new D1 database. Run `node scripts/self-host-setup.mjs init --worker ... --database ... --database-id ...` and then `node scripts/self-host-setup.mjs check` to generate and validate a private local Wrangler config and two secrets without network access. The self-host template disables GitHub OAuth and reuses the existing counter backend. Run the disposable local end-to-end test `node worker/self-host-smoke.mjs` first, then run local migrations and explicitly opt in to remote D1 migrations and deployment. After deployment, run the read-only `node scripts/self-host-verify.mjs --api YOUR_WORKER_URL --token-file .wvt-admin-token` check (optionally `--slug` for an existing published counter). It verifies the Worker's identity, closed OAuth, private admin access, D1 budget and SVG HEAD without writing counts. Export a Studio `schemaVersion: 1` design JSON, and run `node scripts/self-host-publish.mjs create|update|inspect` against **your own HTTPS Worker** with a private `--token-file`. Success prints the dynamic SVG Markdown; it does not update a GitHub profile automatically.
+Get the CI-tested source-only preview ZIP from the latest successful PR #21 Verify run (GitHub Actions Artifacts). Unzip the Actions artifact and then its inner `Workshop-Visitor-Terminal-Self-Host.zip` into a NEW folder. Check the included SHA256, run `npm ci`, then create a new D1 in your own Cloudflare account. This is not an official GitHub Release and the PR artifact is retained for seven days.\n\nUse **your own** Cloudflare account and create a new D1 database. Run `node scripts/self-host-setup.mjs init --worker ... --database ... --database-id ...` and then `node scripts/self-host-setup.mjs check` to generate and validate a private local Wrangler config and two secrets without network access. The self-host template disables GitHub OAuth and reuses the existing counter backend. Run the disposable local end-to-end test `node worker/self-host-smoke.mjs` first, then run local migrations and explicitly opt in to remote D1 migrations and deployment. After deployment, run the read-only `node scripts/self-host-verify.mjs --api YOUR_WORKER_URL --token-file .wvt-admin-token` check (optionally `--slug` for an existing published counter). It verifies the Worker's identity, closed OAuth, private admin access, D1 budget and SVG HEAD without writing counts. Export a Studio `schemaVersion: 1` design JSON, and run `node scripts/self-host-publish.mjs create|update|inspect` against **your own HTTPS Worker** with a private `--token-file`. Success prints the dynamic SVG Markdown; it does not update a GitHub profile automatically.
 
 This is a technical preview, not a hosted service or promise of free Cloudflare capacity. Image cache effects mean counts represent qualifying upstream requests, not unique people.
 
