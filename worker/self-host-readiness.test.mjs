@@ -60,7 +60,7 @@ test("only offline check and optional report path are accepted", () => {
 
 test("the local-only report is sanitized and never claims remote verification", async () => {
   await fixture(async root => {
-    const report = await inspectOfflineReadiness({ root, nodeVersion: "22.9.0" });
+    const report = await inspectOfflineReadiness({ root, nodeVersion: "22.12.0" });
     assert.equal(report.local, "PASS");
     assert.equal(report.releaseGate, "PENDING_INDEPENDENT_CLOUDFLARE_TEST");
     assert(Object.values(report.checks).every(x => x === "PASS"));
