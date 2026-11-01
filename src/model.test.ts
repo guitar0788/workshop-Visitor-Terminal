@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  addLayer, CARD_THEMES, clonePreset, escapeXml, moveLayer,
+  addLayer, CARD_THEMES, clonePreset, escapeXml, fittedCountSize, moveLayer,
   renderSvg, reorderLayer, sanitizeDesign
 } from "./model";
 
@@ -149,5 +149,55 @@ describe("v0.6 illustrated visitor cards", () => {
     expect(svg).toContain("rect");
     expect(renderSvg({ ...design, width: 600, height: 300 }, 25))
       .toContain("scale(1.4285714285714286 1.3636363636363635)");
+  });
+});
+
+
+describe("formatted count fit and long-term visitor growth", () => {
+  it("keeps 5-digit values at the intended template font size", () => {
+    for (const theme of CARD_THEMES) {
+      const design = clonePreset(theme);
+      const layer = design.layers.find(layer => layer.kind === "count")!;
+      expect(fittedCountSize(layer, "12,847")).toBe(layer.fontSize);
+      const svg = renderSvg(design, 12_847);
+      expect(svg).toContain('font-size="' + layer.fontSize + '"');
+    }
+  });
+
+  it("shrinks 12-digit counts to fit all nine illustrated count boxes", () => {
+    for (const theme of CARD_THEMES) {
+      const d = clonePreset(theme);
+      const counter = "999,999,999,999";
+      const layer = d.layers.find(l => l.kind === "count")!;
+      const sized = fittedCountSize(layer, counter);
+      expect(sized).toBeLessThan(layer.fontSize);
+      expect(sized).toBeGreaterThanOrEqual(8);
+      expect(sized * counter.length * 0.63).toBeLessThanOrEqual(layer.width - 4);
+      const svg = renderSvg(d, 999_999_999_999);
+      expect(svg).toContain('font-size="' + sized + '"');
+      expect(svg).toContain('>999,999,999,999</text>');
+      expect(svg).toContain("999,999,999,999 visits");
+    }
+  });
+
+  it("can render a complete count even in a user-customized very narrow layer", () => {
+    const d = clonePreset("neon-card");
+    const count = d.layers.find(l => l.kind === "count")!;
+    count.width = 8;
+    count.fontSize = 80;
+    const output = renderSvg(d, 999_999_999_999);
+    expect(output).toContain('textLength="4" lengthAdjust="spacingAndGlyphs"');
+    expect(output).toContain('>999,999,999,999</text>');
+    expect(output).not.toContain('href=');
+  });
+
+  it("does not change legacy exported markup for typical small values", () => {
+    for (const theme of ["pixel","cyber","minimal"] as const) {
+      const d = clonePreset(theme);
+      const layer = d.layers.find(l => l.kind === "count")!;
+      expect(fittedCountSize(layer, "125")).toBe(layer.fontSize);
+      expect(renderSvg(d, 125)).toContain('>125</text>');
+      expect(renderSvg(d, 125)).not.toContain('textLength=');
+    }
   });
 });

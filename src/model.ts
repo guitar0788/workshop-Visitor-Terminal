@@ -150,6 +150,21 @@ export function escapeXml(value: string): string {
     .replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;" })[c]!);
 }
 
+/**
+ * Fit the complete formatted visit count into its editable box. The original
+ * font size is preserved for short values, but long counters (including the
+ * 12-digit limit) shrink rather than disappearing under the clipPath.
+ * A strict 8px floor is a user-editing readability guard; for extremely narrow
+ * custom boxes the renderer also uses SVG textLength below.
+ */
+export function fittedCountSize(layer: Layer, value: string): number {
+  if (!value.length) return Math.max(8, Math.min(layer.fontSize, layer.height - 4));
+  const available = Math.max(1, layer.width - 4);
+  // 0.63em conservatively bounds the width of the default monospace digits.
+  const byWidth = Math.floor(available / (value.length * 0.63));
+  return Math.max(8, Math.min(layer.fontSize, layer.height - 4, byWidth));
+}
+
 export function renderSvg(input: unknown, visits: number): string {
   const d = sanitizeDesign(input);
   const count = Number.isFinite(visits) ? Math.floor(Math.max(0, Math.min(999999999999, visits))) : 0;
@@ -184,6 +199,7 @@ export function renderSvg(input: unknown, visits: number): string {
         '" rx="3" fill="', layer.color, '" fill-opacity="0.13" stroke="', layer.color, '"/>');
     } else {
       const content = layer.kind === "count" ? counter : layer.text;
+      const fittedSize = layer.kind === "count" ? fittedCountSize(layer, counter) : layer.fontSize;
       // Text is clipped to its designated box so user designs cannot overflow the exported SVG.
       parts.push('<defs><clipPath id="clip-', layer.id,
         '"><rect x="', String(layer.x), '" y="', String(layer.y),
@@ -191,8 +207,11 @@ export function renderSvg(input: unknown, visits: number): string {
         '"/></clipPath></defs><text clip-path="url(#clip-', layer.id,
         ')" x="', String(layer.x), '" y="', String(layer.y + 2),
         '" dominant-baseline="hanging" fill="', layer.color,
-        '" font-size="', String(layer.fontSize),
-        '" font-family="ui-monospace, Menlo, Consolas, PingFang SC, Microsoft YaHei, Noto Sans CJK SC, monospace" font-weight="',
+        '" font-size="', String(fittedSize),
+        '"', ...(layer.kind === "count" && fittedSize * counter.length * 0.63 > layer.width - 4
+          ? [' textLength="', String(Math.max(1, layer.width - 4)), '" lengthAdjust="spacingAndGlyphs"']
+          : []),
+        ' font-family="ui-monospace, Menlo, Consolas, PingFang SC, Microsoft YaHei, Noto Sans CJK SC, monospace" font-weight="',
         layer.kind === "count" ? "700" : "600",
         '">', escapeXml(content), '</text>');
     }

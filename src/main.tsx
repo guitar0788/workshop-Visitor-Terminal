@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   addLayer, CARD_THEMES, moveLayer, reorderLayer, renderSvg, sanitizeDesign,
@@ -41,6 +41,7 @@ function App() {
   const [noticeKey, setNoticeKey] = useState<MessageKey>("noticeInitial");
   const [mobileTab, setMobileTab] = useState<MobileTab>("preview");
   const [cleanPreview, setCleanPreview] = useState(false);
+  const [galleryExpanded, setGalleryExpanded] = useState(false);
   const [moveMode, setMoveMode] = useState(false);
   const [preciseOpen, setPreciseOpen] = useState(false);
   const [publishSession, setPublishSession] = useState<PublishSession | null>(null);
@@ -64,6 +65,13 @@ function App() {
   const selected = design.layers.find(layer => layer.id === selectedId) ?? null;
   const svg = renderSvg(design, demoCount);
   const preview = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
+  // Re-render thumbnails only when their localized stock captions change,
+  // not on every pointer drag, counter update or undo/redo operation.
+  const cardPreviews = useMemo(() => CARD_THEMES.map(theme => ({
+    theme,
+    src: "data:image/svg+xml;charset=utf-8," +
+      encodeURIComponent(renderSvg(createLocalizedPreset(theme, language), PREVIEW_COUNT))
+  })), [language]);
   const layerName = (layer: Layer) =>
     layer.kind === "text" ? layer.text || t.blankText : names[layer.kind];
 
@@ -605,11 +613,16 @@ function App() {
           </select>
         </label>
         <div className="template-gallery-head">
-          <strong>{t.cardTemplates}</strong><span>{t.galleryHint}</span>
+          <strong>{t.cardTemplates}</strong>
+          <button type="button" className="gallery-expand"
+            aria-expanded={galleryExpanded}
+            onClick={() => setGalleryExpanded(current => !current)}>
+            {galleryExpanded ? t.galleryCollapse : t.galleryExpand}
+          </button>
         </div>
-        <div className="template-gallery" aria-label={t.cardTemplates}>
-          {CARD_THEMES.map((theme, index) => {
-            const svg = renderSvg(createLocalizedPreset(theme, language), PREVIEW_COUNT);
+        <div className={"template-gallery" + (galleryExpanded ? " expanded" : " compact")}
+          aria-label={t.cardTemplates}>
+          {cardPreviews.map(({ theme, src }, index) => {
             return (
               <button key={theme} type="button"
                 className={"template-choice" + (design.theme === theme ? " active" : "")}
@@ -618,7 +631,7 @@ function App() {
                 title={cardLabels[index]}
                 onClick={() => changePreset(theme)}>
                 <img alt="" loading="lazy" draggable={false} width={420} height={220}
-                  src={"data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg)}/>
+                  src={src}/>
                 <span>{cardLabels[index]}</span>
               </button>
             );
