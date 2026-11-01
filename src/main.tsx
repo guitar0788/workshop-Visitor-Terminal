@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { isApprovedTheme, approvedCanvasWidth } from "./approved-reference-cards";
 import { isCardTheme } from "./card-art";
+import { restoreLocalDraft, saveLocalDraft } from "./local-draft";
 import { createRoot } from "react-dom/client";
 import {
   addLayer, CARD_THEMES, MAX_VISITOR_COUNT, moveLayer, reorderLayer, renderSvg, resizeCanvas, sanitizeDesign,
@@ -29,6 +30,11 @@ const PREVIEW_COUNT = 12856;
 const APPROVED_PREVIEW_COUNT = 12847;
 type MessageKey = keyof typeof translations.en;
 type MobileTab = "preview" | "layers" | "properties" | "export";
+function readBrowserDraft(): TerminalDesign | null {
+  if (typeof window === "undefined") return null;
+  try { return restoreLocalDraft(window.localStorage); } catch { return null; }
+}
+
 type DragState = {
   id: string;
   pointerId: number;
@@ -39,12 +45,15 @@ type DragState = {
 
 function App() {
   const [language, setLanguage] = useState<Language>(readPreferredLanguage);
+  const [initialDraft] = useState<TerminalDesign | null>(readBrowserDraft);
   const [history, setHistory] = useState<EditHistory>(
-    () => createHistory(createLocalizedPreset("pixel", readPreferredLanguage()))
+    () => createHistory(initialDraft ?? createLocalizedPreset("pixel", language))
   );
-  const [selectedId, setSelectedId] = useState<string | null>("heading");
+  const [selectedId, setSelectedId] = useState<string | null>(
+    () => initialDraft ? initialDraft.layers.find(layer => layer.visible)?.id ?? null : "heading"
+  );
   const [demoCount, setDemoCount] = useState(PREVIEW_COUNT);
-  const [noticeKey, setNoticeKey] = useState<MessageKey>("noticeInitial");
+  const [noticeKey, setNoticeKey] = useState<MessageKey>(initialDraft ? "noticeDraftRestored" : "noticeInitial");
   const [mobileTab, setMobileTab] = useState<MobileTab>("preview");
   const [cleanPreview, setCleanPreview] = useState(false);
   const [galleryExpanded, setGalleryExpanded] = useState(false);
@@ -90,6 +99,14 @@ function App() {
       // Language switching continues to work without persistent browser storage.
     }
   }, [language]);
+
+  // Save only a sanitized design on this device. No remote requests or account
+  // secrets are involved; inaccessible/private-mode storage is optional.
+  useEffect(() => {
+    try { saveLocalDraft(window.localStorage, history.present); } catch {
+      // An offline HTML file or privacy mode can refuse localStorage access.
+    }
+  }, [history.present]);
 
   // OAuth return values are one-use. Remove them from the URL immediately;
   // React StrictMode may execute effects twice during local development.
@@ -818,6 +835,17 @@ function App() {
     );
   }
 
+  function startFreshDesign() {
+    if (!window.confirm(t.newDesignConfirm)) return;
+    setHistory(createHistory(createLocalizedPreset("pixel", language)));
+    setSelectedId("heading");
+    setDemoCount(PREVIEW_COUNT);
+    setCleanPreview(false);
+    setMoveMode(false);
+    setMobileTab("preview");
+    setNoticeKey("noticeNewDesign");
+  }
+
   function renderExport() {
     return (
       <>
@@ -840,6 +868,8 @@ function App() {
               JSON.stringify(design, null, 2),
               "visitor-terminal.design.json", "application/json"
             )}>{t.saveDesign}</button>
+          <button type="button" className="secondary"
+            onClick={startFreshDesign}>{t.newDesign}</button>
           <label className="secondary import-label">{t.loadDesign}
             <input type="file" aria-label={t.importLabel}
               accept=".json,application/json" onChange={importDesign}/>
@@ -847,6 +877,7 @@ function App() {
           <button type="button" className="secondary"
             onClick={copySvg}>{t.copySvg}</button>
         </div>
+        <p className="hint" role="note">{t.localDraftHelp}</p>
         <p className="notice" role="status">{t[noticeKey]}</p>
         {!OFFLINE_DEMO_MODE && (
           <section className="offline-distribution" aria-label={t.offlineDownloadTitle}>
