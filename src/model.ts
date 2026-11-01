@@ -71,7 +71,7 @@ const CARD_CONFIG: Record<CardTheme, {
   "terminal-card": { accent:"#5ef9ab", background:"#081e18", heading:"WORKSHOP VISITORS", caption:"SYSTEM ONLINE",
     titleX:57,titleY:82,titleWidth:337,titleSize:22,countX:57,countY:121,countWidth:234,countSize:46,labelX:58,labelY:184 },
   "cozy-card": { accent:"#754932", background:"#fff0de", heading:"WORKSHOP VISITORS", caption:"THANK YOU FOR VISITING",
-    titleX:165,titleY:58,titleWidth:228,titleSize:17,countX:165,countY:105,countWidth:220,countSize:45,labelX:164,labelY:165 },
+    titleX:165,titleY:58,titleWidth:228,titleSize:17,countX:158,countY:105,countWidth:185,countSize:45,labelX:164,labelY:165 },
   "rpg-card": { accent:"#f6d78d", background:"#233968", heading:"WORKSHOP VISITORS", caption:"LEVEL UP · THANK YOU",
     titleX:173,titleY:54,titleWidth:213,titleSize:16,countX:173,countY:107,countWidth:215,countSize:45,labelX:174,labelY:165 },
   "space-card": { accent:"#f4eaff", background:"#1b1b56", heading:"WORKSHOP VISITORS", caption:"EXPLORING THE STARS",
