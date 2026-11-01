@@ -1,4 +1,7 @@
 import { CARD_THEMES, isCardTheme, cardArtwork, type CardTheme } from "./card-art";
+import { isApprovedTheme, approvedBackdrop, approvedCountMarkup,
+  defaultApprovedCountLayer, REFERENCE_WIDTH, REFERENCE_HEIGHT }
+  from "./approved-reference-cards";
 export { CARD_THEMES } from "./card-art";
 export type { CardTheme } from "./card-art";
 export type Theme = "pixel" | "minimal" | "cyber" | CardTheme;
@@ -84,6 +87,16 @@ const CARD_CONFIG: Record<CardTheme, {
     titleX:233,titleY:76,titleWidth:191,titleSize:22,countX:443,countY:89,countWidth:128,countSize:31,labelX:234,labelY:111,captionSize:22,captionWidth:180 }
 };
 function makeCardPreset(theme: CardTheme): TerminalDesign {
+  if (isApprovedTheme(theme)) {
+    const countLayer = defaultApprovedCountLayer(theme);
+    const bg = theme === "pixel-card" ? "#112039" :
+      theme === "terminal-card" ? "#051f1a" : "#072d67";
+    return { schemaVersion:1, theme, width:REFERENCE_WIDTH,
+      height:REFERENCE_HEIGHT, background:bg, accent:countLayer.color,
+      // Headings, characters and ornaments are fixed in the approved artwork.
+      // Only the live visitor counter can be moved or edited independently.
+      layers:[countLayer] };
+  }
   const c = CARD_CONFIG[theme];
   const layers: Layer[] = [
     { id:"heading", kind:"text", x:c.titleX, y:c.titleY, width:c.titleWidth,
@@ -200,9 +213,13 @@ export function renderSvg(input: unknown, visits: number): string {
     '" viewBox="0 0 ', String(d.width), ' ', String(d.height), '">',
     '<title>Workshop visitor counter: ', counter, ' visits</title>',
   ];
-  if (isCardTheme(d.theme)) {
-    // Canonical vector art scales to any configured canvas dimensions.
-    // These elements are bundled constants, not user-controlled SVG markup.
+  if (isApprovedTheme(d.theme)) {
+    // Exact user-approved raster illustration; no redraw or external URL.
+    parts.push(approvedBackdrop(d.theme, d.width, d.height));
+    const countLayer = d.layers.find(layer => layer.kind === "count");
+    parts.push(approvedCountMarkup(d.theme, counter, countLayer ?? null, scope));
+  } else if (isCardTheme(d.theme)) {
+    // All other six illustrated cards retain their existing vector artwork.
     parts.push('<g transform="scale(', String(d.width / 600), ' ', String(d.height / 210),
       ')">', scopedCardArtwork(cardArtwork(d.theme), scope), '</g>');
   } else {
@@ -212,6 +229,9 @@ export function renderSvg(input: unknown, visits: number): string {
       '" stroke-width="', d.theme === "minimal" ? "1" : "3", '"/>');
   }
   for (const layer of d.layers) {
+    // Approved image card draws its one real count in the reference-specific
+    // compositing pass. Do not duplicate it over the pristine raster digits.
+    if (isApprovedTheme(d.theme) && layer.kind === "count") continue;
     if (!layer.visible) continue;
     if (layer.kind === "dot") {
       parts.push('<circle cx="', String(layer.x + layer.width / 2),
