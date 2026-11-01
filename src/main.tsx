@@ -21,10 +21,11 @@ import {
 } from "./publish-client";
 import "./style.css";
 
-// Use the owner-approved reference count so initial thumbnails display the
-// unmodified original artwork. Editing the demo count still exercises the
-// separate cleaned-background + live numeral compositing path.
-const PREVIEW_COUNT = 12847;
+// Preserve the original sample count on all six untouched illustrated styles
+// and the three legacy themes. Only the owner-approved 1 / 3 / 5 artwork uses
+// its exact 12,847 source-image sample when first selected.
+const PREVIEW_COUNT = 12856;
+const APPROVED_PREVIEW_COUNT = 12847;
 type MessageKey = keyof typeof translations.en;
 type MobileTab = "preview" | "layers" | "properties" | "export";
 type DragState = {
@@ -74,7 +75,8 @@ function App() {
   const cardPreviews = useMemo(() => CARD_THEMES.map(theme => ({
     theme,
     src: "data:image/svg+xml;charset=utf-8," +
-      encodeURIComponent(renderSvg(createLocalizedPreset(theme, language), PREVIEW_COUNT))
+      encodeURIComponent(renderSvg(createLocalizedPreset(theme, language),
+        isApprovedTheme(theme) ? APPROVED_PREVIEW_COUNT : PREVIEW_COUNT))
   })), [language]);
   const layerName = (layer: Layer) =>
     layer.kind === "text" ? layer.text || t.blankText : names[layer.kind];
@@ -440,7 +442,8 @@ function App() {
 
   function changePreset(theme: Theme) {
     edit(() => createLocalizedPreset(theme, language));
-    setSelectedId("heading");
+    setDemoCount(isApprovedTheme(theme) ? APPROVED_PREVIEW_COUNT : PREVIEW_COUNT);
+    setSelectedId(isApprovedTheme(theme) ? "visits" : "heading");
     setCleanPreview(false);
     setNoticeKey("noticeTemplate");
   }
