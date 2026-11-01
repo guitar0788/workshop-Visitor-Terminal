@@ -21,25 +21,34 @@ const HELP = [
   "  node scripts/self-host-doctor.mjs",
   "  node scripts/self-host-doctor.mjs --account-subdomain YOUR_ACCOUNT_LABEL",
   "  node scripts/self-host-doctor.mjs --account-subdomain YOUR_ACCOUNT_LABEL --slug KNOWN_COUNTER",
+  "  node scripts/self-host-doctor.mjs --account-subdomain YOUR_ACCOUNT_LABEL --steps",
+  "  node scripts/self-host-doctor.mjs --steps  (local-only step list)",
   "  node scripts/self-host-doctor.mjs --account-subdomain YOUR_ACCOUNT_LABEL --report selfhost-live-result.json --readme README.md",
   "This checks local config, private secret separation, locked files, Worker",
   "address, previously saved receipt and README links. It NEVER creates a",
-  "counter, changes credentials, edits README, or verifies a real cloud account."
+  "counter, changes credentials, edits README, or verifies a real cloud account.",
+  "--steps only PRINTS manual commands. Nothing is run or uploaded."
 ].join("\n") + "\n";
 
 export function parseDoctorArgs(argv) {
   if (argv.length === 1 && ["--help", "-h", "help"].includes(argv[0])) return { help: true };
-  if (argv.length % 2 !== 0) throw Error("Options must be pairs (see --help)");
   const result = {};
   const allowed = new Set(["account-subdomain", "slug", "report", "readme"]);
-  for (let i = 0; i < argv.length; i += 2) {
-    const name = argv[i].startsWith("--") ? argv[i].slice(2) : "";
+  for (let i = 0; i < argv.length;) {
+    if (argv[i] === "--steps") {
+      if (result.steps) throw Error("Duplicate manual steps option");
+      result.steps = true;
+      i += 1;
+      continue;
+    }
+    const name = argv[i]?.startsWith("--") ? argv[i].slice(2) : "";
     const value = argv[i + 1];
     if (!allowed.has(name) || Object.hasOwn(result, name) ||
         !value || value.startsWith("--")) {
       throw Error("Unknown, duplicate or incomplete offline doctor option");
     }
     result[name] = value;
+    i += 2;
   }
   if (result["account-subdomain"]) {
     parseUrlArgs(["--account-subdomain", result["account-subdomain"],
@@ -57,6 +66,100 @@ export function parseDoctorArgs(argv) {
     throw Error("README audit requires an existing --slug or successful --report");
   }
   return result;
+}
+
+
+/**
+ * Stable, sanitized diagnostic categories. Errors can contain local paths,
+ * secret fragments or raw configuration: never echo their original messages.
+ * This is a troubleshooting hint, NOT proof that any remote check succeeded.
+ */
+export function explainDoctorFailure(error) {
+  const message = error instanceof Error ? error.message : "";
+  const code = error && typeof error === "object" ? error.code : "";
+  if (code === "ENOENT" || code === "ENOTDIR") {
+    return "WVT-D01 MISSING_LOCAL_FILE: Check the extracted self-host directory, " +
+      "wrangler.selfhost.toml, two private secret files, and any requested local README/receipt. " +
+      "Do not delete or regenerate existing credentials.";
+  }
+  if (/supported Node\.js version|Node\.js 22\.12\+|locked toolchain/.test(message)) {
+    return "WVT-D02 NODE_VERSION: Install Node.js 22.12+ or a supported newer release; " +
+      "run node --version and retry the local check.";
+  }
+  if (/Missing, identical, or malformed local secret files|Unsafe secret generation/.test(message)) {
+    return "WVT-D03 SECRET_FILES: Verify distinct local .wvt-admin-token and " +
+      ".wvt-visit-secret files. Do not paste or upload their contents; " +
+      "do not rerun init over an existing installation.";
+  }
+  if (/Wrangler configuration is incomplete or unsafe|Unexpected self-host template|private config/i.test(message)) {
+    return "WVT-D04 WORKER_CONFIG: Run node scripts/self-host-setup.mjs check " +
+      "and compare the ignored local configuration against wrangler.selfhost.example.toml. " +
+      "Never overwrite existing Worker/D1 identifiers or secrets.";
+  }
+  if (/package-lock|lockfile|locked npm|Untrusted or incomplete npm dependency/.test(message)) {
+    return "WVT-D05 DEPENDENCIES: Restore the validated ZIP's package.json " +
+      "and package-lock.json together; run npm ci. Do not disable lockfile validation.";
+  }
+  if (/WVT_API_URL disagrees|Untrusted receipt Worker origin/.test(message)) {
+    return "WVT-D06 ORIGIN_CONFLICT: WVT_API_URL or the saved receipt disagrees with " +
+      "the locally configured Worker. Confirm the correct account-level workers.dev " +
+      "subdomain in your OWN Cloudflare dashboard. Do not send credentials yet.";
+  }
+  if (/subdomain|Invalid Worker or account|Invalid counter slug|invalid.*URL/i.test(message)) {
+    return "WVT-D07 URL_OR_SLUG: Supply only the account workers.dev subdomain label " +
+      "(not a URL or D1 name); a counter slug must be an actual existing slug. " +
+      "Identical Worker and account labels may appear twice in the full hostname.";
+  }
+  if (/receipt|live-check|JSON|diagnostic report|completed real-cloud/.test(message)) {
+    return "WVT-D08 RECEIPT: Check the saved local successful live-check JSON. " +
+      "A missing or failed report cannot prove a counter exists; do not repeat " +
+      "the cloud write test automatically.";
+  }
+  if (/README|Markdown|.md\b|.markdown\b/i.test(message)) {
+    return "WVT-D09 README_FILE: Check the path to your LOCAL README and the exact " +
+      "existing SVG slug. This doctor does not download or edit GitHub files.";
+  }
+  return "WVT-D00 LOCAL_CHECK_FAILED: Review the extracted self-host files and run " +
+    "node scripts/self-host-setup.mjs check, then node scripts/self-host-readiness.mjs check. " +
+    "No cloud deployment or write was attempted.";
+}
+
+function manualSteps(origin = null) {
+  const lines = [
+    "MANUAL NEXT STEPS (PRINT-ONLY; NO COMMANDS EXECUTED):",
+    "1. Run: node scripts/self-host-setup.mjs check",
+    "2. Run: node scripts/self-host-readiness.mjs check",
+    "3. Run: node worker/self-host-smoke.mjs (disposable local D1 only)",
+    "4. Run: npx wrangler whoami (NETWORK; verify YOUR account before using any resource)"
+  ];
+  if (!origin) {
+    lines.push(
+      "5. Find your OWN Cloudflare account workers.dev subdomain in the dashboard.",
+      "6. Re-run doctor with --account-subdomain YOUR_ACCOUNT_LABEL --steps.",
+      "No remote migration/deployment commands are shown before an account label is supplied."
+    );
+    return lines;
+  }
+  lines.push(
+    "5. ONLY IF the named Worker/D1 are YOUR disposable resources and you accept usage:",
+    "   npx wrangler d1 migrations apply DB --remote --config wrangler.selfhost.toml",
+    "   npx wrangler deploy --config wrangler.selfhost.toml",
+    "   npx wrangler secret put ADMIN_TOKEN --config wrangler.selfhost.toml",
+    "   npx wrangler secret put VISIT_HASH_SECRET --config wrangler.selfhost.toml",
+    "   For the two secret put prompts, supply the corresponding ignored files",
+    "   interactively. NEVER include their values in shell arguments or GitHub.",
+    "6. READ-ONLY remote verification (only after confirming the exact origin):",
+    "   node scripts/self-host-verify.mjs --api " + origin +
+      " --token-file .wvt-admin-token",
+    "7. If a counter already exists, recover its slug WITHOUT creating another:",
+    "   node scripts/self-host-publish.mjs list --api " + origin +
+      " --token-file .wvt-admin-token",
+    "   Note: list makes remote D1 reads and may return 405 for older Workers.",
+    "8. Create/update counters only after separately opting in to a real D1 write.",
+    "   GitHub caching means image requests are NOT accurate profile views.",
+    "Manual commands above do not verify ownership, remote counters or billing."
+  );
+  return lines;
 }
 
 export async function inspectSelfHostDoctor(args, {
@@ -86,6 +189,7 @@ export async function inspectSelfHostDoctor(args, {
       "subdomain. Then re-run with --account-subdomain ACCOUNT_LABEL.",
       "Do NOT enter a full URL or the D1 database name."
     );
+    if (args.steps) lines.push(...manualSteps());
     return lines.join("\n") + "\n";
   }
   const config = await setup({ root });
@@ -144,18 +248,17 @@ export async function inspectSelfHostDoctor(args, {
       "Older Workers can return HTTP 405. Do NOT recreate or redeploy automatically."
     );
   }
+  if (args.steps) lines.push(...manualSteps(origin));
   return lines.join("\n") + "\n";
 }
 
 async function main() {
   try {
     process.stdout.write(await inspectSelfHostDoctor(parseDoctorArgs(process.argv.slice(2))));
-  } catch {
-    // Never echo raw private config, tokens, paths, network errors, or report bodies.
-    process.stderr.write(
-      "Offline self-host diagnosis failed. Check local setup, exact account " +
-      "subdomain, optional receipt/README and WVT_API_URL. Nothing was deployed or changed.\n"
-    );
+  } catch (error) {
+    // Never echo raw config, secrets, private paths, URLs or report bodies.
+    process.stderr.write(explainDoctorFailure(error) + "\n" +
+      "Offline doctor stopped. No Cloudflare or D1 requests or writes occurred.\n");
     process.exitCode = 1;
   }
 }
