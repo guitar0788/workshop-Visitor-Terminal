@@ -32,7 +32,7 @@ export function parseReadmeArgs(argv, environment = process.env) {
         !argv[i + 1] || argv[i + 1].startsWith("--")) {
       throw Error("Unknown, repeated or incomplete README option");
     }
-    parsed[name] = argv[++i];
+    parsed[name] = argv[i + 1];
   }
   const api = parsed.api ?? environment.WVT_API_URL;
   if (!api || !parsed.report || !/^[a-zA-Z0-9._/-]+\.json$/.test(parsed.report)) {
