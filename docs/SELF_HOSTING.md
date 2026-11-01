@@ -197,6 +197,17 @@ node scripts/self-host-doctor.mjs --account-subdomain YOUR_ACCOUNT_SUBDOMAIN --s
 node scripts/self-host-doctor.mjs --account-subdomain YOUR_ACCOUNT_SUBDOMAIN --report selfhost-live-result.json --readme README.md
 ```
 
+**让诊断工具给出下一步命令（只打印，不执行）：**
+
+```sh
+node scripts/self-host-doctor.mjs --steps
+node scripts/self-host-doctor.mjs --account-subdomain YOUR_ACCOUNT_SUBDOMAIN --steps
+```
+
+第一条只提供离线配置、一次性本地 D1 测试和账户核对步骤，不会打印云端部署命令。第二条在**本地检查通过**且你确认账户子域名后，额外打印远程迁移、部署、交互式密钥上传、只读验证及计数器名称恢复的手动命令；但**不会自动执行任何命令**。确认自己的 Cloudflare 账户、Worker、全新可丢弃 D1 和费用后，使用者才应决定是否逐条运行涉及 `--remote`、`deploy` 或 `secret put` 的命令。已有数据不应为排查而重建或迁移。
+
+**诊断失败时的安全故障代码：** Doctor 不再把“全部错误”隐藏成一条无法定位的提示，也不会回显原始异常中可能包含的文件路径或密钥。它输出固定的 `WVT-Dxx` 类别与对应建议：`D01` 缺少本地文件、`D02` Node 版本、`D03` 本地密钥、`D04` Wrangler 配置、`D05` npm 锁定文件、`D06` Worker 地址冲突、`D07` 账户子域名或 slug、`D08` 实机报告、`D09` 本地 README；无法安全判定时输出 `D00`。**不要把密钥或私有配置粘贴到 Issue/聊天中**。这里的代码只针对本地检查，不代表真实 Cloudflare 测试或账单验证。
+
 README 检查只报告 `MATCH`、`DIFFERENT_COUNTER_URL` 或 `MISSING_COUNTER_IMAGE`，**绝不自动编辑文件**；报告中的成功标志并不是密码学签名，也不能证明链接目前仍能被访问。诊断工具不会发出网络请求、运行 Wrangler、部署或修改 D1；仅在本地读取并检查密钥内容是否符合要求，不在输出中回显。即使全部通过，**Issue #22 的真实独立云端、GitHub 图片渲染及账单验收仍未完成**。如果没有已知 slug 或报告，工具只会给出使用 `list` 的独立只读命令，不会尝试新建计数器；该 `list` 命令如手动执行，仍会产生自己的 D1 读取用量。
 
 ### 在 Mac 终端中一次保存 Worker 地址（无需重复填写）
