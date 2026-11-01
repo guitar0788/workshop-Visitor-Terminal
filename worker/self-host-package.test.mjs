@@ -81,7 +81,7 @@ test("release preview ZIP contains ONLY reviewed project sources and never secre
     const expectedHash = createHash("sha256").update(result.zip).digest("hex");
     assert.equal(result.sha256, expectedHash);
     assert.equal(await readFile(result.checksumPath, "utf8"),
-      expectedHash + "  Workshop-Visitor-Terminal-Self-Host.zip\\n");
+      expectedHash + "  Workshop-Visitor-Terminal-Self-Host.zip\n");
     const extracted = extractZip(result.zip);
     assert.deepEqual([...extracted.keys()].sort(), [...ALLOWED_FILES].sort());
     assert(![...extracted.keys()].some(name =>
