@@ -14,7 +14,14 @@
 4. 即使断网，也可以选择模板、编辑图层、移动与调整尺寸、实时预览、保存 SVG、保存/加载 JSON 设计，以及切换中英文。
 5. 测试完成后将问题反馈到 [GitHub Issues](https://github.com/guitar0788/workshop-Visitor-Terminal/issues)，可提供无敏感信息的截图或问题步骤，不需要上传私人的账户数据、访问令牌或浏览器文件。
 
-文件是一个完整 HTML，内含编辑器程序与样式；**不要求安装 Node.js、启动服务或配置 Cloudflare**。打开后浏览器内容安全策略限制所有网络连接（`connect-src 'none'`），并且编译时已明确禁用云端登录与发布按钮。
+文件是一个完整 HTML，内含编辑器程序与样式；**不要求安装 Node.js、启动服务或配置 Cloudflare**。
+
+### 编辑草稿自动恢复（v0.6 开发分支）
+
+- 如果浏览器允许 `localStorage`，编辑内容会以**仅包含设计数据的 JSON** 留在当前浏览器中；重新打开同一编辑器可以恢复原有设计，包含 Minecraft 的自定义标题与图层。
+- 草稿不包含 GitHub 登录状态、Cloudflare 密钥、计数器托管记录或访问统计，不会上传至任何服务器，也不会跨手机或电脑同步。
+- **重新开始设计**会要求确认，替换当前本地草稿，但不会删除已发布的线上计数器。示例访问次数不作为草稿持久化。
+- 部分隐私模式、清除浏览器数据或本地 `file://` 策略可能禁止保存或删除草稿。**请始终导出 JSON 备份**，不要把自动恢复作为唯一保存手段。打开后浏览器内容安全策略限制所有网络连接（`connect-src 'none'`），并且编译时已明确禁用云端登录与发布按钮。
 
 **重要区别：** 在离线版中填写或调整的访问次数是预览演示数字。下载的 SVG 是静态图片，**不会自动增加访问次数，也不能假装拥有真实 GitHub 主页访问统计**。如果希望 README 中的访问次数随实际请求增加，必须部署可公开访问的计数后端；可以由用户自己选择托管，不必使用维护者的 Cloudflare 账户。
 
@@ -52,14 +59,14 @@ npm run build:offline
 - 单文件版是由 **关闭 OAuth 与发布功能** 的专用 Vite 编译生成，不是从线上内测版本直接复制的脚本。
 - 文件中没有 GitHub OAuth Client Secret、Cloudflare API Token、D1 数据库凭据或用户会话。
 - 安全策略禁止浏览器对任何网络地址发起连接，并且没有外部 CSS/JS/字体依赖。
-- 静态 HTML 中的语言偏好、文件导入/导出由本机浏览器处理；是否记住语言取决于浏览器对 `file://` 的存储政策。
+- 静态 HTML 中的语言偏好、设计草稿、文件导入/导出由本机浏览器处理；是否能恢复草稿取决于浏览器对 `file://` 的存储政策。
 - 在自己的电脑打开可信来源的 HTML。仓库中的 MIT 许可证允许查看、修改、分发和自行托管代码。
 
 ## English — No installation needed
 
 Download `Workshop-Studio-Offline.html` from the **Download offline HTML** button in [Workshop Studio](https://guitar0788.github.io/workshop-Visitor-Terminal/), then double-click the file in your file browser. Open it in an up-to-date Chrome, Edge, or Firefox browser. After the initial download, no network connection or account is needed.
 
-You can visually edit and reorder layers, preview your SVG, change an **example** visitor count, export a static SVG, and import/export JSON design files. GitHub OAuth and Cloudflare hosting are intentionally disabled. The generated document contains embedded JS/CSS and a strict no-connect Content Security Policy.
+You can visually edit and reorder layers, preview your SVG, change an **example** visitor count, export a static SVG, and import/export JSON design files. On the v0.6 development branch, the editor also restores local design drafts on a subsequent visit when browser storage permits. This is local-only, not cloud sync: the preview count is not saved and you must still export JSON as a portable backup. **Start fresh** confirms before replacing an unsaved local design and never removes published counters. GitHub OAuth and Cloudflare hosting are intentionally disabled. The generated document contains embedded JS/CSS and a strict no-connect Content Security Policy.
 
 This edition **does not record real visits**. For live counters, testers must use an independently hosted backend or an explicitly authorized cloud provider. The project owner does not need to pay for other users' offline editing.
 
