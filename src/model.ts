@@ -110,7 +110,7 @@ function makeCardPreset(theme: CardTheme): TerminalDesign {
     { id:"visits", kind:"count", x:c.countX, y:c.countY, width:c.countWidth,
       height:61, text:"", fontSize:c.countSize, color:c.accent, visible:true },
     { id:"caption", kind:"text", x:c.labelX, y:c.labelY, width:c.captionWidth,
-      height:28, text:c.caption, fontSize:c.captionSize, color:c.accent, visible:theme === "minimal-card" }
+      height:28, text:c.caption, fontSize:c.captionSize, color:c.accent, visible:theme === "minimal-card" || theme.startsWith("mc-") }
   ];
   return { schemaVersion:1, theme, width:600, height:210,
     background:c.background, accent:c.accent, layers };
