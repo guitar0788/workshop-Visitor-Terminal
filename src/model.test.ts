@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   addLayer, CARD_THEMES, clonePreset, escapeXml, fittedCountSize, moveLayer,
-  renderSvg, reorderLayer, sanitizeDesign
+  renderSvg, reorderLayer, resizeCanvas, sanitizeDesign
 } from "./model";
 import { isApprovedTheme, approvedCanvasWidth } from "./approved-reference-cards";
 
@@ -481,5 +481,48 @@ describe("six illustrated-card editing and exported-design parity", () => {
       expect(renderSvg(design, 999_999_999_999)).toContain('>999,999,999,999</text>');
       expect(renderSvg(design, 1_000_000_000_000)).toContain('>999,999,999,999</text>');
     }
+  });
+});
+
+describe("canvas resizing preserves illustrated art and overlay alignment", () => {
+  it("scales each existing editable layer with the artwork instead of leaving it behind", () => {
+    for (const theme of CARD_THEMES) {
+      const original = clonePreset(theme);
+      const originalJson = JSON.stringify(original);
+      const resized = resizeCanvas(original, 800, 420);
+      const sx = 800 / original.width;
+      const sy = 420 / original.height;
+      expect(resized.width).toBe(800);
+      expect(resized.height).toBe(420);
+      expect(JSON.stringify(original)).toBe(originalJson);
+      for (const old of original.layers) {
+        const layer = resized.layers.find(l => l.id === old.id);
+        expect(layer).toBeTruthy();
+        expect(Math.abs(layer!.x - Math.round(old.x * sx))).toBeLessThanOrEqual(1);
+        expect(Math.abs(layer!.y - Math.round(old.y * sy))).toBeLessThanOrEqual(1);
+        expect(layer!.width).toBe(Math.max(8, Math.round(old.width * sx)));
+        expect(layer!.height).toBe(Math.max(8, Math.round(old.height * sy)));
+        expect(layer!.x + layer!.width).toBeLessThanOrEqual(resized.width);
+        expect(layer!.y + layer!.height).toBeLessThanOrEqual(resized.height);
+      }
+      const svg = renderSvg(resized, 12_848);
+      expect(svg).toContain('width="800" height="420" viewBox="0 0 800 420"');
+      expect(svg).toContain(">12,848</text>");
+      expect(sanitizeDesign(JSON.parse(JSON.stringify(resized)))).toEqual(resized);
+      if (isApprovedTheme(theme)) {
+        expect(svg).toContain('href="data:image/avif;base64,');
+      } else {
+        expect(svg).toContain('shape-rendering="crispEdges"');
+      }
+    }
+  });
+
+  it("bounds invalid resize input and leaves an already correct canvas untouched", () => {
+    const design = clonePreset("mc-overworld");
+    expect(resizeCanvas(design, design.width, design.height)).toEqual(design);
+    const clamped = resizeCanvas(design, 50_000, -3);
+    expect(clamped.width).toBe(800);
+    expect(clamped.height).toBe(160);
+    expect(clamped.layers.some(l => l.kind === "count")).toBe(true);
   });
 });
