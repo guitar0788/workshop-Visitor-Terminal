@@ -13,12 +13,11 @@
 
 ### 1. 安装工具并创建独立数据库
 
-要求安装 Node.js 20+、Git，并拥有自己的 Cloudflare 账户。
+要求安装 Node.js 20+、Git，并拥有自己的 Cloudflare 账户。 当前 PR #21 仍处于 Draft 预览阶段，因此下面命令临时切换到开发分支；正式合并后可省略 `git switch`。
 
 ```sh
 git clone https://github.com/guitar0788/workshop-Visitor-Terminal.git
 cd workshop-Visitor-Terminal
-# PR #21 is still a Draft; this branch contains the preview tools.
 git switch feat/v06-independent-self-hosting
 npm install
 npx wrangler login
