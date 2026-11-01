@@ -52,9 +52,9 @@ test("only offline check and optional report path are accepted", () => {
     ["check", "--report", "--delete"], ["check", "--report", "x", "--api", "y"],
     ["check", "--report", "x", "--remote", "true"]
   ]) assert.throws(() => parseReadinessArgs(args));
-  assert.equal(checkNodeVersion("22.1.0"), true);
+  assert.equal(checkNodeVersion("22.12.0"), true);
   assert.equal(checkNodeVersion("24.0.1"), true);
-  for (const v of ["20.14.0", "21.99.0", "x", "", null])
+  for (const v of ["20.14.0", "21.99.0", "22.1.0", "23.5.0", "25.0.0", "x", "", null])
     assert.throws(() => checkNodeVersion(v));
 });
 
