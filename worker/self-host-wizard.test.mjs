@@ -5,7 +5,7 @@ import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { initialize, checkSetup } from "../scripts/self-host-setup.mjs";
 import {
-  parseWizardArgs, runGuidedSetup, checkWizard, WIZARD_INTRO, WIZARD_NEXT
+  parseWizardArgs, runGuidedSetup, checkWizard, explainWizardFailure, WIZARD_INTRO, WIZARD_NEXT
 } from "../scripts/self-host-wizard.mjs";
 
 const WORKER = "my-new-visitor-worker";
@@ -182,4 +182,23 @@ test("Node versions and malformed injected readiness gates fail closed", async (
     }), /Unexpected local readiness status/);
     assert(!(await readdir(root)).includes("wrangler.selfhost.toml"));
   });
+});
+
+test("first-run input errors have fixed instructions without private values", () => {
+  const confidential = "private-account-UUID-secret/Users/person";
+  const cases = [
+    [new Error("Choose a unique lowercase Worker name, new D1 name, and a genuine D1 UUID"), "WVT-W01"],
+    [new Error("Self-host setup already exists or is partial. No file was replaced; inspect it manually."), "WVT-W02"],
+    [new Error("Interactive terminal required for first-run setup"), "WVT-W03"],
+    [new Error("Unexpected local readiness status"), "WVT-W04"],
+    [Object.assign(new Error(confidential), {code: "ENOENT"}), "WVT-D01"],
+    [new Error(confidential), "WVT-D00"]
+  ];
+  for (const [error, expected] of cases) {
+    const result = explainWizardFailure(error);
+    assert(result.startsWith(expected), expected + " " + result);
+    assert(!result.includes(confidential));
+    assert(!result.includes("/Users/person"));
+    assert(result.length < 550);
+  }
 });
