@@ -96,6 +96,9 @@ test("release preview ZIP contains ONLY reviewed project sources and never secre
     const service = extracted.get("worker/service.ts").toString("utf8");
     const publishing = extracted.get("worker/publishing.ts").toString("utf8");
     const cardArt = extracted.get("src/card-art.ts").toString("utf8");
+    assert(extracted.has("src/approved-reference-cards.ts"), "Exact approved card overlay present");
+    assert(extracted.has("src/approved-three-card-image.ts"), "Approved concept art embedded in standalone ZIP");
+    assert(extracted.get("src/approved-three-card-image.ts").toString("utf8").includes("data:image/avif;base64,"));
     assert.match(cardArt, /pixel-card/);
     assert.match(cardArt, /minimal-card/);
     assert.match(service, /from "..\/src\/model"/);

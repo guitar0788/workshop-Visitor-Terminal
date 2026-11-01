@@ -3,6 +3,7 @@ import {
   addLayer, CARD_THEMES, clonePreset, escapeXml, fittedCountSize, moveLayer,
   renderSvg, reorderLayer, sanitizeDesign
 } from "./model";
+import { isApprovedTheme } from "./approved-reference-cards";
 
 describe("visitor terminal SVG layer model", () => {
   it("starts with editable layers and isolated presets", () => {
@@ -102,7 +103,12 @@ describe("v0.6 illustrated visitor cards", () => {
       expect(updated).not.toContain(">12,847</text>");
       expect(first).toMatch(/<rect|<path|<circle/);
       expect(first).toContain("scale(1 1)");
-      expect(first).not.toMatch(/<script|<foreignObject|<image|href=|url\(https?:/i);
+      if (isApprovedTheme(theme)) {
+        expect(first).toContain('href="data:image/avif;base64,');
+        expect(first).not.toMatch(/<script|<foreignObject|href="https?:/i);
+      } else {
+        expect(first).not.toMatch(/<script|<foreignObject|<image|href=|url\(https?:/i);
+      }
       expect(sanitizeDesign(JSON.parse(JSON.stringify(design)))).toEqual(design);
     }
   });
@@ -120,15 +126,23 @@ describe("v0.6 illustrated visitor cards", () => {
   it("does not let imported designs inject SVG markup into card artwork or layers", () => {
     for (const theme of CARD_THEMES) {
       const design = clonePreset(theme);
+      const injected = {
+        ...design.layers[0],
+        id: "hostile_label", kind: "text" as const,
+        text: '<image href="https://evil.example"/>'
+      };
+      const live = design.layers.find(layer => layer.kind === "count")!;
       const hostile = sanitizeDesign({
-        ...design,
-        theme,
-        accent: 'url("https://evil.example")',
-        layers: [{ ...design.layers[0], text: '<image href="https://evil.example"/>' },
-          design.layers[1]]
+        ...design, theme, accent: 'url("https://evil.example")',
+        layers: [injected, live]
       });
       const output = renderSvg(hostile, 4);
-      expect(output).not.toContain('<image');
+      if (isApprovedTheme(theme)) {
+        expect(output.match(/<image\b/g)).toHaveLength(1);
+        expect(output).toContain('data:image/avif;base64,');
+      } else {
+        expect(output).not.toContain('<image');
+      }
       expect(output).not.toContain('href="https://evil.example"');
       expect(output).not.toContain('fill="url(&quot;https://evil.example&quot;)"');
       expect(output).toContain("&lt;image");
@@ -139,7 +153,7 @@ describe("v0.6 illustrated visitor cards", () => {
   });
 
   it("changes customizable text/count layers without losing the illustrated scene", () => {
-    const design = clonePreset("pixel-card");
+    const design = clonePreset("modern-card");
     design.layers[0].text = "My Workshop";
     design.layers[0].color = "#aabbcc";
     const svg = renderSvg(design, 25);
@@ -158,6 +172,7 @@ describe("formatted count fit and long-term visitor growth", () => {
     for (const theme of CARD_THEMES) {
       const design = clonePreset(theme);
       const layer = design.layers.find(layer => layer.kind === "count")!;
+      if (isApprovedTheme(theme)) continue;
       expect(fittedCountSize(layer, "12,847")).toBe(layer.fontSize);
       const svg = renderSvg(design, 12_847);
       expect(svg).toContain('font-size="' + layer.fontSize + '"');
@@ -174,7 +189,7 @@ describe("formatted count fit and long-term visitor growth", () => {
       expect(sized).toBeGreaterThanOrEqual(8);
       expect(sized * counter.length * 0.63).toBeLessThanOrEqual(layer.width - 4);
       const svg = renderSvg(d, 999_999_999_999);
-      expect(svg).toContain('font-size="' + sized + '"');
+      if (!isApprovedTheme(theme)) expect(svg).toContain('font-size="' + sized + '"');
       expect(svg).toContain('>999,999,999,999</text>');
       expect(svg).toContain("999,999,999,999 visits");
     }
@@ -223,7 +238,8 @@ describe("inline gallery fragment isolation", () => {
           expect(local.has(refId)).toBe(true);
         }
         expect(svg).not.toContain('id="clip-heading"');
-        expect([...svg.matchAll(/<clipPath\b/g)]).toHaveLength(theme === "minimal-card" ? 3 : 2);
+        expect([...svg.matchAll(/<clipPath\b/g)]).toHaveLength(
+          isApprovedTheme(theme) ? 1 : theme === "minimal-card" ? 3 : 2);
       }
     }
     expect(total).toBeGreaterThanOrEqual(38);
@@ -236,8 +252,8 @@ describe("inline gallery fragment isolation", () => {
     const b = renderSvg(moved, 125);
     const idsA = [...a.matchAll(/\bid="(clip-[^"]+)"/g)].map(v => v[1]);
     const idsB = [...b.matchAll(/\bid="(clip-[^"]+)"/g)].map(v => v[1]);
-    expect(idsA).toHaveLength(2);
-    expect(idsB).toHaveLength(2);
+    expect(idsA).toHaveLength(1);
+    expect(idsB).toHaveLength(1);
     expect(idsA.filter(x => idsB.includes(x))).toHaveLength(0);
   });
 });
@@ -247,13 +263,16 @@ describe("visual reference fidelity — nine wide illustrated cards", () => {
   it("uses the original wide-banner canvas instead of old tall placeholder proportions", () => {
     for (const theme of CARD_THEMES) {
       const card = clonePreset(theme);
-      expect(card.width).toBe(600);
-      expect(card.height).toBe(210);
+      const isReference = isApprovedTheme(theme);
+      expect(card.width).toBe(isReference ? 690 : 600);
+      expect(card.height).toBe(isReference ? 362 : 210);
       expect(card.layers.filter(l => l.kind === "count")).toHaveLength(1);
       expect(card.layers[0].visible).toBe(true);
       const actual = renderSvg(card, 12_847);
-      expect(actual).toContain('width="600" height="210" viewBox="0 0 600 210"');
-      expect(actual).toContain('scale(1 1)');
+      expect(actual).toContain(isReference ?
+        'width="690" height="362" viewBox="0 0 690 362"' :
+        'width="600" height="210" viewBox="0 0 600 210"');
+      if (!isReference) expect(actual).toContain('scale(1 1)');
       expect(actual).toContain('>12,847</text>');
       expect(actual).not.toContain('>999,999,999,999</text>');
     }
@@ -265,15 +284,49 @@ describe("visual reference fidelity — nine wide illustrated cards", () => {
   it("renders distinct actual vector scenes rather than switching only colors or text", () => {
     const scenes = CARD_THEMES.map(theme => renderSvg(clonePreset(theme), 12_847));
     expect(new Set(scenes).size).toBe(9);
-    for (const svg of scenes) {
-      expect(svg.match(/<(?:path|rect|circle|ellipse)\b/g)?.length ?? 0).toBeGreaterThan(8);
-      expect(svg).not.toMatch(/<image\b|<script\b|<foreignObject\b|\shref\s*=/i);
+    for (const [i, svg] of scenes.entries()) {
+      const theme = CARD_THEMES[i];
+      if (isApprovedTheme(theme)) {
+        expect(svg).toContain('data:image/avif;base64,');
+        expect(svg.match(/<image\b/g)).toHaveLength(1);
+      } else {
+        expect(svg.match(/<(?:path|rect|circle|ellipse)\b/g)?.length ?? 0).toBeGreaterThan(8);
+        expect(svg).not.toMatch(/<image\b|<script\b|<foreignObject\b|\shref\s*=/i);
+      }
       expect(svg).toContain("<defs>");
     }
-    expect(scenes[0]).toContain('shape-rendering="crispEdges"');
-    expect(scenes[2]).toContain("termGlow");
     expect(scenes[5]).toContain("planet");
     expect(scenes[6]).toContain("paperLines");
     expect(scenes[7]).toContain("neonGlow");
+  });
+});
+
+describe("exact approved raster cards, and nothing else", () => {
+  it("bundles the approved three-card artwork without external URLs", () => {
+    for (const theme of ["pixel-card","terminal-card","rpg-card"] as const) {
+      const art=renderSvg(clonePreset(theme),12_847);
+      expect(art.match(/<image\b/g)).toHaveLength(1);
+      expect(art).toContain('href="data:image/avif;base64,');
+      expect(art).not.toMatch(/href="https?:/i);
+      expect(art).toContain('opacity="0"');
+      expect(art).toContain('>12,847</text>');
+      const updated=renderSvg(clonePreset(theme),12_848);
+      expect(updated).toContain('>12,848</text>');
+      expect(updated).not.toContain('>12,847</text>');
+      expect(updated).not.toContain('opacity="0"');
+    }
+  });
+  it("leaves all six other illustrated and three classic template widths unchanged", () => {
+    for(const theme of CARD_THEMES.filter(t=>!isApprovedTheme(t))) {
+      const card=clonePreset(theme);
+      expect(card.width).toBe(600);
+      expect(card.height).toBe(210);
+      expect(renderSvg(card, 12_847)).not.toContain('data:image/avif');
+    }
+    for(const theme of ["pixel","minimal","cyber"] as const) {
+      const card=clonePreset(theme);
+      expect(card.width).toBe(420);
+      expect(card.height).toBe(220);
+    }
   });
 });

@@ -24,7 +24,8 @@ const browserScript = [
   "if(usedIds.has(node.id))failures.push('duplicate inline SVG id: '+node.id);",
   "usedIds.add(node.id);}",
   "const texts=[...svg.querySelectorAll('text')];",
-  "if(texts.length!==(sample.dataset.theme==='minimal-card'?3:2))failures.push(sample.dataset.theme+': wrong text layer count');",
+  "const approved=['pixel-card','terminal-card','rpg-card'].includes(sample.dataset.theme);",
+  "if(texts.length!==(approved?1:sample.dataset.theme==='minimal-card'?3:2))failures.push(sample.dataset.theme+': wrong text layer count');",
   "for(const t of texts){",
   "const clip=t.getAttribute('clip-path');",
   "if(!clip||!/^url\\(#clip-[A-Za-z0-9_-]{1,100}\\)$/.test(clip)){failures.push('unsafe/missing clip');continue;}",
@@ -49,7 +50,10 @@ const browserScript = [
   "if(overlapX>3&&overlapY>2)failures.push(sample.dataset.theme+",
   "' text overlap: '+texts[i].textContent.slice(0,16)+' / '+texts[j].textContent.slice(0,16));",
   "}}",
-  "if(svg.querySelector('script,image,foreignObject'))failures.push('unsafe svg');",
+  "if(svg.querySelector('script,foreignObject'))failures.push('unsafe svg');",
+  "const images=[...svg.querySelectorAll('image')];",
+  "if(images.length!==(approved?1:0))failures.push('unexpected artwork images');",
+  "for(const im of images){if(!/^data:image\\/avif;base64,[A-Za-z0-9+/=]+$/.test(im.getAttribute('href')||''))failures.push('external artwork image');}",
   "}",
   "document.getElementById('visual-audit').textContent=JSON.stringify({",
   "schemaVersion:1,kind:'workshop-visitor-terminal-browser-svg-audit',",
@@ -66,9 +70,22 @@ export function createGallery(samples) {
     if(!s||typeof s.name!=="string"||!/^[a-z-]+$/.test(s.name)||
       !COUNTS.includes(s.count)||seen.has(s.name+":"+s.count)||
       typeof s.svg!=="string"||
-      !s.svg.startsWith('<svg xmlns="http://www.w3.org/2000/svg"')||
-      /<script\b|<foreignObject\b|<image\b|\shref\s*=/i.test(s.svg)){
-      throw Error("Invalid or duplicate card SVG");}
+      !s.svg.startsWith('<svg xmlns="http://www.w3.org/2000/svg"')) {
+      throw Error("Invalid or duplicate card SVG");
+    }
+    const approved = ["pixel-card","terminal-card","rpg-card"].includes(s.name);
+    const embeddedImages = s.svg.match(/<image\b[^>]*>/g) || [];
+    if(embeddedImages.length!==(approved?1:0))throw Error("Unexpected SVG image element");
+    let checked = s.svg;
+    if(approved) {
+      const tag=embeddedImages[0];
+      if(!/href="data:image\/avif;base64,[A-Za-z0-9+/=]{90000,120000}"/.test(tag) ||
+        !/^<image\b/.test(tag))throw Error("Non-approved external image reference");
+      checked=checked.replace(tag,"");
+    }
+    if(/<script\b|<foreignObject\b|<image\b|\shref\s*=/i.test(checked)) {
+      throw Error("Active, extra or external image markup");
+    }
     seen.add(s.name+":"+s.count);
   }
   // Static second barrier: a multi-card page MUST NOT reuse SVG fragment IDs
@@ -137,7 +154,7 @@ export function parseBrowserAudit(html) {
   try{r=JSON.parse(match[1].replaceAll("&quot;",'"').replaceAll("&amp;","&"));}
   catch{throw Error("Malformed browser font audit result");}
   if(!r||r.schemaVersion!==1||r.kind!=="workshop-visitor-terminal-browser-svg-audit"||
-    r.sampleCount!==SAMPLES||r.checkedText!==38||
+    r.sampleCount!==SAMPLES||r.checkedText!==32||
     r.remoteRendering!=="NOT_TESTED"||r.githubReadmeRendering!=="NOT_TESTED"||
     !Array.isArray(r.failures)||r.failures.some(x=>typeof x!=="string")||
     !Number.isSafeInteger(r.overflowCount)||r.overflowCount!==r.failures.length||

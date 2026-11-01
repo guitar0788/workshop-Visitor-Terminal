@@ -22,7 +22,9 @@ test("gallery builds from actual bundled model with all nine vector cards at bot
     assert(html.includes("getBBox()")===false || html.includes("getBBox()"));
     assert.match(html,/getBBox\(\)/);
     assert(html.includes("remote SVG")==false);
-    assert(!/https:\/\/evil\.example|<image\b|\shref\s*=/i.test(html));
+    assert.equal(html.split("data:image/avif;base64,").length-1,6);
+    assert(!html.includes('href="https://'));
+    assert(!/https:\/\/evil\.example|<script\b|<foreignObject\b/i.test(html));
     assert(html.includes("NOT cloud statistics."));
   } finally { await rm(root,{recursive:true,force:true}); }
 });
@@ -41,13 +43,13 @@ test("gallery source rejects duplicate, injected, and incomplete samples", () =>
 test("browser report is accepted only with exact full render coverage", async () => {
   const report={
     schemaVersion:1,kind:"workshop-visitor-terminal-browser-svg-audit",
-    sampleCount:18,checkedText:38,failures:[],overflowCount:0,
+    sampleCount:18,checkedText:32,failures:[],overflowCount:0,
     remoteRendering:"NOT_TESTED",githubReadmeRendering:"NOT_TESTED"
   };
   const html='<output id="visual-audit" hidden="">'+JSON.stringify(report)+'</output>';
   assert.deepEqual(parseBrowserAudit(html),report);
   for(const patch of [
-    {sampleCount:17},{checkedText:37},{remoteRendering:"PASS"},
+    {sampleCount:17},{checkedText:31},{remoteRendering:"PASS"},
     {githubReadmeRendering:"PASS"},{overflowCount:2},{failures:["clipped"],overflowCount:1}
   ]) {
     const altered='<output id="visual-audit">'+JSON.stringify({...report,...patch})+'</output>';
@@ -64,7 +66,7 @@ test("the verifier flags actual browser-measured clipping, not just SVG string c
   try {
     const file=join(root,"browser.html");
     const base={schemaVersion:1,kind:"workshop-visitor-terminal-browser-svg-audit",
-      sampleCount:18,checkedText:38,failures:["neon-card(999999999999) text:long"],
+      sampleCount:18,checkedText:32,failures:["neon-card(999999999999) text:long"],
       overflowCount:1,remoteRendering:"NOT_TESTED",githubReadmeRendering:"NOT_TESTED"};
     const {writeFile}=await import("node:fs/promises");
     await writeFile(file,'<output id="visual-audit">'+JSON.stringify(base)+'</output>');
