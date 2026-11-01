@@ -24,6 +24,7 @@ Usage:
   node scripts/self-host-publish.mjs update --api https://YOUR-WORKER.YOUR-SUBDOMAIN.workers.dev --slug my-counter --design visitor-terminal.design.json [--token-file .wvt-admin-token]
   node scripts/self-host-publish.mjs inspect --api https://YOUR-WORKER.YOUR-SUBDOMAIN.workers.dev --slug my-counter [--token-file .wvt-admin-token]
 
+Set WVT_API_URL once in the terminal to omit repeated --api on macOS/Linux/Windows.
 Use an administrator token stored in WVT_ADMIN_TOKEN or an ignored --token-file.
 Never use the repository owner's staging Worker or expose this token in a browser.
 The CLI runs three unauthenticated safety checks before it reads/sends the token.
@@ -45,7 +46,7 @@ export function parseArgs(argv, environment = process.env) {
   }
   options.api = resolveSelfHostApi(options.api, environment);
   if (!options.slug || !SLUG.test(options.slug)) {
-    throw Error("Provide --api and a valid lowercase --slug (1–40 characters)");
+    throw Error("Provide a valid lowercase --slug (1–40 characters)");
   }
   if (command === "create" && (!options.owner || !OWNER.test(options.owner))) {
     throw Error("Create requires a valid --owner GitHub login");
