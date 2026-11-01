@@ -1,0 +1,69 @@
+name: Illustrated Card Visual Audit
+# Real browser rendering with no publish credentials, remote images or D1.
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/card-visual-audit.yml"
+      - "scripts/card-visual-audit.mjs"
+      - "worker/card-visual-audit.test.mjs"
+      - "src/model.ts"
+      - "src/card-art.ts"
+      - "src/main.tsx"
+      - "src/style.css"
+      - "package.json"
+      - "package-lock.json"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: card-visual-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  browser-render:
+    name: Render nine illustrated cards in headless Chrome
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'feat/v06-independent-self-hosting'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install exact locked dependencies
+        run: npm ci
+      - name: Test contact-sheet source validation
+        run: node --test worker/card-visual-audit.test.mjs
+      - name: Generate 18 SVG cards using the actual shared renderer
+        run: node scripts/card-visual-audit.mjs build
+      - name: Measure actual Chrome SVG text clipping
+        run: |
+          set -euo pipefail
+          command -v google-chrome
+          google-chrome --headless=new --no-sandbox --disable-gpu \
+            --disable-dev-shm-usage --disable-extensions \
+            --virtual-time-budget=3000 \
+            --dump-dom "file://$PWD/dist/Card-Visual-Review.html" \
+            > dist/card-browser-dom.html 2> /dev/null
+          node scripts/card-visual-audit.mjs check dist/card-browser-dom.html
+      - name: Capture real browser visual contact sheet
+        run: |
+          set -euo pipefail
+          google-chrome --headless=new --no-sandbox --disable-gpu \
+            --disable-dev-shm-usage --disable-extensions --hide-scrollbars \
+            --window-size=1590,2450 \
+            --screenshot="$PWD/dist/WVT-Nine-Cards-Visual-Review.png" \
+            "file://$PWD/dist/Card-Visual-Review.html" 2> /dev/null
+          test -s dist/WVT-Nine-Cards-Visual-Review.png
+      - name: Upload browser preview image and self-contained HTML (not a release)
+        uses: actions/upload-artifact@v4
+        with:
+          name: WVT-Nine-Cards-Browser-Preview-Not-A-Release
+          path: |
+            dist/WVT-Nine-Cards-Visual-Review.png
+            dist/Card-Visual-Review.html
+          retention-days: 7
+          if-no-files-found: error
