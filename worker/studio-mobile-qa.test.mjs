@@ -9,6 +9,8 @@ test("mobile browser integration page exercises real app tabs and six current st
     assert(html.includes(theme));
   assert(html.includes("scrollWidth<=long.clientWidth"));
   assert(html.includes("img2.src"));
+  assert(html.includes("publish-cache-caveat"));
+  assert(html.includes("missing GitHub proxy count caveat"));
   assert(html.includes("page.querySelector('.mobile-sheet .template-choice"));
   assert(!html.includes("fetch("));
   assert(!html.includes("https://"));

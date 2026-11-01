@@ -526,6 +526,11 @@ button, a, input, select { -webkit-tap-highlight-color: transparent; }
   .publish-delete-buttons button { flex: 1 1 100%; }
 }
 
+.publish-cache-caveat {
+  color: #c6d5de; background: #172632; border: 1px solid #526373;
+  border-radius: 9px; padding: 10px 12px; line-height: 1.55;
+  font-size: 12px; margin: 10px 0; overflow-wrap: anywhere;
+}
 .publish-markdown { margin: 12px 0 0; }
 .publish-markdown textarea {
   display: block; width: 100%; max-width: 100%; resize: vertical;

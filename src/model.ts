@@ -58,9 +58,11 @@ function makePreset(theme: "pixel" | "minimal" | "cyber"): TerminalDesign {
 }
 
 
-/* Nine new fully rendered cards, separate from original editable v0.5 presets.
- * The illustrations are built-in vectors; the same editable visitor-count
- * layer is used by offline exports and the Cloudflare SVG endpoint. */
+/* Six selectable illustrated cards (three approved reference illustrations
+ * plus original Overworld/Nether/End voxel scenes). Six retired card themes remain
+ * renderable for existing saved counters and exported JSON compatibility.
+ * Counts reflect qualifying requests reaching the Worker, not guaranteed
+ * GitHub profile visits: GitHub Camo may serve cached README images. */
 const CARD_CONFIG: Record<CardTheme, {
   accent: string; background: string; heading: string; caption: string;
   titleX: number; titleY: number; titleWidth: number; titleSize: number;

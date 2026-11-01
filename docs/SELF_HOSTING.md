@@ -11,6 +11,8 @@
 - 下载的 `Workshop-Studio-Offline.html` 可断网使用，输出静态 SVG 和 JSON 设计。
 - **动态访客计数**需要运行自己的公开 Worker，并将次数写入自己的 D1。它可能产生 Cloudflare 用量，**不保证零费用**。
 - 统计的是到达 Worker 的合格图片请求，不是 GitHub 主页的精确浏览人数，也不是独立访客；GitHub 的图片代理会缓存 SVG。
+- **GitHub 官方机制：** GitHub 使用 Camo 匿名图片代理，浏览器访问 GitHub 页面时，可能直接收到已缓存图片而不触发 Worker GET；因此卡片无法可靠测量每次 README 查看。直接访问公开 SVG URL 也可能增加上游图片请求，但不代表真人访问。不要承诺“每位访客 +1”“每次页面刷新 +1”，更不要通过高频查询或强行删除 Camo 缓存刷访问量。参见 [GitHub About anonymized URLs](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/about-anonymized-urls) 和 [GitHub Proxying User Images](https://github.blog/news-insights/product-news/proxying-user-images/)。
+- **数据含义：** 只有实际到达自己的 Worker、通过 IP/日期去重及安全限额的 SVG GET 才可能新增数据库记录。独立账户、远程 GitHub 图片代理、真实访客映射和缓存刷新仍需分别验收。调低 `Cache-Control` 无法强制 GitHub Camo 为每位用户重新请求，还可能增加 Cloudflare 用量。
 - 不要把管理员密钥放进 HTML、GitHub README 或任何前端 JavaScript。
 
 ### 1. 取得自托管文件并创建独立数据库

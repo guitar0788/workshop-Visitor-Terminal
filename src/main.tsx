@@ -282,6 +282,7 @@ function App() {
             {OFFLINE_DEMO_MODE ? "OFFLINE" : PUBLISH_UI_ENABLED ? "BETA" : "PREVIEW"}
           </span>
         </div>
+        <p className="publish-cache-caveat" role="note">{t.githubProxyCountingNotice}</p>
         {PUBLISH_UI_ENABLED && PUBLISH_PILOT_MODE && (
           <p className="publish-hint" role="note">{t.publishPilotNotice}</p>
         )}

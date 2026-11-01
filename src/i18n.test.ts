@@ -20,6 +20,16 @@ describe("Studio bilingual UI", () => {
     expect(resolveLanguage("invalid", ["zh-CN"])).toBe("zh-CN");
   });
 
+  it("warns in both languages that GitHub Camo caching prevents per-view tracking", () => {
+    const english = translations.en.githubProxyCountingNotice;
+    const chinese = translations["zh-CN"].githubProxyCountingNotice;
+    expect(english).toMatch(/GitHub.*cache|GitHub.*cached/i);
+    expect(english).toMatch(/not profile views or unique people/);
+    expect(chinese).toContain("缓存");
+    expect(chinese).toContain("不代表个人主页浏览量或独立访客");
+    expect(chinese).toContain("Worker");
+  });
+
   it("has nonempty matching keys in English and Simplified Chinese", () => {
     const english = Object.keys(translations.en).sort();
     const chinese = Object.keys(translations["zh-CN"]).sort();
