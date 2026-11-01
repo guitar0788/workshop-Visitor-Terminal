@@ -36,8 +36,8 @@ const REGION: Record<ApprovedTheme, CleanRegion> = {
     textX: 334, textY: 179, fontSize: 68, color: "#122e61"
   },
   "terminal-card": {
-    cropX: 692, cropWidth: 735, x: 167, y: 207, width: 270, height: 81,
-    textX: 176, textY: 199, fontSize: 65, color: "#6bff9e"
+    cropX: 705, cropWidth: 722, x: 154, y: 207, width: 270, height: 81,
+    textX: 163, textY: 199, fontSize: 65, color: "#6bff9e"
   },
   "rpg-card": {
     cropX: 1450, cropWidth: 722, x: 315, y: 171, width: 331, height: 118,
