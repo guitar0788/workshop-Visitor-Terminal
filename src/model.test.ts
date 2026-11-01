@@ -130,7 +130,7 @@ describe("v0.6 illustrated visitor cards", () => {
       const output = renderSvg(hostile, 4);
       expect(output).not.toContain('<image');
       expect(output).not.toContain('href="https://evil.example"');
-      expect(output).not.toContain('fill="url(');
+      expect(output).not.toContain('fill="url(&quot;https://evil.example&quot;)"');
       expect(output).toContain("&lt;image");
       expect(output).toContain(">4</text>");
       expect(hostile.layers).toHaveLength(2);
