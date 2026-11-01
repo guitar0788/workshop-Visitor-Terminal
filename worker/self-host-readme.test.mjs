@@ -89,7 +89,7 @@ test("reject malformed or wrong-destination URL without network requests", () =>
 
 test("CLI success path prints the actual diagnostic rather than a placeholder", async () => {
   const source = await readFile("scripts/self-host-live-check.mjs", "utf8");
-  assert.match(source, /createReadmeSnippet\(args\.api, result\.diagnosticCounter\)\.markdown/);
+  assert.match(source, /createReadmeSnippet\(resolveSelfHostApi\(args\.api\), result\.diagnosticCounter\)\.markdown/);
   assert.match(source, /This diagnostic is NOT the illustrative my-counter slug/);
   const packageSource = await readFile("scripts/build-selfhost-package.mjs", "utf8");
   assert.match(packageSource, /scripts\/self-host-readme\.mjs/);
