@@ -53,9 +53,13 @@ export function parseReadinessArgs(argv) {
 }
 
 export function checkNodeVersion(version) {
-  if (typeof version !== "string" || !/^\d+\.\d+\.\d+/.test(version) ||
-      Number(version.split(".")[0]) < 22) {
-    throw Error("Node.js 22+ is required by the locked Wrangler dependency");
+  const match = typeof version === "string"
+    ? version.match(/^(\d+)\.(\d+)\.(\d+)$/) : null;
+  if (!match) throw Error("A supported Node.js version is required");
+  const major = Number(match[1]), minor = Number(match[2]);
+  // Vitest 5 requires Node ^22.12.0 || ^24.0.0 || >=26.0.0.
+  if (!((major === 22 && minor >= 12) || major === 24 || major >= 26)) {
+    throw Error("Node.js 22.12+ LTS, 24.x, or 26+ is required by the locked toolchain");
   }
   return true;
 }
