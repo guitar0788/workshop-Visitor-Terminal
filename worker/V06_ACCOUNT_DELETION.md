@@ -57,7 +57,7 @@ Content-Type: application/json
 - D1 batch 不可用或失败：503；事务必须回滚，不得部分删除。
 - 成功：200，只返回 `deleted`、`signedOutEverywhere` 和已删除计数器数量，不返回 slug、设计、访问指纹或会话信息。
 
-**当前没有向用户界面开放“删除账户”按钮。** 此 API 先在隔离开发分支验证；不得在真实 pilot 中启用或测试删除。UI、独立双账户真实浏览器验收、备份保留政策和正式法律/隐私审查仍是后续工作。
+**前端已有双重确认控件代码，但默认隐藏。** 只有构建时显式设置 `VITE_ACCOUNT_DELETION_UI_ENABLED=true` 且发布 UI 已启用，按钮才会出现；服务端还必须单独设置 `ACCOUNT_DELETION_ENABLED=true`。两个开关默认均关闭。当前没有在真实 pilot 中启用或测试删除。独立双账户真实浏览器验收、备份保留政策和正式法律/隐私审查仍是后续工作。
 
 ## English summary
 
