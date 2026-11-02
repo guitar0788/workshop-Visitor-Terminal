@@ -18,6 +18,10 @@ test("mobile browser integration page exercises real app tabs and six current st
   assert(html.includes("restored draft not announced"));
   assert(html.includes("preview count still capped below 12 digits"));
   assert(html.includes("no approved raster editing limitation on phone"));
+  assert(html.includes("MOBILE EDIT DUPLICATE"));
+  assert(html.includes("missing duplicate button in phone Properties"));
+  assert(html.includes("selected-layer-shortcut.mobile-only"));
+  assert(html.includes("no selected layer quick edit on phone preview"));
   assert(html.includes("page.querySelector('.mobile-sheet .template-choice"));
   assert(!html.includes("fetch("));
   assert(!html.includes("https://"));
