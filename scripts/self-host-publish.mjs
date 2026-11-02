@@ -4,7 +4,7 @@
  * The administrator token stays in the local environment or an ignored file;
  * never embed it in HTML, a GitHub Action, a URL, or a public README.
  */
-import { readFile, open } from "node:fs/promises";
+import { readFile, open, writeFile } from "node:fs/promises";
 import { resolve, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { resolveSelfHostApi } from "./self-host-api.mjs";
@@ -23,6 +23,7 @@ Usage:
   node scripts/self-host-publish.mjs create --api https://YOUR-WORKER.YOUR-SUBDOMAIN.workers.dev --slug my-counter --owner YOUR_GITHUB_NAME --design visitor-terminal.design.json [--token-file .wvt-admin-token]
   node scripts/self-host-publish.mjs update --api https://YOUR-WORKER.YOUR-SUBDOMAIN.workers.dev --slug my-counter --design visitor-terminal.design.json [--token-file .wvt-admin-token]
   node scripts/self-host-publish.mjs inspect --api https://YOUR-WORKER.YOUR-SUBDOMAIN.workers.dev --slug my-counter [--token-file .wvt-admin-token]
+  node scripts/self-host-publish.mjs export --api https://YOUR-WORKER.YOUR-SUBDOMAIN.workers.dev --slug my-counter [--token-file .wvt-admin-token] (read-only; save local JSON without overwriting)
   node scripts/self-host-publish.mjs list --api https://YOUR-WORKER.YOUR-SUBDOMAIN.workers.dev [--token-file .wvt-admin-token] (read-only; new self-host Worker)
 
 Set WVT_API_URL once in the terminal to omit repeated --api on macOS/Linux/Windows.
@@ -34,7 +35,7 @@ The CLI runs three unauthenticated safety checks before it reads/sends the token
 export function parseArgs(argv, environment = process.env) {
   if (argv.length === 1 && ["--help", "-h", "help"].includes(argv[0])) return { command: "help" };
   const [command, ...rest] = argv;
-  if (!["create", "update", "inspect", "list"].includes(command)) throw Error("Expected create, update, inspect, list or --help");
+  if (!["create", "update", "inspect", "list", "export"].includes(command)) throw Error("Expected create, update, inspect, list, export or --help");
   if (rest.length % 2 !== 0) throw Error("Every option must have a value");
   const options = { command };
   for (let i = 0; i < rest.length; i += 2) {
@@ -62,7 +63,7 @@ export function parseArgs(argv, environment = process.env) {
     if (!options.design) throw Error("Create and update require --design JSON path");
   }
   if (command !== "create" && options.owner) throw Error("--owner is only accepted for create");
-  if (command === "inspect" && options.design) throw Error("--design is not accepted for inspect");
+  if (["inspect", "export"].includes(command) && options.design) throw Error("--design is not accepted for inspect/export");
   return options;
 }
 
@@ -260,7 +261,76 @@ async function requestJson(origin, token, path, method, payload, fetchImpl) {
   return data;
 }
 
-export async function execute(options, { fetchImpl = fetch, environment = process.env } = {}) {
+/**
+ * Only a whitelisted, canonical Studio schema may be restored to a local file.
+ * Untrusted Worker JSON can include unexpected metadata; never serialize it.
+ */
+export function validateExportDesign(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value) ||
+      value.schemaVersion !== 1 || typeof value.theme !== "string" ||
+      !Number.isSafeInteger(value.width) || value.width < 280 || value.width > 800 ||
+      !Number.isSafeInteger(value.height) || value.height < 160 || value.height > 480 ||
+      !/^#[0-9a-fA-F]{6}$/.test(value.background ?? "") ||
+      !/^#[0-9a-fA-F]{6}$/.test(value.accent ?? "") ||
+      !Array.isArray(value.layers) || value.layers.length > 32) {
+    throw Error("Worker returned an invalid saved Studio design");
+  }
+  const ids = new Set();
+  const layers = value.layers.map(layer => {
+    if (!layer || typeof layer !== "object" || Array.isArray(layer) ||
+        typeof layer.id !== "string" || !/^[a-zA-Z0-9_-]{1,48}$/.test(layer.id) ||
+        ids.has(layer.id) ||
+        !["text", "count", "dot", "panel"].includes(layer.kind) ||
+        ![layer.x,layer.y,layer.width,layer.height,layer.fontSize].every(Number.isSafeInteger) ||
+        layer.width < 8 || layer.width > value.width ||
+        layer.height < 8 || layer.height > value.height ||
+        layer.x < 0 || layer.x + layer.width > value.width ||
+        layer.y < 0 || layer.y + layer.height > value.height ||
+        layer.fontSize < 8 || layer.fontSize > 80 ||
+        typeof layer.text !== "string" || layer.text.length > 120 ||
+        typeof layer.color !== "string" || !/^#[0-9a-fA-F]{6}$/.test(layer.color) ||
+        typeof layer.visible !== "boolean") {
+      throw Error("Worker returned an invalid saved Studio design layer");
+    }
+    ids.add(layer.id);
+    return {
+      id: layer.id, kind: layer.kind, x: layer.x, y: layer.y,
+      width: layer.width, height: layer.height, text: layer.text,
+      fontSize: layer.fontSize, color: layer.color, visible: layer.visible
+    };
+  });
+  return {
+    schemaVersion: 1, theme: value.theme, width: value.width,
+    height: value.height, background: value.background,
+    accent: value.accent, layers
+  };
+}
+
+/** Save only into the operator's current directory. Never overwrite any file
+ * (including symlinks). Backup data is a Studio design, NOT a D1 export. */
+export async function saveExportedDesign(slug, design, { directory = process.cwd() } = {}) {
+  if (typeof slug !== "string" || !SLUG.test(slug)) {
+    throw Error("Invalid counter slug for local design recovery");
+  }
+  const fileName = "visitor-terminal-" + slug + ".design.json";
+  const sanitized = validateExportDesign(design);
+  const contents = JSON.stringify(sanitized, null, 2) + "\n";
+  if (Buffer.byteLength(contents, "utf8") > MAX_DESIGN_FILE_BYTES) {
+    throw Error("Recovered Studio design exceeds the safe 20 KB export limit");
+  }
+  try {
+    await writeFile(join(directory, fileName), contents, { flag: "wx", mode: 0o600 });
+  } catch (error) {
+    if (error?.code === "EEXIST") {
+      throw Error("Local design backup already exists; no file was overwritten. Move the existing backup before exporting again.");
+    }
+    // Avoid echoing private local directory names or native filesystem errors.
+    throw Error("Could not save recovered Studio design in the current directory; no existing file was replaced.");
+  }
+  return fileName;
+}
+
+export async function execute(options, { fetchImpl = fetch, environment = process.env, directory = process.cwd() } = {}) {
   if (options.command === "help") return HELP;
   const origin = validateApiOrigin(resolveSelfHostApi(options.api, environment));
   await assertLocalWorkerHostname(origin);
@@ -301,6 +371,16 @@ export async function execute(options, { fetchImpl = fetch, environment = proces
     const data = await requestJson(origin, token, resource, "GET", undefined, fetchImpl);
     if (data.slug !== slug || !Number.isSafeInteger(data.hits)) throw Error("Counter identity or count mismatch");
     return `Counter: ${slug}\nRecorded upstream requests: ${data.hits}\n`;
+  }
+  if (options.command === "export") {
+    // Dedicated authenticated GET; never issue a public SVG GET (which counts
+    // visits), mutate D1 or rely on the optional list endpoint.
+    const data = await requestJson(origin, token, resource + "/design", "GET", undefined, fetchImpl);
+    if (data.slug !== slug) throw Error("Recovered counter identity mismatch");
+    const fileName = await saveExportedDesign(slug, data.design, { directory });
+    return "Saved existing Studio design locally: " + fileName + "\n" +
+      "No remote counter or visit was modified. The backup contains only the design, not counts or D1 records.\n" +
+      "Open it using Studio's Import JSON. Existing local backups are never replaced.\n";
   }
   if (options.command === "create") {
     try {
