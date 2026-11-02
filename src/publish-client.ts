@@ -17,6 +17,9 @@ export const PUBLISH_PILOT_MODE = vars.VITE_PUBLISH_PILOT === "true";
 export const PUBLISH_UI_ENABLED =
   !OFFLINE_DEMO_MODE && vars.VITE_PUBLISH_ENABLED === "true" && PUBLISH_PILOT_MODE &&
   PUBLIC_API_ORIGIN.length > 0;
+/** UI stays hidden unless a separately reviewed build opts in; server flag is also required. */
+export const ACCOUNT_DELETION_UI_ENABLED =
+  PUBLISH_UI_ENABLED && vars.VITE_ACCOUNT_DELETION_UI_ENABLED === "true";
 const OAUTH_VERIFIER = "workshop-publish-oauth-verifier";
 const OAUTH_STATE = "workshop-publish-oauth-state";
 
@@ -196,6 +199,22 @@ export async function revokeAllPublishedSessions(token: string): Promise<void> {
   );
   if (response.signedOutEverywhere !== true) {
     throw Error("Account sessions could not be revoked");
+  }
+}
+
+/** Permanently remove app-owned data for the verified account and revoke all sessions. */
+export async function deletePublishedAccount(token: string, exactLogin: string): Promise<void> {
+  if (!/^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$/.test(exactLogin)) {
+    throw Error("Invalid GitHub login");
+  }
+  const result = await api<{
+    deleted: boolean; signedOutEverywhere: boolean; deletedCounters: number
+  }>("/v1/my/account", "DELETE", {
+    confirm: "DELETE_MY_ACCOUNT", confirmLogin: exactLogin
+  }, token);
+  if (result.deleted !== true || result.signedOutEverywhere !== true ||
+      !Number.isSafeInteger(result.deletedCounters) || result.deletedCounters < 0) {
+    throw Error("Account deletion could not be confirmed");
   }
 }
 
