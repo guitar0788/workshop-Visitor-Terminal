@@ -39,6 +39,7 @@ test("mobile browser integration page exercises real app tabs and six current st
   assert(html.includes("invalid import overwrote local draft"));
   assert(html.includes("invalid import replaced current Studio design"));
   assert(html.includes("design JSON import control missing on phone"));
+  assert(html.includes("Invalid (?:or unsupported )?design JSON|设计 JSON 无效"));
   assert(html.includes("send('pointerup'"));
   assert(html.includes("undoButton.click()"));
   assert(html.includes("redoButton.click()"));
