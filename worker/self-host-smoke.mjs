@@ -509,7 +509,7 @@ export async function smokeSelfHostedCounter() {
     const bucket = Math.floor(Date.now() / 300_000);
     const ip = "203.0.113.77";
     const receipt = slug => createHmac("sha256", VISIT_SECRET)
-      .update(slug + "\\0" + ip).digest("hex");
+      .update(slug + "\0" + ip).digest("hex");
     const sqlText = value => "'" + String(value).replace(/'/g, "''") + "'";
     const localD1 = sql => {
       const invocation = wranglerInvocation(ROOT, [
@@ -532,7 +532,7 @@ export async function smokeSelfHostedCounter() {
         "PILOT_GITHUB_USER_ID=" + pilotId
       ];
       if (deletionEnabled) values.push("ACCOUNT_DELETION_ENABLED=true");
-      await writeFile(DEV_VARS, values.join("\\n") + "\\n", { mode: 0o600 });
+      await writeFile(DEV_VARS, values.join("\n") + "\n", { mode: 0o600 });
     };
     const restartLocalWorker = async () => {
       await shutdown(running.child);
@@ -544,10 +544,6 @@ export async function smokeSelfHostedCounter() {
     smokeStage = "account-delete-seed-local-only-d1-records";
     const createdAt = new Date().toISOString();
     const expiresAt = Date.now() + 60 * 60_000;
-    const ownCounterSql = ownSlugs.map(slug =>
-      "(" + [slug, accountLogin, 0, "{}", createdAt, accountId].map(sqlText).slice(0, 5).join(", ") +
-      ", " + accountId + ")"
-    );
     const counterRows = [
       ...ownSlugs.map(slug => "(" + sqlText(slug) + ", " + sqlText(accountLogin) +
         ", 0, '{}', " + sqlText(createdAt) + ", " + accountId + ")"),
@@ -662,7 +658,7 @@ export async function smokeSelfHostedCounter() {
       headers: { "CF-Connecting-IP": ip }
     });
     assert.equal(reissuedImage.status, 200);
-    assert.match(await reissuedImage.text(), />1<\\/text>/,
+    assert.match(await reissuedImage.text(), />1<\/text>/,
       "A stale visit receipt survived deletion and blocked a fresh counter's first visit");
     const foreignBefore = await checked(await api("/v1/admin/counters/" + foreignSlug, {
       headers: { Authorization: "Bearer " + ADMIN_TOKEN }
