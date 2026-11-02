@@ -7,6 +7,7 @@ const COLOR = /^#[0-9a-fA-F]{6}$/;
 const ID = /^[a-zA-Z0-9_-]{1,48}$/;
 const KINDS = new Set<LayerKind>(["text", "count", "dot", "panel"]);
 const CLASSIC_THEMES = new Set(["pixel", "minimal", "cyber"]);
+const TEXT_ALIGNMENTS = new Set(["left", "center", "right"]);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -68,7 +69,9 @@ export function parseDesignFile(json: string): TerminalDesign {
         typeof entry.text !== "string" || entry.text.length > 120 ||
         /[\u0000-\u0008\u000B\u000C\u000E-\u001F]/.test(entry.text) ||
         typeof entry.color !== "string" || !COLOR.test(entry.color) ||
-        typeof entry.visible !== "boolean") {
+        typeof entry.visible !== "boolean" ||
+        (entry.textAlign !== undefined &&
+          (typeof entry.textAlign !== "string" || !TEXT_ALIGNMENTS.has(entry.textAlign)))) {
       throw new Error("Invalid design file");
     }
     ids.add(entry.id);
