@@ -22,6 +22,7 @@
 - 草稿不包含 GitHub 登录状态、Cloudflare 密钥、计数器托管记录或访问统计，不会上传至任何服务器，也不会跨手机或电脑同步。
 - **重新开始设计**会要求确认，替换当前本地草稿，但不会删除已发布的线上计数器。示例访问次数不作为草稿持久化。
 - **手机拖动保护（v0.6）：** 按住图层拖动时，屏幕上暂时显示的位置只是预览，不会立即写进浏览器草稿。正常松手才保存新位置；系统中断、页面失去焦点、第二根手指误触或取消拖动后，草稿保留拖动前的位置。撤销／重做的正式修改仍会被自动保存。
+- **JSON 导入保护：** 只接受本编辑器支持的完整设计格式（最大 64 KiB）；未知模板、重复/非法图层 ID、超出画布范围的属性或不支持的图层不会被静默修补或删除。文件不合格时会拒绝导入，当前设计和草稿保持不变。
 - 部分隐私模式、清除浏览器数据或本地 `file://` 策略可能禁止保存或删除草稿。**请始终导出 JSON 备份**，不要把自动恢复作为唯一保存手段。打开后浏览器内容安全策略限制所有网络连接（`connect-src 'none'`），并且编译时已明确禁用云端登录与发布按钮。
 
 **重要区别：** 在离线版中填写或调整的访问次数是预览演示数字。下载的 SVG 是静态图片，**不会自动增加访问次数，也不能假装拥有真实 GitHub 主页访问统计**。如果希望 README 中的访问次数随实际请求增加，必须部署可公开访问的计数后端；可以由用户自己选择托管，不必使用维护者的 Cloudflare 账户。
@@ -67,7 +68,7 @@ npm run build:offline
 
 Download `Workshop-Studio-Offline.html` from the **Download offline HTML** button in [Workshop Studio](https://guitar0788.github.io/workshop-Visitor-Terminal/), then double-click the file in your file browser. Open it in an up-to-date Chrome, Edge, or Firefox browser. After the initial download, no network connection or account is needed.
 
-You can visually edit and reorder layers, preview your SVG, change an **example** visitor count, export a static SVG, and import/export JSON design files. On the v0.6 development branch, the editor also restores local design drafts on a subsequent visit when browser storage permits. This is local-only, not cloud sync: the preview count is not saved and you must still export JSON as a portable backup. Pointer-move previews are **not** persisted as drafts: on an interrupted/aborted gesture the last committed position remains saved, while a completed pointerup and normal Undo/Redo are saved locally. **Start fresh** confirms before replacing an unsaved local design and never removes published counters. GitHub OAuth and Cloudflare hosting are intentionally disabled. The generated document contains embedded JS/CSS and a strict no-connect Content Security Policy.
+You can visually edit and reorder layers, preview your SVG, change an **example** visitor count, export a static SVG, and import/export JSON design files. On the v0.6 development branch, the editor also restores local design drafts on a subsequent visit when browser storage permits. This is local-only, not cloud sync: the preview count is not saved and you must still export JSON as a portable backup. Pointer-move previews are **not** persisted as drafts: on an interrupted/aborted gesture the last committed position remains saved, while a completed pointerup and normal Undo/Redo are saved locally. JSON import is strict and lossless for supported schema-v1 designs (64 KiB maximum): unknown templates, duplicate/invalid layer IDs, unsupported layers and out-of-bounds values are rejected instead of silently repaired or dropped. A rejected file leaves the current design and saved draft untouched. **Start fresh** confirms before replacing an unsaved local design and never removes published counters. GitHub OAuth and Cloudflare hosting are intentionally disabled. The generated document contains embedded JS/CSS and a strict no-connect Content Security Policy.
 
 This edition **does not record real visits**. For live counters, testers must use an independently hosted backend or an explicitly authorized cloud provider. The project owner does not need to pay for other users' offline editing.
 
