@@ -101,9 +101,13 @@ function App() {
     }
   }, [language]);
 
-  // Save only a sanitized design on this device. No remote requests or account
-  // secrets are involved; inaccessible/private-mode storage is optional.
+  // Persist only committed edits. Pointermove previews are transient: a
+  // browser reload, tab switch or system gesture while a finger is down must
+  // restore the previous saved design, not an uncommitted element position.
+  // finishPointerDrag clears dragRef before committing one undoable change;
+  // cancellation also clears it and restores the exact pre-drag snapshot.
   useEffect(() => {
+    if (dragRef.current) return;
     try { saveLocalDraft(window.localStorage, history.present); } catch {
       // An offline HTML file or privacy mode can refuse localStorage access.
     }
