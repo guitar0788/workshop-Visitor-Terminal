@@ -204,6 +204,7 @@ export async function revokeAllPublishedSessions(token: string): Promise<void> {
 
 /** Permanently remove app-owned data for the verified account and revoke all sessions. */
 export async function deletePublishedAccount(token: string, exactLogin: string): Promise<void> {
+  if (!ACCOUNT_DELETION_UI_ENABLED) throw Error("Account deletion is not available.");
   if (!/^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$/.test(exactLogin)) {
     throw Error("Invalid GitHub login");
   }
