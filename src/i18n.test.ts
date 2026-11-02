@@ -20,6 +20,16 @@ describe("Studio bilingual UI", () => {
     expect(resolveLanguage("invalid", ["zh-CN"])).toBe("zh-CN");
   });
 
+  it("warns in both languages that GitHub Camo caching prevents per-view tracking", () => {
+    const english = translations.en.githubProxyCountingNotice;
+    const chinese = translations["zh-CN"].githubProxyCountingNotice;
+    expect(english).toMatch(/GitHub.*cache|GitHub.*cached/i);
+    expect(english).toMatch(/not profile views or unique people/);
+    expect(chinese).toContain("缓存");
+    expect(chinese).toContain("不代表个人主页浏览量或独立访客");
+    expect(chinese).toContain("Worker");
+  });
+
   it("has nonempty matching keys in English and Simplified Chinese", () => {
     const english = Object.keys(translations.en).sort();
     const chinese = Object.keys(translations["zh-CN"]).sort();
@@ -58,5 +68,23 @@ describe("Studio bilingual UI", () => {
       expect(zh.layers.find(layer => layer.id === "status")?.text).toMatch(/[\u4e00-\u9fff]/);
       expect(zh.theme).toBe(theme);
     }
+  });
+});
+
+describe("Minecraft-style bilingual card labels", () => {
+  it("localizes all three new voxel scenes without altering old presets", () => {
+    const examples = [["mc-overworld","主世界访客"],["mc-nether","下界探索者"],
+      ["mc-end","末地探索者"]] as const;
+    for(const [theme,title] of examples) {
+      const en=createLocalizedPreset(theme,"en");
+      const zh=createLocalizedPreset(theme,"zh-CN");
+      expect(en.theme).toBe(theme);
+      expect(zh.layers.find(layer=>layer.id==="heading")?.text).toBe(title);
+      expect(en.layers.find(layer=>layer.id==="heading")?.text).not.toBe(title);
+      expect(renderSvg(zh,100)).toContain(title);
+      expect(clonePreset(theme)).toEqual(en);
+    }
+    expect(translations.en.cardTemplates).toContain("6");
+    expect(translations["zh-CN"].cardTemplates).toContain("6");
   });
 });

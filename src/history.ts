@@ -38,6 +38,14 @@ export function finishDrag(history: EditHistory, before: TerminalDesign): EditHi
   };
 }
 
+/** Aborted pointer gestures are not edits. Restore the exact pre-drag
+ * snapshot while retaining both undo and redo stacks (especially if the user
+ * had previously undone another edit). */
+export function cancelDrag(history: EditHistory, before: TerminalDesign): EditHistory {
+  return unchanged(history.present, before) ? history :
+    { ...history, present: before };
+}
+
 export function undoEdit(history: EditHistory): EditHistory {
   if (!history.past.length) return history;
   const previous = history.past[history.past.length - 1];
