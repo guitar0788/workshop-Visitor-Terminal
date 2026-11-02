@@ -18,12 +18,8 @@ class MockD1 implements PublishDatabase {
   sessions = new Map<string, DbRow>();
   counters = new Map<string, DbRow>();
   receipts = new Map<string, DbRow>();
-  failNextBatch = false;
+  failBatchAt = -1;
   async batch(statements: PublishStatement[]) {
-    if (this.failNextBatch) {
-      this.failNextBatch = false;
-      throw Error("Simulated D1 batch failure");
-    }
     const snapshot = {
       states: new Map([...this.states].map(([key, value]) => [key, { ...value }])),
       tickets: new Map([...this.tickets].map(([key, value]) => [key, { ...value }])),
@@ -33,8 +29,12 @@ class MockD1 implements PublishDatabase {
     };
     try {
       const results = [];
-      for (const statement of statements) {
-        const result = await statement.run();
+      for (let index = 0; index < statements.length; index++) {
+        if (this.failBatchAt === index) {
+          this.failBatchAt = -1;
+          throw Error("Simulated D1 batch failure after partial work");
+        }
+        const result = await statements[index].run();
         if (!result.success) throw Error("Simulated D1 statement failure");
         results.push(result);
       }
@@ -889,4 +889,129 @@ describe("v0.5 securely gated GitHub OAuth publishing", () => {
     expect((await oauthCallback(new Request(callbackUrl), env, now + 1, fakeGithub)).status).toBe(302);
     expect((await oauthCallback(new Request(callbackUrl), env, now + 2, fakeGithub)).status).toBe(401);
   });
+  it("keeps account deletion disabled unless explicitly enabled", async () => {
+    const env = createEnv();
+    const logged = await completeLogin(env);
+    const slug = "v111111111111111111111111";
+    env.DB.counters.set(slug, {
+      slug, owner: "guitar0788", owner_user_id: 124379632,
+      hits: 12, created_at: "2026-01-01", design_json: JSON.stringify(clonePreset("pixel"))
+    });
+    const response = await handlePublishingRequest(req("/v1/my/account", "DELETE", {
+      confirm: "DELETE_MY_ACCOUNT", confirmLogin: "guitar0788"
+    }, logged.accessToken), env, now + 2_000);
+    expect(response.status).toBe(404);
+    expect(env.DB.counters.has(slug)).toBe(true);
+    expect(env.DB.sessions.size).toBe(1);
+  });
+
+  it("atomically deletes only the verified account's app data after exact confirmation", async () => {
+    const env = createEnv();
+    const first = await completeLogin(env);
+    const second = await completeLogin(env);
+    env.ACCOUNT_DELETION_ENABLED = "true";
+
+    const own = ["v111111111111111111111111", "v222222222222222222222222"];
+    const foreign = "v333333333333333333333333";
+    const legacy = "v444444444444444444444444";
+    for (const [index, slug] of own.entries()) {
+      env.DB.counters.set(slug, {
+        slug, owner: "guitar0788", owner_user_id: 124379632,
+        hits: 100 + index, created_at: "2026-01-01",
+        design_json: JSON.stringify(clonePreset("pixel"))
+      });
+      env.DB.receipts.set("own-" + index, { slug, fingerprint: "private-own-" + index });
+    }
+    env.DB.counters.set(foreign, {
+      slug: foreign, owner: "guitar0788", owner_user_id: 9002001,
+      hits: 88, created_at: "2026-01-02",
+      design_json: JSON.stringify(clonePreset("cyber"))
+    });
+    env.DB.counters.set(legacy, {
+      slug: legacy, owner: "guitar0788", owner_user_id: null,
+      hits: 77, created_at: "2026-01-03",
+      design_json: JSON.stringify(clonePreset("minimal"))
+    });
+    env.DB.receipts.set("foreign", { slug: foreign, fingerprint: "private-foreign" });
+    env.DB.receipts.set("legacy", { slug: legacy, fingerprint: "private-legacy" });
+
+    const otherToken = "f".repeat(64);
+    const otherHashBytes = await crypto.subtle.digest(
+      "SHA-256", new TextEncoder().encode(otherToken)
+    );
+    const otherHash = Array.from(new Uint8Array(otherHashBytes),
+      value => value.toString(16).padStart(2, "0")).join("");
+    env.DB.sessions.set(otherHash, {
+      github_user_id: 9002001, github_login: "guitar0788", expires_at: now + 60 * 60_000
+    });
+    env.DB.tickets.set("own-ticket", {
+      github_user_id: 124379632, github_login: "guitar0788", expires_at: now + 60_000
+    });
+    env.DB.tickets.set("foreign-ticket", {
+      github_user_id: 9002001, github_login: "guitar0788", expires_at: now + 60_000
+    });
+
+    const endpoint = "/v1/my/account";
+    const payload = { confirm: "DELETE_MY_ACCOUNT", confirmLogin: "guitar0788" };
+    expect((await handlePublishingRequest(req(endpoint, "DELETE", payload),
+      env, now + 3_000)).status).toBe(401);
+    expect((await handlePublishingRequest(req(endpoint, "DELETE", payload,
+      first.accessToken, "https://evil.example"), env, now + 3_000)).status).toBe(403);
+    expect((await handlePublishingRequest(req(endpoint, "GET", undefined,
+      first.accessToken), env, now + 3_000)).status).toBe(405);
+    expect((await handlePublishingRequest(req(endpoint, "DELETE", {
+      confirm: "DELETE_MY_ACCOUNT", confirmLogin: "different-login"
+    }, first.accessToken), env, now + 3_000)).status).toBe(400);
+    expect((await handlePublishingRequest(req(endpoint, "DELETE", {
+      confirm: "DELETE", confirmLogin: "guitar0788"
+    }, first.accessToken), env, now + 3_000)).status).toBe(400);
+
+    // Simulate a D1 batch failing after the first two statements. The test
+    // adapter rolls the whole transaction back, as Cloudflare D1 batch does.
+    env.DB.failBatchAt = 2;
+    const failed = await handlePublishingRequest(req(endpoint, "DELETE", payload,
+      first.accessToken), env, now + 3_100);
+    expect(failed.status).toBe(503);
+    expect(own.every(slug => env.DB.counters.has(slug))).toBe(true);
+    expect(own.every(slug => [...env.DB.receipts.values()].some(row => row.slug === slug)))
+      .toBe(true);
+    expect(env.DB.sessions.size).toBe(3);
+    expect(env.DB.tickets.has("own-ticket")).toBe(true);
+
+    const deleted = await handlePublishingRequest(req(endpoint, "DELETE", payload,
+      first.accessToken), env, now + 3_200);
+    expect(deleted.status).toBe(200);
+    expect(await deleted.json()).toEqual({
+      deleted: true, signedOutEverywhere: true, deletedCounters: 2
+    });
+    expect(own.every(slug => !env.DB.counters.has(slug))).toBe(true);
+    expect(own.every(slug => ![...env.DB.receipts.values()].some(row => row.slug === slug)))
+      .toBe(true);
+    expect(env.DB.counters.has(foreign)).toBe(true);
+    expect(env.DB.counters.has(legacy)).toBe(true);
+    expect(env.DB.receipts.has("foreign")).toBe(true);
+    expect(env.DB.receipts.has("legacy")).toBe(true);
+    expect(env.DB.sessions.size).toBe(1);
+    expect(env.DB.sessions.has(otherHash)).toBe(true);
+    expect(!env.DB.tickets.has("own-ticket")).toBe(true);
+    expect(env.DB.tickets.has("foreign-ticket")).toBe(true);
+    expect((await handlePublishingRequest(req("/v1/me", "GET", undefined,
+      first.accessToken), env, now + 3_300)).status).toBe(401);
+    expect((await handlePublishingRequest(req("/v1/me", "GET", undefined,
+      second.accessToken), env, now + 3_300)).status).toBe(401);
+
+    env.PILOT_GITHUB_USER_ID = "9002001";
+    expect((await handlePublishingRequest(req("/v1/me", "GET", undefined,
+      otherToken), env, now + 3_400)).status).toBe(200);
+
+    // Deletion removes this application's data, not the external GitHub
+    // identity. Re-authentication creates an empty app account.
+    env.PILOT_GITHUB_USER_ID = "124379632";
+    const fresh = await completeLogin(env);
+    const list = await handlePublishingRequest(req("/v1/my/counters", "GET",
+      undefined, fresh.accessToken), env, now + 4_000);
+    expect(list.status).toBe(200);
+    expect((await list.json() as {counters:unknown[]}).counters).toEqual([]);
+  });
+
 });
