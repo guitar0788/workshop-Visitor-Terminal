@@ -52,7 +52,7 @@ export function defaultApprovedCountLayer(theme: ApprovedTheme) {
     x: region.textX, y: region.textY,
     width: region.width - 12, height: region.height - 10,
     text: "", fontSize: region.fontSize, color: region.color,
-    visible: true
+    visible: true, textAlign: "left" as const
   };
 }
 
@@ -83,12 +83,14 @@ export function approvedBackdrop(
 export interface ApprovedCountLayer {
   x: number; y: number; width: number; height: number;
   fontSize: number; color: string; visible: boolean;
+  textAlign?: "left" | "center" | "right";
 }
 const isDefault = (theme: ApprovedTheme, layer: ApprovedCountLayer) => {
   const d = defaultApprovedCountLayer(theme);
   return layer.x===d.x && layer.y===d.y && layer.width===d.width &&
     layer.height===d.height && layer.fontSize===d.fontSize &&
-    layer.color===d.color && layer.visible;
+    layer.color===d.color && layer.visible &&
+    (layer.textAlign ?? "left") === (d.textAlign ?? "left");
 };
 
 export function approvedReferenceIsPristine(
@@ -124,6 +126,10 @@ export function approvedCountMarkup(theme: ApprovedTheme, counter: string,
     Math.floor(layer.height * .78)));
   const x = layer.x;
   // Keep resized counts vertically centered at the approved numeral row.
+  const alignment = layer.textAlign ?? "left";
+  const textAnchor = alignment === "center" ? "middle" : alignment === "right" ? "end" : "start";
+  const x = layer.x + (alignment === "center" ? layer.width / 2 :
+    alignment === "right" ? layer.width : 0);
   const y = layer.y + Math.ceil(layer.fontSize * .24) +
     Math.round((layer.fontSize - font) / 2);
   // Match the APPROVED illustration's typographic families instead of
@@ -141,7 +147,8 @@ export function approvedCountMarkup(theme: ApprovedTheme, counter: string,
       ? ' stroke="#125634" stroke-width="1" paint-order="stroke"'
       : ' stroke="#164579" stroke-width="1.2" paint-order="stroke"';
   return clip + '<text clip-path="url(#' + clipId + ')" x="' + x + '" y="' + y +
-    '" fill="' + layer.color + '" font-size="' + font +
+    '"' + (alignment === "left" ? "" : ' text-anchor="' + textAnchor + '"') +
+    ' fill="' + layer.color + '" font-size="' + font +
     '" font-family="' + fontFamily + '"' +
     ' font-weight="' + fontWeight + '" dominant-baseline="hanging"' + shadow +
     ' data-count-layer="true">' + counter + '</text>';
