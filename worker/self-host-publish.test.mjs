@@ -86,6 +86,86 @@ test("reads a local admin secret without sending it to stdout", async () => {
   await assert.rejects(() => readAdminToken({ environment: { WVT_ADMIN_TOKEN: "short" } }));
 });
 
+test("rejects invalid local design before any Worker request or token-file access", async () => {
+  const privatePath = join(tmpdir(), "private-USER-PATH-secret-" + Date.now() + ".json");
+  let calls = 0;
+  const fetchImpl = async () => {
+    calls++;
+    throw Error("No request should be attempted for an invalid local file");
+  };
+  for (const command of ["create", "update"]) {
+    const options = opts(command, {
+      ...(command === "create" ? { owner: "tester" } : {}),
+      design: privatePath,
+      "token-file": join(tmpdir(), "PRIVATE-ADMIN-SECRET-NOT-READ")
+    });
+    await assert.rejects(() => execute(options, {
+      environment: {}, fetchImpl
+    }), error => {
+      assert.match(error.message, /Could not read local design JSON file/);
+      assert(!error.message.includes(privatePath));
+      assert(!error.message.includes("PRIVATE-ADMIN-SECRET"));
+      return true;
+    });
+  }
+  assert.equal(calls, 0, "Invalid JSON must not spend even anonymous Worker requests");
+});
+
+test("oversized or malformed Studio files fail locally before any Worker call", async () => {
+  await withDesign(async path => {
+    let calls = 0;
+    const fetchImpl = async () => { calls++; throw Error("Should be offline"); };
+    const argumentsFor = opts("update", { design: path });
+    for (const value of [
+      "{this is not JSON",
+      JSON.stringify({ formatVersion: 1, counters: ["secret"] }),
+      "x".repeat(2_000_000)
+    ]) {
+      await writeFile(path, value);
+      await assert.rejects(() => execute(argumentsFor, {
+        environment: { WVT_ADMIN_TOKEN: token }, fetchImpl
+      }), /Design file is not valid JSON|exported schemaVersion|Design JSON exceeds 20 KB/);
+    }
+    assert.equal(calls, 0);
+  });
+});
+
+test("missing or oversized admin token files never leak private filesystem paths", async () => {
+  const privateFile = join(tmpdir(), "PRIVATE-LOCAL-TOKEN-PATH-DO-NOT-ECHO");
+  await assert.rejects(() => readAdminToken({
+    tokenFile: privateFile, environment: {}
+  }), error => {
+    assert.match(error.message, /Could not read local administrator token file/);
+    assert(!error.message.includes(privateFile));
+    return true;
+  });
+  const dir = await mkdtemp(join(tmpdir(), "wvt-private-token-"));
+  try {
+    const tokenPath = join(dir, "secret-admin-file");
+    await writeFile(tokenPath, "a".repeat(3_000_000));
+    await assert.rejects(() => readAdminToken({ tokenFile: tokenPath, environment: {} }),
+      /token file is too large/);
+    await writeFile(tokenPath, token + "\n");
+    assert.equal(await readAdminToken({ tokenFile: tokenPath, environment: {} }), token);
+    // Successful anonymous service checks precede local credential-file access.
+    const seen = [];
+    await assert.rejects(() => execute(opts("inspect", {
+      "token-file": privateFile
+    }), {
+      environment: {},
+      fetchImpl: async (url, init) => {
+        seen.push({url, init});
+        return preflightResponse(url, init);
+      }
+    }), /Could not read local administrator token file/);
+    assert.equal(seen.length, 3);
+    assert(seen.every(({init}) => !init.headers.Authorization));
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+
 test("create and update send validated design to own host only and output embed link", async () => {
   await withDesign(async path => {
     const seen = [];
