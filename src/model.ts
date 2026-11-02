@@ -337,6 +337,30 @@ export function reorderLayer(input: TerminalDesign, id: string, direction: -1 | 
   return { ...input, layers };
 }
 
+/**
+ * Duplicate an existing editable overlay directly above its original layer.
+ * Never mutate the input, invent a replacement ID or create off-canvas art.
+ * For approved image cards this duplicates overlays, never raster artwork.
+ */
+export function duplicateLayer(input: TerminalDesign, id: string, newId: string): TerminalDesign {
+  if (input.layers.length >= 32 || input.layers.some(layer => layer.id === newId) ||
+      !/^[a-zA-Z0-9_-]{1,48}$/.test(newId)) return input;
+  const index = input.layers.findIndex(layer => layer.id === id);
+  if (index < 0) return input;
+  const original = input.layers[index];
+  const cloned: Layer = {
+    ...original,
+    id: newId,
+    x: Math.max(0, Math.min(input.width - original.width, original.x + 12)),
+    y: Math.max(0, Math.min(input.height - original.height, original.y + 12))
+  };
+  return { ...input, layers: [
+    ...input.layers.slice(0, index + 1),
+    cloned,
+    ...input.layers.slice(index + 1)
+  ] };
+}
+
 export function addLayer(input: TerminalDesign, kind: LayerKind, id: string): TerminalDesign {
   if (input.layers.length >= 32 || input.layers.some(layer => layer.id === id)) return input;
   const offset = (input.layers.length * 19) % 110;
