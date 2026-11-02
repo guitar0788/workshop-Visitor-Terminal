@@ -17,6 +17,37 @@ class MockD1 implements PublishDatabase {
   tickets = new Map<string, DbRow>();
   sessions = new Map<string, DbRow>();
   counters = new Map<string, DbRow>();
+  receipts = new Map<string, DbRow>();
+  failNextBatch = false;
+  async batch(statements: PublishStatement[]) {
+    if (this.failNextBatch) {
+      this.failNextBatch = false;
+      throw Error("Simulated D1 batch failure");
+    }
+    const snapshot = {
+      states: new Map([...this.states].map(([key, value]) => [key, { ...value }])),
+      tickets: new Map([...this.tickets].map(([key, value]) => [key, { ...value }])),
+      sessions: new Map([...this.sessions].map(([key, value]) => [key, { ...value }])),
+      counters: new Map([...this.counters].map(([key, value]) => [key, { ...value }])),
+      receipts: new Map([...this.receipts].map(([key, value]) => [key, { ...value }]))
+    };
+    try {
+      const results = [];
+      for (const statement of statements) {
+        const result = await statement.run();
+        if (!result.success) throw Error("Simulated D1 statement failure");
+        results.push(result);
+      }
+      return results;
+    } catch (cause) {
+      this.states = snapshot.states;
+      this.tickets = snapshot.tickets;
+      this.sessions = snapshot.sessions;
+      this.counters = snapshot.counters;
+      this.receipts = snapshot.receipts;
+      throw cause;
+    }
+  }
   prepare(sql: string): PublishStatement {
     const db = this;
     let args: Array<string | number | null> = [];
@@ -95,6 +126,20 @@ class MockD1 implements PublishDatabase {
           const row = db.counters.get(String(args[0]));
           if (row && row.owner_user_id === args[1]) {
             db.counters.delete(String(args[0])); changes = 1;
+          }
+        } else if (sql.startsWith("DELETE FROM request_windows WHERE slug IN (SELECT slug FROM counters WHERE owner_user_id = ?)")) {
+          const owned = new Set([...db.counters.values()]
+            .filter(row => row.owner_user_id === args[0]).map(row => row.slug));
+          for (const [key, row] of db.receipts) {
+            if (owned.has(row.slug)) { db.receipts.delete(key); changes++; }
+          }
+        } else if (sql.startsWith("DELETE FROM counters WHERE owner_user_id = ?")) {
+          for (const [slug, row] of db.counters) {
+            if (row.owner_user_id === args[0]) { db.counters.delete(slug); changes++; }
+          }
+        } else if (sql.startsWith("DELETE FROM publish_login_tickets WHERE github_user_id = ?")) {
+          for (const [hash, row] of db.tickets) {
+            if (row.github_user_id === args[0]) { db.tickets.delete(hash); changes++; }
           }
         } else if (sql.startsWith("DELETE FROM publish_sessions WHERE github_user_id = ?")) {
           for (const [hash, row] of db.sessions) {
