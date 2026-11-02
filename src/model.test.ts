@@ -522,7 +522,9 @@ describe("six illustrated-card editing and exported-design parity", () => {
           svg.split('href="data:image/avif;base64,')[1]?.split('"')[0];
         expect(image(rendered)).toBe(image(original));
       } else {
-        expect(rendered).toContain('shape-rendering="crispEdges"');
+        const image = (svg: string) =>
+          svg.split('href="data:image/webp;base64,')[1]?.split('"')[0];
+        expect(image(rendered)).toBe(image(original));
       }
     }
   });

@@ -13,11 +13,11 @@ describe("v0.6.1 image-authored Minecraft-inspired cards", () => {
       expect(markup).not.toMatch(/<path|<rect|<polygon|<script|<foreignObject|https?:/i);
       const image = markup.match(/href="data:image\/webp;base64,([A-Za-z0-9+/=]+)"/)?.[1];
       expect(image).toBeTruthy();
-      const bytes = Buffer.from(image!, "base64");
-      expect(bytes.length).toBeGreaterThan(4000);
-      expect(bytes.length).toBeLessThan(25000);
-      expect(bytes.subarray(0, 4).toString("ascii")).toBe("RIFF");
-      expect(bytes.subarray(8, 12).toString("ascii")).toBe("WEBP");
+      const decoded = atob(image!);
+      expect(decoded.length).toBeGreaterThan(4000);
+      expect(decoded.length).toBeLessThan(25000);
+      expect(decoded.slice(0, 4)).toBe("RIFF");
+      expect(decoded.slice(8, 12)).toBe("WEBP");
       plates.add(image!);
     }
     expect(plates.size).toBe(3);
