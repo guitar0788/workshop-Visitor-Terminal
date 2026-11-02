@@ -751,7 +751,7 @@ function App() {
         </div>
         <p className="template-gallery-hint">{t.galleryHint}</p>
         <div className={"template-gallery" + (galleryExpanded ? " expanded" : " compact")}
-          aria-label={t.cardTemplates}>
+          role="group" aria-label={t.cardTemplates}>
           {cardPreviews.map(({ theme, src }, index) => {
             return (
               <button key={theme} type="button"
@@ -785,7 +785,7 @@ function App() {
         <div className="section-title">
           <h3>{t.addLayer}</h3><span>{t.maxLayers}</span>
         </div>
-        <div className="tool-grid">
+        <div className="tool-grid" role="group" aria-label={t.addLayer}>
           {(["text", "count", "dot", "panel"] as LayerKind[]).map(kind =>
             <button type="button" className="tool-button"
               onClick={() => insertLayer(kind)} key={kind}
@@ -1134,7 +1134,7 @@ function App() {
           )}
 
           {preciseOpen && !cleanPreview && (
-            <div className="precision-panel" aria-label={t.toolsLabel}>
+            <div className="precision-panel" role="group" aria-label={t.toolsLabel}>
               <div className="precision-caption">
                 <strong>{selected ? t.moving + " " + layerName(selected) : t.selectFirst}</strong>
                 <span>{t.tapArrows}</span>
