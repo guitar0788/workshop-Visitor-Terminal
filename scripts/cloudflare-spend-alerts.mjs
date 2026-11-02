@@ -109,7 +109,7 @@ export async function createWorkerSpendNotification({
     throw new Error("Invalid Workers notification threshold.");
   }
   if (typeof email !== "string" ||
-      !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email) || email.length > 254) {
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254) {
     throw new Error("Invalid Workers notification recipient.");
   }
   const result = await requestPolicies(accountId, token, "POST", {
