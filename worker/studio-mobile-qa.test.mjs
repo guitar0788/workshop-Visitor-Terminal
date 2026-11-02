@@ -28,6 +28,13 @@ test("mobile browser integration page exercises real app tabs and six current st
   assert(html.includes("send('lostpointercapture'"));
   assert(html.includes("frame.contentWindow.dispatchEvent(new frame.contentWindow.Event('blur'))"));
   assert(html.includes("move mode toggle rollback"));
+  assert(html.includes("uncommitted drag preview leaked into saved local draft"));
+  assert(html.includes("canceled touch modified saved local draft"));
+  assert(html.includes("multitouch cancellation modified saved local draft"));
+  assert(html.includes("focus loss saved canceled drag"));
+  assert(html.includes("checkpoint='committed draft persistence'"));
+  assert(html.includes("currentDraft()===draftBeforeDrag"));
+  assert(html.includes("currentDraft()===committedDraft"));
   assert(html.includes("send('pointerup'"));
   assert(html.includes("undoButton.click()"));
   assert(html.includes("redoButton.click()"));
