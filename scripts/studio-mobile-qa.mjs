@@ -270,7 +270,7 @@ export function createMobileQA(){
     "if(currentDraft()!==beforeQuotaEdit)",
     "errors.push('failed autosave overwrote previous valid local draft');",
     "}finally{storageProto.setItem=originalStorageSet;}",
-    "const note=await until(()=>page.querySelector('.mobile-sheet .publish-cache-caveat'));
+    "const note=await until(()=>page.querySelector('.mobile-sheet .publish-cache-caveat'));",
     "if(!/GitHub/.test(note.textContent)||!/Worker/.test(note.textContent)||",
     "!/(cached|缓存)/i.test(note.textContent))",
     "errors.push('missing GitHub proxy count caveat on phone export');",
