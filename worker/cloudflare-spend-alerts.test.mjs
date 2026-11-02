@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  POLICY_NAME, parseArgs, runUsageAlertCommand
+  POLICY_NAME, createWorkerSpendNotification, parseArgs, runUsageAlertCommand
 } from "../scripts/cloudflare-spend-alerts.mjs";
 
 const accountId = "a".repeat(32);
@@ -126,4 +126,51 @@ test("invalid local credentials fail before any network request", async () => {
     /CLOUDFLARE_ACCOUNT_ID/
   );
   assert.equal(called, false);
+});
+
+test("direct helper calls reject unsafe thresholds and recipients before network access", async () => {
+  let called = false;
+  const fetchImpl = async () => {
+    called = true;
+    return response({});
+  };
+  await assert.rejects(createWorkerSpendNotification({
+    accountId, token, thresholdCents: 0, email, fetchImpl
+  }), /threshold/);
+  await assert.rejects(createWorkerSpendNotification({
+    accountId, token, thresholdCents: 100, email: "not-an-email", fetchImpl
+  }), /recipient/);
+  assert.equal(called, false);
+});
+
+test("transport failures do not echo provider error details or credentials", async () => {
+  await assert.rejects(
+    runUsageAlertCommand([], env, { write: () => {} }, async () => {
+      throw new Error("network failure " + token + " " + accountId);
+    }),
+    error => {
+      assert.match(error.message, /details suppressed/);
+      assert.equal(error.message.includes(token), false);
+      assert.equal(error.message.includes(accountId), false);
+      return true;
+    }
+  );
+});
+
+test("an existing named usage-block policy is reported but never modified", async () => {
+  const calls = [];
+  const output = [];
+  await runUsageAlertCommand([
+    "--apply", "--confirm-create-notification",
+    "--threshold-cents", "200", "--email", email
+  ], env, { write: value => output.push(value) }, async (_url, init) => {
+    calls.push(init.method);
+    return response([{
+      name: POLICY_NAME, product_id: "workers", action: "usage_block",
+      enabled: true, threshold_cents: 100
+    }]);
+  });
+  assert.deepEqual(calls, ["GET"]);
+  assert.match(output.join("\\n"), /not a notification/);
+  assert.match(output.join("\\n"), /No policy changed/);
 });
