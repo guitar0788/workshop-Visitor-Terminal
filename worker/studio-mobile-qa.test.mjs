@@ -43,6 +43,12 @@ test("mobile browser integration page exercises real app tabs and six current st
   assert(html.includes("autosave failure warning has unclear text"));
   assert(html.includes("failed autosave overwrote previous valid local draft"));
   assert(html.includes("draft-warning[role=alert]"));
+  assert(html.includes("layer geometry bounds"));
+  assert(html.includes("layer x max ignores current layer width"));
+  assert(html.includes("layer y max ignores current layer height"));
+  assert(html.includes("layer width max ignores current x position"));
+  assert(html.includes("layer height max ignores current y position"));
+  assert(html.includes("layer geometry inputs are not constrained to whole pixels"));
   assert(html.includes("Invalid (?:or unsupported )?design JSON|设计 JSON 无效"));
   assert(html.includes("send('pointerup'"));
   assert(html.includes("undoButton.click()"));
