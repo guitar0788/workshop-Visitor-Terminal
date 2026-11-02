@@ -13,9 +13,17 @@ export interface PublishStatement {
   all<T = Record<string, unknown>>(): Promise<{ results: T[]; success: boolean }>;
   run(): Promise<{ success: boolean; meta?: { changes?: number } }>;
 }
-export interface PublishDatabase { prepare(sql: string): PublishStatement }
+export interface PublishDatabase {
+  prepare(sql: string): PublishStatement;
+  /** Cloudflare D1 batch executes the supplied statements atomically. */
+  batch?(statements: PublishStatement[]): Promise<Array<{
+    success: boolean; meta?: { changes?: number }
+  }>>;
+}
 export interface PublishEnv {
   DB: PublishDatabase;
+  /** Disabled unless deliberately enabled in an isolated environment. */
+  ACCOUNT_DELETION_ENABLED?: string;
   PUBLISHING_ENABLED?: string;
   GITHUB_CLIENT_ID?: string;
   GITHUB_CLIENT_SECRET?: string;
@@ -440,6 +448,52 @@ async function logout(request: Request, env: PublishEnv): Promise<Response> {
   return respond({ loggedOut: true });
 }
 
+/**
+ * Permanently delete this app's data for the currently authenticated numeric
+ * GitHub identity. A D1 batch is mandatory: never fall back to partial,
+ * sequential deletion if the runtime does not support atomic batches.
+ *
+ * The caller must type both the destructive phrase and the exact login from
+ * the verified session. This removes only app-owned counters/receipts and
+ * auth tickets/sessions; it cannot delete the external GitHub account, local
+ * editor files, Cloudflare resources, or third-party caches/backups.
+ */
+async function deleteMyAccount(
+  request: Request, env: PublishEnv, user: PublishSession
+): Promise<Response> {
+  const confirmation = await jsonBody(request);
+  if (!object(confirmation) ||
+      confirmation.confirm !== "DELETE_MY_ACCOUNT" ||
+      confirmation.confirmLogin !== user.github_login) {
+    return fail("Type DELETE_MY_ACCOUNT and the exact signed-in GitHub login", 400);
+  }
+  if (typeof env.DB.batch !== "function") {
+    return fail("Atomic account deletion is unavailable", 503);
+  }
+  const statements = [
+    env.DB.prepare(
+      "DELETE FROM request_windows WHERE slug IN " +
+      "(SELECT slug FROM counters WHERE owner_user_id = ?)"
+    ).bind(user.github_user_id),
+    env.DB.prepare("DELETE FROM counters WHERE owner_user_id = ?")
+      .bind(user.github_user_id),
+    env.DB.prepare("DELETE FROM publish_login_tickets WHERE github_user_id = ?")
+      .bind(user.github_user_id),
+    env.DB.prepare("DELETE FROM publish_sessions WHERE github_user_id = ?")
+      .bind(user.github_user_id)
+  ];
+  const results = await env.DB.batch(statements);
+  if (!Array.isArray(results) || results.length !== statements.length ||
+      results.some(result => !result || result.success !== true)) {
+    throw new Error("Atomic account deletion batch failed");
+  }
+  return respond({
+    deleted: true,
+    signedOutEverywhere: true,
+    deletedCounters: results[1].meta?.changes ?? 0
+  });
+}
+
 export async function handlePublishingRequest(
   request: Request, env: PublishEnv, now = Date.now(), fetchImpl: typeof fetch = fetch
 ): Promise<Response> {
@@ -487,6 +541,11 @@ export async function handlePublishingRequest(
       } else if (path === "/v1/my/export") {
         result = request.method === "GET"
           ? await exportMine(env, user, now) : noMethods("GET");
+      } else if (path === "/v1/my/account") {
+        result = env.ACCOUNT_DELETION_ENABLED !== "true"
+          ? fail("Account deletion is not enabled", 404)
+          : request.method === "DELETE"
+            ? await deleteMyAccount(request, env, user) : noMethods("DELETE");
       } else if (path === "/v1/my/counters") {
         result = request.method === "GET"
           ? await listMine(env, user)
