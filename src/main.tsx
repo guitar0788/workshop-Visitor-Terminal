@@ -48,6 +48,7 @@ type DragState = {
 function App() {
   const [language, setLanguage] = useState<Language>(readPreferredLanguage);
   const [initialDraft] = useState<TerminalDesign | null>(readBrowserDraft);
+  const [draftSaveUnavailable, setDraftSaveUnavailable] = useState(false);
   const [history, setHistory] = useState<EditHistory>(
     () => createHistory(initialDraft ?? createLocalizedPreset("pixel", language))
   );
@@ -109,9 +110,12 @@ function App() {
   // cancellation also clears it and restores the exact pre-drag snapshot.
   useEffect(() => {
     if (dragRef.current) return;
-    try { saveLocalDraft(window.localStorage, history.present); } catch {
+    let saved = false;
+    try { saved = saveLocalDraft(window.localStorage, history.present); } catch {
       // An offline HTML file or privacy mode can refuse localStorage access.
     }
+    // Never imply autosave succeeded when storage is blocked or over quota.
+    setDraftSaveUnavailable(!saved);
   }, [history.present]);
 
   // The browser can cancel capture without a final pointerup (phone call,
@@ -968,6 +972,9 @@ function App() {
             onClick={copySvg}>{t.copySvg}</button>
         </div>
         <p className="hint" role="note">{t.localDraftHelp}</p>
+        {draftSaveUnavailable && (
+          <p className="notice draft-warning" role="alert">{t.localDraftUnavailable}</p>
+        )}
         <p className="notice" role="status">{t[noticeKey]}</p>
         {!OFFLINE_DEMO_MODE && (
           <section className="offline-distribution" aria-label={t.offlineDownloadTitle}>
