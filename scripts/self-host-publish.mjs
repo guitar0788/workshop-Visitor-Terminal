@@ -4,7 +4,7 @@
  * The administrator token stays in the local environment or an ignored file;
  * never embed it in HTML, a GitHub Action, a URL, or a public README.
  */
-import { readFile } from "node:fs/promises";
+import { readFile, open } from "node:fs/promises";
 import { resolve, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { resolveSelfHostApi } from "./self-host-api.mjs";
@@ -112,11 +112,36 @@ export async function assertLocalWorkerHostname(origin, {
   return true;
 }
 
+/**
+ * Read at most maxBytes + 1 from a user-selected local file.
+ * A malicious or accidentally huge JSON/token file must not be read into
+ * memory. Never forward raw filesystem errors that can expose private paths.
+ */
+async function readBoundedLocalFile(path, maxBytes, kind) {
+  let handle;
+  try {
+    handle = await open(path, "r");
+    const buffer = Buffer.alloc(maxBytes + 1);
+    let used = 0;
+    while (used < buffer.length) {
+      const { bytesRead } = await handle.read(buffer, used, buffer.length - used, null);
+      if (bytesRead === 0) break;
+      used += bytesRead;
+    }
+    return { contents: buffer.subarray(0, used).toString("utf8"), oversized: used > maxBytes };
+  } catch {
+    throw Error("Could not read local " + kind +
+      " file. Check its path and permissions on this device; no file content was transmitted.");
+  } finally {
+    if (handle) await handle.close().catch(() => {});
+  }
+}
+
 export async function readDesign(path) {
-  const file = await readFile(path);
-  if (file.byteLength > MAX_DESIGN_FILE_BYTES) throw Error("Design JSON exceeds 20 KB");
+  const file = await readBoundedLocalFile(path, MAX_DESIGN_FILE_BYTES, "design JSON");
+  if (file.oversized) throw Error("Design JSON exceeds 20 KB");
   let parsed;
-  try { parsed = JSON.parse(file.toString("utf8")); }
+  try { parsed = JSON.parse(file.contents); }
   catch { throw Error("Design file is not valid JSON"); }
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed) ||
       parsed.schemaVersion !== 1 || !Array.isArray(parsed.layers)) {
@@ -131,8 +156,11 @@ export async function readDesign(path) {
 }
 
 export async function readAdminToken({ tokenFile, environment = process.env }) {
-  const fromFile = tokenFile ? (await readFile(tokenFile, "utf8")).trim() : "";
-  const token = tokenFile ? fromFile : environment.WVT_ADMIN_TOKEN;
+  const fromFile = tokenFile
+    ? await readBoundedLocalFile(tokenFile, 514, "administrator token")
+    : null;
+  if (fromFile?.oversized) throw Error("Local administrator token file is too large");
+  const token = tokenFile ? fromFile.contents.trim() : environment.WVT_ADMIN_TOKEN;
   if (typeof token !== "string" || token.length < 32 || token.length > 512 ||
       !/^[\x21-\x7e]+$/.test(token)) {
     throw Error("Provide a nonempty 32+ character administrator token in WVT_ADMIN_TOKEN or --token-file");
@@ -236,6 +264,11 @@ export async function execute(options, { fetchImpl = fetch, environment = proces
   if (options.command === "help") return HELP;
   const origin = validateApiOrigin(resolveSelfHostApi(options.api, environment));
   await assertLocalWorkerHostname(origin);
+  // Fail locally before consuming Worker/D1 request quota or reading the token.
+  // create/update use the exact JSON already validated here: no re-read race.
+  const design = options.command === "create" || options.command === "update"
+    ? await readDesign(options.design)
+    : null;
   await assertSafePublishingTarget(origin, fetchImpl);
   const token = await readAdminToken({ tokenFile: options["token-file"], environment });
   if (options.command === "list") {
@@ -269,7 +302,6 @@ export async function execute(options, { fetchImpl = fetch, environment = proces
     if (data.slug !== slug || !Number.isSafeInteger(data.hits)) throw Error("Counter identity or count mismatch");
     return `Counter: ${slug}\nRecorded upstream requests: ${data.hits}\n`;
   }
-  const design = await readDesign(options.design);
   if (options.command === "create") {
     try {
       const created = await requestJson(origin, token, "/v1/admin/counters", "POST",
