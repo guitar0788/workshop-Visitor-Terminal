@@ -9,12 +9,13 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawn } from "node:child_process";
 import { randomBytes, randomInt } from "node:crypto";
-import { readFile, writeFile, rm, mkdtemp, stat } from "node:fs/promises";
+import { readFile, writeFile, rm, mkdtemp, stat, cp, mkdir } from "node:fs/promises";
 import { setTimeout as sleep } from "node:timers/promises";
 import { tmpdir } from "node:os";
 import { resolve, join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { makeConfig } from "../scripts/self-host-setup.mjs";
+import { runGuidedSetup, checkWizard } from "../scripts/self-host-wizard.mjs";
 import { execute } from "../scripts/self-host-publish.mjs";
 import { verifySelfHost } from "../scripts/self-host-verify.mjs";
 import { runLiveCheck } from "../scripts/self-host-live-check.mjs";
@@ -207,12 +208,84 @@ async function verifyCatalogAfterRestart(api, catalog) {
   }
 }
 
+
+/**
+ * Exercise the SAME guided setup shipped in the extracted self-host ZIP.
+ * The fixture is a brand-new temporary directory; input is synthetic and
+ * local, so no Cloudflare account or credential is ever needed by CI.
+ * This runs in Linux, Windows and macOS standalone package smoke tests.
+ */
+async function smokeBundledWizard() {
+  const fixture = await mkdtemp(join(tmpdir(), "wvt-wizard-extracted-"));
+  const required = [
+    ".gitignore", "package.json", "package-lock.json",
+    "wrangler.selfhost.example.toml",
+    "worker/index.ts", "worker/service.ts", "worker/publishing.ts",
+    "worker/migrations/0001_initial.sql", "worker/migrations/0002_atomic_increment.sql",
+    "worker/migrations/0003_publishing.sql", "worker/migrations/0004_visit_budget.sql",
+    "src/model.ts", "src/card-art.ts", "src/minecraft-card-art.ts",
+    "src/approved-reference-cards.ts", "src/approved-three-card-image.ts",
+    "src/approved-clean-card-image.ts",
+    "scripts/self-host-publish.mjs", "scripts/self-host-verify.mjs"
+  ];
+  try {
+    for (const file of required) {
+      await mkdir(dirname(join(fixture, file)), { recursive: true });
+      await cp(join(ROOT, file), join(fixture, file));
+    }
+    const responses = [
+      "OWN", "wvt-extracted-wizard", "wvt-extracted-wizard-d1",
+      "12345678-1234-4abc-8123-123456789abc", "CREATE"
+    ];
+    const notifications = [];
+    const result = await runGuidedSetup({
+      root: fixture,
+      ask: async () => {
+        assert(responses.length > 0, "Unexpected Wizard prompt");
+        return responses.shift();
+      },
+      notify: message => notifications.push(message)
+    });
+    assert.deepEqual(result, { status: "LOCAL_READY", localChecks: "PASS" });
+    assert.equal(responses.length, 0, "The real first-run prompt contract changed");
+    const check = await checkWizard({ root: fixture });
+    assert.match(check, /NOT_TESTED/, "No actual Cloudflare acceptance claim");
+    const config = await readFile(join(fixture, "wrangler.selfhost.toml"), "utf8");
+    const admin = (await readFile(join(fixture, ".wvt-admin-token"), "utf8")).trim();
+    const visitor = (await readFile(join(fixture, ".wvt-visit-secret"), "utf8")).trim();
+    assert.match(admin, /^[a-f0-9]{96}$/);
+    assert.match(visitor, /^[a-f0-9]{96}$/);
+    assert.notEqual(admin, visitor);
+    assert(config.includes("wvt-extracted-wizard-d1"));
+    const visible = notifications.join("\n") + check;
+    for (const confidential of [
+      "12345678-1234-4abc-8123-123456789abc", admin, visitor
+    ]) {
+      assert(!visible.includes(confidential), "The wizard exposed private data");
+    }
+    let unexpectedPrompt = 0;
+    await assert.rejects(() => runGuidedSetup({
+      root: fixture,
+      ask: async () => { unexpectedPrompt++; return "OWN"; }
+    }), /already exists or is partial/);
+    assert.equal(unexpectedPrompt, 0, "A second run must stop before asking for secrets");
+    assert.equal(await readFile(join(fixture, "wrangler.selfhost.toml"), "utf8"), config);
+    console.log("PASS: packaged guided Wizard created local private config, " +
+      "passed readiness, redacted secrets and rejected duplicate setup on this OS.");
+  } finally {
+    await rm(fixture, { recursive: true, force: true });
+  }
+}
+
 export async function smokeSelfHostedCounter() {
   // Both paths are ignored, but the test also refuses to replace a real
   // developer's local secrets/config. No automatic cleanup of existing files.
   if (await exists(CONFIG) || await exists(DEV_VARS)) {
     throw Error("Existing local self-host config or .dev.vars: refusing to overwrite");
   }
+  smokeStage = "packaged-guided-wizard";
+  await smokeBundledWizard();
+  smokeStage = "disposable-d1-setup";
   const persistence = await mkdtemp(join(tmpdir(), "wvt-selfhost-d1-"));
   const designDir = await mkdtemp(join(tmpdir(), "wvt-selfhost-design-"));
   const tokenPath = join(designDir, "private-admin-token");
