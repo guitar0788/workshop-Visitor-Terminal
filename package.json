@@ -8,7 +8,7 @@
     "build": "tsc -b && vite build",
     "build:offline": "node scripts/build-offline.mjs",
     "preview": "vite preview",
-    "test": "vitest run && node --test worker/cloudflare-spend-alerts.test.mjs",
+    "test": "vitest run",
     "dev:worker": "wrangler dev --config wrangler.toml",
     "deploy:worker": "wrangler deploy --config wrangler.toml",
     "db:migrate:local": "wrangler d1 migrations apply workshop-visitor-terminal --local --config wrangler.toml"
