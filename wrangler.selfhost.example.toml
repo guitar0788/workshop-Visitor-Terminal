@@ -1,0 +1,38 @@
+# Public self-host template: run this in YOUR OWN Cloudflare account.
+# Copy to wrangler.selfhost.toml (git-ignored); choose your own Worker name,
+# NEW D1 name and its newly created UUID. Never reuse the project owner's D1.
+name = "REPLACE_WITH_YOUR_UNIQUE_WORKER_NAME"
+main = "worker/index.ts"
+compatibility_date = "2026-10-30"
+workers_dev = true
+
+[[d1_databases]]
+binding = "DB"
+database_name = "REPLACE_WITH_YOUR_NEW_D1_DATABASE_NAME"
+database_id = "REPLACE_WITH_YOUR_NEW_D1_DATABASE_ID"
+migrations_dir = "worker/migrations"
+
+[vars]
+PUBLISHING_ENABLED = "false"
+SVG_RATE_LIMIT_ENABLED = "true"
+# Explicit self-host-only, read-only counter discovery.
+SELF_HOST_ADMIN_LIST_ENABLED = "true"
+
+# Two independent, per-Cloudflare-location rate limiters. Choose namespace IDs
+# not already shared with unrelated Workers in your OWN Cloudflare account.
+[[ratelimits]]
+name = "SVG_RATE_LIMITER"
+namespace_id = "1001"
+[ratelimits.simple]
+limit = 60
+period = 60
+
+[[ratelimits]]
+name = "SVG_GLOBAL_RATE_LIMITER"
+namespace_id = "1002"
+[ratelimits.simple]
+limit = 120
+period = 60
+
+[triggers]
+crons = ["17 * * * *"]

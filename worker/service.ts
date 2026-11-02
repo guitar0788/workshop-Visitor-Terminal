@@ -19,6 +19,8 @@ export interface WorkerEnv extends PublishEnv {
   VISIT_HASH_SECRET: string;
   /** Explicit owner-only pilot flag. Optional in older/local deployments. */
   SVG_RATE_LIMIT_ENABLED?: string;
+  /** Self-host-only opt-in; disabled by default in the owner pilot. */
+  SELF_HOST_ADMIN_LIST_ENABLED?: string;
   SVG_RATE_LIMITER?: WorkerRateLimiter;
   SVG_GLOBAL_RATE_LIMITER?: WorkerRateLimiter;
 }
@@ -226,8 +228,20 @@ async function admin(request: Request, env: WorkerEnv, path: string, now: number
     });
   }
   if (path === "/v1/admin/counters") {
-    return request.method === "POST" ? createCounter(request, env, now) :
-      methodNotAllowed("POST");
+    if (request.method === "POST") return createCounter(request, env, now);
+    if (request.method !== "GET" ||
+        env.SELF_HOST_ADMIN_LIST_ENABLED !== "true" ||
+        env.PUBLISHING_ENABLED !== "false") return methodNotAllowed("POST");
+    // An authenticated, bounded D1 read: never select designs, owners, or receipts.
+    const result = await env.DB.prepare(
+      "SELECT slug, hits FROM counters ORDER BY slug LIMIT 101"
+    ).all<{ slug: string; hits: number }>();
+    if (!result.success || !Array.isArray(result.results) ||
+        result.results.some(row => !row || !validSlug(row.slug) || !validCount(row.hits))) {
+      throw Error("Self-host counter list integrity failure");
+    }
+    return json({ counters: result.results.slice(0, 100),
+      truncated: result.results.length > 100 });
   }
   const match = path.match(/^\/v1\/admin\/counters\/([^/]+)(?:\/(design|legacy))?$/);
   if (!match || !validSlug(match[1])) return error("Not found", 404);
@@ -241,7 +255,20 @@ async function admin(request: Request, env: WorkerEnv, path: string, now: number
       baselineCapturedAt: row.baseline_captured_at, baselineAppliedAt: row.baseline_applied_at
     }) : error("Counter not found", 404);
   }
-  if (request.method !== "POST") return methodNotAllowed("POST");
+  if (action === "design" && request.method === "GET") {
+    // Explicitly opt-in self-hosted installations only: never expose the
+    // stored Studio design from an OAuth/pilot installation or anonymously.
+    if (env.SELF_HOST_ADMIN_LIST_ENABLED !== "true" ||
+        env.PUBLISHING_ENABLED !== "false") return methodNotAllowed("POST");
+    const row = await getCounter(env.DB, slug);
+    if (!row) return error("Counter not found", 404);
+    const stored = JSON.parse(row.design_json) as unknown;
+    if (!isObject(stored) || stored.schemaVersion !== 1 ||
+        !Array.isArray(stored.layers)) throw Error("Invalid stored Studio design");
+    // Whitelist design fields; never return owner, IP hashes or D1 metadata.
+    return json({ slug, design: sanitizeDesign(stored) });
+  }
+  if (request.method !== "POST") return methodNotAllowed(action === "design" ? "GET, POST" : "POST");
   return action === "design" ? updateDesign(request, env, slug) :
     seedLegacy(request, env, slug, now);
 }

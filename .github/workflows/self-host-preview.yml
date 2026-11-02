@@ -1,0 +1,167 @@
+name: Build Self-Host Preview
+
+# This workflow has NO Cloudflare credentials, no deployment rights, and no
+# database snapshot access. Keep it separate from Verify: the recovery drill's
+# safety invariant explicitly prohibits any artifact uploading in Verify.
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/self-host-preview.yml"
+      - "scripts/build-selfhost-package.mjs"
+      - "scripts/self-host-*.mjs"
+      - "worker/**"
+      - "src/model.ts"
+      - "package.json"
+      - "package-lock.json"
+      - "wrangler.selfhost.example.toml"
+      - "docs/SELF_HOSTING.md"
+      - ".gitignore"
+
+permissions:
+  contents: read
+
+# Keep stale commits from publishing outdated preview archives.
+concurrency:
+  group: selfhost-preview-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  package:
+    # Only the reviewed in-repository preview branch may publish a test ZIP.
+    # Untrusted fork pull requests must not create a similarly named artifact.
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'feat/v06-independent-self-hosting'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install project dependencies
+        run: npm ci
+      - name: Audit all locked npm dependencies including development tooling
+        run: npm audit --audit-level=moderate
+      - name: Check archive encoding and manifest no-go gates
+        run: node --test worker/self-host-package.test.mjs worker/self-host-release-manifest.test.mjs
+      - name: Build ZIP and SHA256 from explicit source file allowlist
+        run: node scripts/build-selfhost-package.mjs
+      - name: Check built ZIP digest
+        run: |
+          cd dist
+          sha256sum -c Workshop-Visitor-Terminal-Self-Host.zip.sha256
+      - name: Install standalone ZIP into a fresh temporary directory
+        run: |
+          mkdir -p .wvt-package-ci
+          unzip -q dist/Workshop-Visitor-Terminal-Self-Host.zip -d .wvt-package-ci
+          cd .wvt-package-ci/Workshop-Visitor-Terminal-Self-Host
+          npm ci
+          node worker/self-host-dryrun.mjs
+          node worker/self-host-smoke.mjs
+          node scripts/self-host-setup.mjs init --worker preview-ci-own-worker --database preview-ci-own-d1 --database-id 11111111-2222-4333-8444-555555555555
+          node scripts/self-host-doctor.mjs --account-subdomain preview-ci-account
+          node scripts/self-host-readiness.mjs check --report selfhost-ci-report.json
+          node -e 'const r=require("./selfhost-ci-report.json"); if(r.local!=="PASS" || r.releaseGate!=="PENDING_INDEPENDENT_CLOUDFLARE_TEST" || Object.values(r.live).some(x=>x!=="NOT_TESTED")) process.exit(1)'
+      - name: Upload only the reviewed ZIP and SHA256 (no database backups)
+        uses: actions/upload-artifact@v4
+        with:
+          name: Workshop-SelfHost-CI-Input
+          path: |
+            dist/Workshop-Visitor-Terminal-Self-Host.zip
+            dist/Workshop-Visitor-Terminal-Self-Host.zip.sha256
+          retention-days: 7
+          if-no-files-found: error
+
+  windows-zip-smoke:
+    name: Windows standalone ZIP / Worker+D1
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'feat/v06-independent-self-hosting'
+    needs: package
+    runs-on: windows-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: Workshop-SelfHost-CI-Input
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Verify ZIP checksum, extract and run independent Windows D1
+        shell: pwsh
+        run: |
+          $zip = "Workshop-Visitor-Terminal-Self-Host.zip"
+          $expected = ((Get-Content "$zip.sha256" -Raw).Split(" ")[0]).ToLowerInvariant()
+          $actual = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($expected -ne $actual) { throw "Self-host ZIP SHA256 mismatch" }
+          New-Item -ItemType Directory -Path ".wvt-windows-package-ci" | Out-Null
+          Expand-Archive -LiteralPath $zip -DestinationPath ".wvt-windows-package-ci"
+          Set-Location ".wvt-windows-package-ci/Workshop-Visitor-Terminal-Self-Host"
+          npm ci
+          if ($LASTEXITCODE -ne 0) { throw "Windows npm ci failed" }
+          node worker/self-host-dryrun.mjs
+          if ($LASTEXITCODE -ne 0) { throw "Windows Wrangler --dry-run failed" }
+          node worker/self-host-smoke.mjs
+          if ($LASTEXITCODE -ne 0) { throw "Windows local Worker/D1 smoke failed" }
+
+  macos-zip-smoke:
+    name: macOS standalone ZIP / Worker+D1
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'feat/v06-independent-self-hosting'
+    needs: package
+    runs-on: macos-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: Workshop-SelfHost-CI-Input
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Verify original ZIP checksum and run real local macOS Wrangler/D1
+        shell: bash
+        run: |
+          set -euo pipefail
+          zip="Workshop-Visitor-Terminal-Self-Host.zip"
+          expected="$(awk '{print $1}' "$zip.sha256")"
+          actual="$(shasum -a 256 "$zip" | awk '{print $1}')"
+          test "$expected" = "$actual"
+          mkdir -p .wvt-macos-package-ci
+          unzip -q "$zip" -d .wvt-macos-package-ci
+          cd .wvt-macos-package-ci/Workshop-Visitor-Terminal-Self-Host
+          npm ci
+          node worker/self-host-dryrun.mjs
+          node worker/self-host-smoke.mjs
+
+  validated-preview:
+    name: Publish validated PREVIEW only (not a Release)
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'feat/v06-independent-self-hosting'
+    needs: [package, windows-zip-smoke, macos-zip-smoke]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: actions/download-artifact@v4
+        with:
+          name: Workshop-SelfHost-CI-Input
+          path: .wvt-validated-input
+      - name: Confirm ZIP digest and create explicit not-yet-released preview manifest
+        env:
+          WVT_EXPECT_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          WVT_WORKFLOW_RUN_ID: ${{ github.run_id }}
+        run: |
+          node scripts/self-host-release-manifest.mjs .wvt-validated-input
+          node -e 'const fs=require("node:fs");const m=JSON.parse(fs.readFileSync(".wvt-validated-input/Workshop-SelfHost-Preview-Manifest.json","utf8"));if(m.status!=="VALIDATED_CI_PREVIEW_NOT_A_RELEASE"||m.notVerified.realRemoteWorkerDeployment!=="NOT_TESTED"||m.notVerified.separateCloudflareAccountOwnership!=="NOT_TESTED")process.exit(1)'
+      - name: Upload pre-release archive, checksum and transparent provenance
+        uses: actions/upload-artifact@v4
+        with:
+          name: Workshop-SelfHost-Validated-Preview
+          path: |
+            .wvt-validated-input/Workshop-Visitor-Terminal-Self-Host.zip
+            .wvt-validated-input/Workshop-Visitor-Terminal-Self-Host.zip.sha256
+            .wvt-validated-input/Workshop-SelfHost-Preview-Manifest.json
+          retention-days: 7
+          if-no-files-found: error

@@ -1,0 +1,152 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { readFile, mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { createHash } from "node:crypto";
+import { inflateRawSync } from "node:zlib";
+import {
+  ALLOWED_FILES, PACKAGE_DIR, ROOT, archive, buildSelfHostPackage,
+  crc32, safeZipPath, validateLockedDependencies
+} from "../scripts/build-selfhost-package.mjs";
+
+function extractZip(buffer) {
+  const eocd = buffer.length - 22;
+  assert.equal(buffer.readUInt32LE(eocd), 0x06054b50, "ZIP central directory footer");
+  assert.equal(buffer.readUInt16LE(eocd + 20), 0);
+  const total = buffer.readUInt16LE(eocd + 10);
+  const size = buffer.readUInt32LE(eocd + 12);
+  const directory = buffer.readUInt32LE(eocd + 16);
+  assert.equal(directory + size, eocd);
+  const found = new Map();
+  let position = directory;
+  for (let i = 0; i < total; i++) {
+    assert.equal(buffer.readUInt32LE(position), 0x02014b50);
+    assert.equal(buffer.readUInt16LE(position + 10), 8);
+    assert.equal(buffer.readUInt16LE(position + 8), 0x0800);
+    const checksum = buffer.readUInt32LE(position + 16);
+    const compSize = buffer.readUInt32LE(position + 20);
+    const origSize = buffer.readUInt32LE(position + 24);
+    const nameSize = buffer.readUInt16LE(position + 28);
+    const offset = buffer.readUInt32LE(position + 42);
+    const name = buffer.subarray(position + 46, position + 46 + nameSize).toString("utf8");
+    assert(name.startsWith(PACKAGE_DIR + "/"), "Expected portable extraction root");
+    assert(safeZipPath(name));
+    assert(!found.has(name));
+    assert.equal(buffer.readUInt32LE(offset), 0x04034b50);
+    assert.equal(buffer.readUInt16LE(offset + 8), 8);
+    const localNameSize = buffer.readUInt16LE(offset + 26);
+    const localExtra = buffer.readUInt16LE(offset + 28);
+    assert.equal(buffer.subarray(offset + 30, offset + 30 + localNameSize).toString("utf8"), name);
+    const bodyStart = offset + 30 + localNameSize + localExtra;
+    const inflated = inflateRawSync(buffer.subarray(bodyStart, bodyStart + compSize));
+    assert.equal(inflated.length, origSize);
+    assert.equal(crc32(inflated), checksum, "Actual file must match ZIP CRC");
+    found.set(name.slice(PACKAGE_DIR.length + 1), inflated);
+    position += 46 + nameSize + buffer.readUInt16LE(position + 30) +
+      buffer.readUInt16LE(position + 32);
+  }
+  assert.equal(position, eocd);
+  return found;
+}
+
+test("ZIP encoder is deterministic, rejects unsafe paths and has correct CRC", () => {
+  const x = archive([
+    { path: "z/test.txt", data: Buffer.from("Hello UTF-8 🛠") },
+    { path: ".gitignore", data: Buffer.from("secrets\n") }
+  ]);
+  const y = archive([
+    { path: ".gitignore", data: Buffer.from("secrets\n") },
+    { path: "z/test.txt", data: Buffer.from("Hello UTF-8 🛠") }
+  ]);
+  assert.deepEqual(x, y, "Packaging order must not change bytes");
+  assert.equal(extractZip(x).get("z/test.txt").toString("utf8"), "Hello UTF-8 🛠");
+  for (const path of ["../token", "/etc/passwd", "a//b", "a\\b", "a/./b", "a/../b", "a:b", ""]) {
+    assert.equal(safeZipPath(path), false);
+    assert.throws(() => archive([{ path, data: Buffer.from("bad") }]));
+  }
+  assert.throws(() => archive([{ path: "a", data: "x" }, { path: "a", data: "y" }]));
+  assert.throws(() => archive([{ path: "large", data: Buffer.alloc(3_000_001) }]));
+  assert.equal(crc32(Buffer.from("123456789")), 0xcbf43926);
+});
+
+test("release preview ZIP contains ONLY reviewed project sources and never secrets", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "wvt-selfhost-package-"));
+  try {
+    const result = await buildSelfHostPackage({
+      root: ROOT, output: join(dir, "SelfHostPreview.zip")
+    });
+    assert(result.bytes < 6_000_000);
+    assert.equal(result.members, ALLOWED_FILES.length);
+    const expectedHash = createHash("sha256").update(result.zip).digest("hex");
+    assert.equal(result.sha256, expectedHash);
+    assert.equal(await readFile(result.checksumPath, "utf8"),
+      expectedHash + "  Workshop-Visitor-Terminal-Self-Host.zip\n");
+    const extracted = extractZip(result.zip);
+    assert(extracted.has("scripts/self-host-url.mjs"), "Offline URL tool is included in independent self-host ZIP");
+    assert(extracted.has("scripts/self-host-doctor.mjs"), "Offline one-command diagnosis is included in independent self-host ZIP");
+    assert(extracted.has("scripts/self-host-wizard.mjs"), "Interactive local-only wizard is included in independent self-host ZIP");
+    assert.match(extracted.get("scripts/self-host-wizard.mjs").toString("utf8"), /runGuidedSetup/);
+    assert.match(extracted.get("worker/self-host-smoke.mjs").toString("utf8"), /await smokeBundledWizard\(\)/,
+      "Standalone package smoke must exercise the real wizard, not only the Worker");
+    assert.deepEqual([...extracted.keys()].sort(), [...ALLOWED_FILES].sort());
+    assert(![...extracted.keys()].some(name =>
+      /\.dev\.vars|\.env|\.wvt-admin-token|\.wvt-visit-secret|wrangler\.toml|\.sqlite|node_modules|dist\//i.test(name)));
+    for (const path of ALLOWED_FILES) {
+      assert.deepEqual(extracted.get(path), await readFile(join(ROOT, path)),
+        "Distribution file must match its repository source: " + path);
+    }
+    const entry = extracted.get("worker/index.ts").toString("utf8");
+    const service = extracted.get("worker/service.ts").toString("utf8");
+    const publishing = extracted.get("worker/publishing.ts").toString("utf8");
+    const cardArt = extracted.get("src/card-art.ts").toString("utf8");
+    assert(extracted.has("src/approved-reference-cards.ts"), "Exact approved card overlay present");
+    assert(extracted.has("src/approved-three-card-image.ts"), "Approved concept art embedded in standalone ZIP");
+    assert(extracted.has("src/approved-clean-card-image.ts"), "Dynamic-number clean reference art embedded in standalone ZIP");
+    assert(extracted.get("src/approved-three-card-image.ts").toString("utf8").includes("data:image/avif;base64,"));
+    assert.match(cardArt, /pixel-card/);
+    assert.match(cardArt, /minimal-card/);
+    assert(extracted.has("src/minecraft-card-art.ts"), "All three Minecraft-style scenes included in standalone ZIP");
+    assert.match(extracted.get("src/minecraft-card-art.ts").toString("utf8"), /mc-overworld/);
+    assert.match(extracted.get("src/minecraft-card-art.ts").toString("utf8"), /mc-nether/);
+    assert.match(extracted.get("src/minecraft-card-art.ts").toString("utf8"), /mc-end/);
+    assert.match(service, /from "..\/src\/model"/);
+    assert.match(extracted.get("src/model.ts").toString("utf8"), /from ".\/card-art"/);
+    const manifest = JSON.parse(extracted.get("package.json").toString("utf8"));
+    const lock = JSON.parse(extracted.get("package-lock.json").toString("utf8"));
+    assert(validateLockedDependencies(manifest, lock) > 200,
+      "The real npm lock should be complete and pinned");
+    assert.deepEqual(lock.packages[""].dependencies, manifest.dependencies);
+    assert.deepEqual(lock.packages[""].devDependencies, manifest.devDependencies);
+    assert.match(entry, /from "\.\/service"/);
+    assert.match(service, /from "\.\/publishing"/);
+    assert.match(service, /from "\.\.\/src\/model"/);
+    assert.match(publishing, /from "\.\.\/src\/model"/);
+    assert(manifest.devDependencies.wrangler, "Wrangler install manifest");
+    assert.match(extracted.get("wrangler.selfhost.example.toml").toString("utf8"),
+      /PUBLISHING_ENABLED = "false"/);
+    assert.match(extracted.get("docs/SELF_HOSTING.md").toString("utf8"), /自托管/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("package release validator refuses mismatched and unsafe npm dependency locks", async () => {
+  const manifest = JSON.parse(await readFile(join(ROOT, "package.json"), "utf8"));
+  const original = JSON.parse(await readFile(join(ROOT, "package-lock.json"), "utf8"));
+  assert(validateLockedDependencies(manifest, original) > 200);
+  const clone = () => structuredClone(original);
+  for (const mutate of [
+    v => { v.packages[""].devDependencies.wrangler = "latest"; },
+    v => { v.packages["node_modules/react"].resolved = "https://evil.example/react.tgz"; },
+    v => { v.packages["node_modules/react"].integrity = "unknown"; },
+    v => { v.packages["node_modules/react"].version = "file:../private"; },
+    v => { v.packages["node_modules/react"].link = true; },
+    v => { delete v.packages["node_modules/react"].integrity; },
+    v => { v.lockfileVersion = 1; }
+  ]) {
+    const input = clone();
+    mutate(input);
+    assert.throws(() => validateLockedDependencies(manifest, input));
+  }
+});
