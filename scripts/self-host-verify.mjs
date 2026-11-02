@@ -156,12 +156,9 @@ export async function verifySelfHost(args, {
   if (args.help) return HELP;
   const origin = validateApiOrigin(resolveSelfHostApi(args.api, environment));
   await assertLocalWorkerHostname(origin);
-  // Read the secret only after checking the destination. Never send the
-  // credential to the maintainer staging API, even if explicitly requested.
-  const token = await readAdminToken({
-    tokenFile: args["token-file"], environment
-  });
-
+  // Do not even read the local administrator secret until the public
+  // endpoints have passed their anonymous identity and lockdown checks.
+  // Nothing is sent or changed during these initial checks.
   const health = await checkedJson(
     await probe(fetchImpl, origin, "/health"), 200, "Health");
   if (health.status !== "ok" ||
@@ -182,6 +179,10 @@ export async function verifySelfHost(args, {
     throw Error("Admin access is not safely restricted");
   }
 
+  // Read credentials only after all three unauthenticated safety checks pass.
+  const token = await readAdminToken({
+    tokenFile: args["token-file"], environment
+  });
   const usage = validateUsage(await checkedJson(
     await probe(fetchImpl, origin, "/v1/admin/usage", { token }),
     200, "Authenticated budget"));
