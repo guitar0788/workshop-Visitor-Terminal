@@ -17,7 +17,8 @@ import {
   type EditHistory
 } from "./history";
 import {
-  OFFLINE_DEMO_MODE, PUBLISH_UI_ENABLED, PUBLISH_PILOT_MODE, beginGitHubLogin, exchangeGitHubReturn, logoutPublishing,
+  ACCOUNT_DELETION_UI_ENABLED, OFFLINE_DEMO_MODE, PUBLISH_UI_ENABLED, PUBLISH_PILOT_MODE,
+  beginGitHubLogin, deletePublishedAccount, exchangeGitHubReturn, logoutPublishing,
   deletePublishedCounter, exportPublishedAccount, markdownEmbed, myCounters, publishDesign,
   readOAuthReturn, revokeAllPublishedSessions, savePublished,
   type PublishedCounter, type PublishSession
@@ -70,6 +71,9 @@ function App() {
   const [deleteTargetSlug, setDeleteTargetSlug] = useState<string | null>(null);
   const [deleteConfirmation, setDeleteConfirmation] = useState("");
   const [signOutEverywhereOpen, setSignOutEverywhereOpen] = useState(false);
+  const [deleteAccountOpen, setDeleteAccountOpen] = useState(false);
+  const [deleteAccountPhrase, setDeleteAccountPhrase] = useState("");
+  const [deleteAccountLogin, setDeleteAccountLogin] = useState("");
   const handledAuth = useRef(false);
   const nextId = useRef(1);
   const stageRef = useRef<HTMLDivElement>(null);
@@ -320,10 +324,41 @@ function App() {
       setDeleteTargetSlug(null);
       setDeleteConfirmation("");
       setSignOutEverywhereOpen(false);
+      setDeleteAccountOpen(false);
+      setDeleteAccountPhrase("");
+      setDeleteAccountLogin("");
       setPublishNotice(t.publishSignOutEverywhereSuccess);
     } catch {
       // A failed remote revocation is NOT a successful all-device logout.
       setPublishNotice(t.publishSignOutEverywhereError);
+    } finally {
+      setPublishingBusy(false);
+    }
+  }
+
+  async function removePublishedAccount() {
+    if (!publishSession || publishingBusy || !deleteAccountOpen ||
+        deleteAccountPhrase !== "DELETE_MY_ACCOUNT" ||
+        deleteAccountLogin !== publishSession.user.login) return;
+    const token = publishSession.accessToken;
+    setPublishingBusy(true);
+    try {
+      await deletePublishedAccount(token, publishSession.user.login);
+      // The server batch has revoked this and every other session. Clear
+      // browser state only after the deletion response is confirmed.
+      setPublishSession(null);
+      setPublishedCounters([]);
+      setPublishedSlug(null);
+      setDeleteTargetSlug(null);
+      setDeleteConfirmation("");
+      setSignOutEverywhereOpen(false);
+      setDeleteAccountOpen(false);
+      setDeleteAccountPhrase("");
+      setDeleteAccountLogin("");
+      setPublishNotice(t.publishDeleteAccountSuccess);
+    } catch {
+      // Do not claim deletion succeeded when the response is uncertain.
+      setPublishNotice(t.publishDeleteAccountError);
     } finally {
       setPublishingBusy(false);
     }
@@ -339,6 +374,9 @@ function App() {
     setDeleteTargetSlug(null);
     setDeleteConfirmation("");
     setSignOutEverywhereOpen(false);
+    setDeleteAccountOpen(false);
+    setDeleteAccountPhrase("");
+    setDeleteAccountLogin("");
     setPublishNotice(t.publishSignedOut);
     try { await logoutPublishing(token); } catch {
       // The in-memory token is discarded regardless; the server token expires
@@ -397,6 +435,18 @@ function App() {
                 onClick={() => setSignOutEverywhereOpen(value => !value)}>
                 {t.publishSignOutEverywhere}
               </button>
+              {ACCOUNT_DELETION_UI_ENABLED && (
+                <button type="button" className="publish-delete-trigger"
+                  disabled={publishingBusy}
+                  aria-expanded={deleteAccountOpen}
+                  onClick={() => {
+                    setDeleteAccountOpen(value => !value);
+                    setDeleteAccountPhrase("");
+                    setDeleteAccountLogin("");
+                  }}>
+                  {t.publishDeleteAccount}
+                </button>
+              )}
             </div>
             {signOutEverywhereOpen && (
               <div className="publish-session-confirm" role="group"
@@ -411,6 +461,45 @@ function App() {
                   <button type="button" className="secondary"
                     disabled={publishingBusy}
                     onClick={() => setSignOutEverywhereOpen(false)}>
+                    {t.publishDeleteCancel}
+                  </button>
+                </div>
+              </div>
+            )}
+            {ACCOUNT_DELETION_UI_ENABLED && deleteAccountOpen && (
+              <div className="publish-delete-confirm" role="group"
+                aria-label={t.publishDeleteAccount}>
+                <strong>{t.publishDeleteAccount}</strong>
+                <p>{t.publishDeleteAccountWarning}</p>
+                <label>{t.publishDeleteAccountTypePhrase}
+                  <input type="text" value={deleteAccountPhrase}
+                    autoComplete="off" autoCapitalize="off" spellCheck={false}
+                    disabled={publishingBusy}
+                    onChange={event => setDeleteAccountPhrase(event.target.value)}
+                    placeholder="DELETE_MY_ACCOUNT"/>
+                </label>
+                <label>{t.publishDeleteAccountTypeLogin}
+                  <input type="text" value={deleteAccountLogin}
+                    autoComplete="off" autoCapitalize="off" spellCheck={false}
+                    disabled={publishingBusy}
+                    onChange={event => setDeleteAccountLogin(event.target.value)}
+                    placeholder={publishSession.user.login}/>
+                </label>
+                <div className="publish-delete-buttons">
+                  <button type="button" className="publish-delete-danger"
+                    disabled={publishingBusy ||
+                      deleteAccountPhrase !== "DELETE_MY_ACCOUNT" ||
+                      deleteAccountLogin !== publishSession.user.login}
+                    onClick={() => void removePublishedAccount()}>
+                    {publishingBusy ? t.publishBusy : t.publishDeleteAccountConfirm}
+                  </button>
+                  <button type="button" className="secondary"
+                    disabled={publishingBusy}
+                    onClick={() => {
+                      setDeleteAccountOpen(false);
+                      setDeleteAccountPhrase("");
+                      setDeleteAccountLogin("");
+                    }}>
                     {t.publishDeleteCancel}
                   </button>
                 </div>
