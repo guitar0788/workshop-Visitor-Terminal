@@ -49,6 +49,10 @@ test("mobile browser integration page exercises real app tabs and six current st
   assert(html.includes("layer width max ignores current x position"));
   assert(html.includes("layer height max ignores current y position"));
   assert(html.includes("layer geometry inputs are not constrained to whole pixels"));
+  assert(html.includes("mobile text alignment"));
+  assert(html.includes("mobile text alignment options are incomplete"));
+  assert(html.includes("text-anchor="));
+  assert(html.includes("alignmentValues"));
   assert(html.includes("Invalid (?:or unsupported )?design JSON|设计 JSON 无效"));
   assert(html.includes("send('pointerup'"));
   assert(html.includes("undoButton.click()"));
