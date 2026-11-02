@@ -191,6 +191,20 @@ describe("editable text alignment", () => {
     }
   });
 
+  it("normalizes missing or unsupported runtime alignment to left", () => {
+    const current = clonePreset("mc-nether");
+    const legacy = {
+      ...current,
+      layers: current.layers.map(({ textAlign: _textAlign, ...layer }) => layer)
+    };
+    expect(sanitizeDesign(legacy).layers.every(layer => layer.textAlign === "left")).toBe(true);
+    const unsupported = sanitizeDesign({
+      ...current,
+      layers: current.layers.map(layer => ({ ...layer, textAlign: "justify" }))
+    });
+    expect(unsupported.layers.every(layer => layer.textAlign === "left")).toBe(true);
+  });
+
   it("aligns visitor-count text inside the selected count box", () => {
     const design = clonePreset("mc-nether");
     const count = design.layers.find(layer => layer.kind === "count")!;
