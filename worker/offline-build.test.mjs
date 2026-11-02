@@ -20,12 +20,14 @@ test("the standalone Vite build disables OAuth even with inherited pilot environ
     VITE_PUBLISH_PILOT: "true",
     VITE_PUBLISH_API_ORIGIN:
       "https://workshop-visitor-terminal-staging.fangcui2007.workers.dev",
-    VITE_OFFLINE_DEMO: "false"
+    VITE_OFFLINE_DEMO: "false",
+    VITE_ACCOUNT_DELETION_UI_ENABLED: "true"
   });
   assert.equal(vars.VITE_OFFLINE_DEMO, "true");
   assert.equal(vars.VITE_PUBLISH_ENABLED, "false");
   assert.equal(vars.VITE_PUBLISH_PILOT, "false");
   assert.equal(vars.VITE_PUBLISH_API_ORIGIN, "");
+  assert.equal(vars.VITE_ACCOUNT_DELETION_UI_ENABLED, "false");
 });
 
 test("bundles React JS and CSS into one local HTML file with a deny-network CSP", () => {
@@ -70,11 +72,15 @@ test("rejects external script, unexpected asset paths or multiple bundles", () =
 
 test("the offline mode is a hard frontend gate, not merely a hidden login button", async () => {
   const client = await readFile("src/publish-client.ts", "utf8");
+  const config = await readFile("src/publish-config.ts", "utf8");
   const scripts = await readFile("scripts/build-offline.mjs", "utf8");
   const index = await readFile("index.html", "utf8");
-  assert.match(client, /OFFLINE_DEMO_MODE = vars\.VITE_OFFLINE_DEMO === "true"/);
-  assert.match(client, /!OFFLINE_DEMO_MODE && vars\.VITE_PUBLISH_ENABLED/);
+  assert.match(client, /from "\.\/publish-config"/);
+  assert.match(config, /offlineDemoMode = vars\.VITE_OFFLINE_DEMO === "true"/);
+  assert.match(config, /!offlineDemoMode && vars\.VITE_PUBLISH_ENABLED/);
+  assert.match(config, /accountDeletionUiEnabled =\s*publishUiEnabled && vars\.VITE_ACCOUNT_DELETION_UI_ENABLED/);
   assert.match(scripts, /VITE_PUBLISH_API_ORIGIN: ""/);
+  assert.match(scripts, /VITE_ACCOUNT_DELETION_UI_ENABLED: "false"/);
   assert.match(scripts, /connect-src 'none'/);
   assert.doesNotMatch(index, /https?:\/\/.*(?:cdn|fonts\.googleapis)/);
 });
