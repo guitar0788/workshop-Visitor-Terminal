@@ -74,6 +74,9 @@ function App() {
   const nextId = useRef(1);
   const stageRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<DragState | null>(null);
+  const mobileSheetRef = useRef<HTMLElement>(null);
+  const mobileNavRef = useRef<HTMLElement>(null);
+  const previousMobileTab = useRef<MobileTab>("preview");
 
   const design = history.present;
   const t = translations[language];
@@ -93,6 +96,24 @@ function App() {
   })), [language]);
   const layerName = (layer: Layer) =>
     layer.kind === "text" ? layer.text || t.blankText : names[layer.kind];
+
+  // Mobile sheets are visually above the bottom navigation but appear
+  // before it in DOM order. Move focus into a newly opened sheet so keyboard
+  // users can reach its controls with Tab; return focus to Preview on close.
+  useEffect(() => {
+    const previous = previousMobileTab.current;
+    previousMobileTab.current = mobileTab;
+    if (previous === mobileTab) return;
+    const nav = mobileNavRef.current;
+    if (!nav || window.getComputedStyle(nav).display === "none") return;
+    if (mobileTab === "preview") {
+      nav.querySelector<HTMLButtonElement>('[data-tab="preview"]')
+        ?.focus({ preventScroll: true });
+    } else {
+      mobileSheetRef.current?.querySelector<HTMLElement>(".sheet-heading h2")
+        ?.focus({ preventScroll: true });
+    }
+  }, [mobileTab]);
 
   useEffect(() => {
     document.documentElement.lang = language;
@@ -1160,9 +1181,10 @@ function App() {
       </div>
 
       {mobileTab !== "preview" && (
-        <section className="mobile-sheet mobile-only" aria-label={sheetTitle}>
+        <section ref={mobileSheetRef} className="mobile-sheet mobile-only"
+          aria-labelledby="mobile-sheet-title">
           <div className="sheet-heading">
-            <h2>{sheetTitle}</h2>
+            <h2 id="mobile-sheet-title" tabIndex={-1}>{sheetTitle}</h2>
             <button type="button" aria-label={t.closePanel}
               onClick={() => setMobileTab("preview")}>×</button>
           </div>
@@ -1191,14 +1213,18 @@ function App() {
         </section>
       )}
 
-      <nav className="mobile-nav mobile-only" aria-label={t.mobileHelp}>
+      <nav ref={mobileNavRef} className="mobile-nav mobile-only" aria-label={t.mobileHelp}>
         {tabs.map(tab => (
-          <button type="button" key={tab.id}
+          <button type="button" key={tab.id} data-tab={tab.id}
             className={mobileTab === tab.id ? "active" : ""}
             aria-current={mobileTab === tab.id ? "page" : undefined}
             onClick={() => {
               cancelActiveDrag();
               setMobileTab(tab.id);
+              if (tab.id === mobileTab && tab.id !== "preview") {
+                mobileSheetRef.current?.querySelector<HTMLElement>(".sheet-heading h2")
+                  ?.focus({ preventScroll: true });
+              }
               if (tab.id !== "preview") setCleanPreview(false);
             }}>
             <span className="nav-icon" aria-hidden="true">{tab.icon}</span>
