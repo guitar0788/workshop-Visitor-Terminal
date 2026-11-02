@@ -87,6 +87,8 @@ test("release preview ZIP contains ONLY reviewed project sources and never secre
     assert(extracted.has("scripts/self-host-doctor.mjs"), "Offline one-command diagnosis is included in independent self-host ZIP");
     assert(extracted.has("scripts/self-host-wizard.mjs"), "Interactive local-only wizard is included in independent self-host ZIP");
     assert.match(extracted.get("scripts/self-host-wizard.mjs").toString("utf8"), /runGuidedSetup/);
+    assert.match(extracted.get("worker/self-host-smoke.mjs").toString("utf8"), /await smokeBundledWizard\(\)/,
+      "Standalone package smoke must exercise the real wizard, not only the Worker");
     assert.deepEqual([...extracted.keys()].sort(), [...ALLOWED_FILES].sort());
     assert(![...extracted.keys()].some(name =>
       /\.dev\.vars|\.env|\.wvt-admin-token|\.wvt-visit-secret|wrangler\.toml|\.sqlite|node_modules|dist\//i.test(name)));
