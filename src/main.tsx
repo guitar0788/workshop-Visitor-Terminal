@@ -469,6 +469,9 @@ function App() {
   }
 
   function edit(updater: (current: TerminalDesign) => TerminalDesign) {
+    // Changing properties, templates or layers during an in-flight gesture
+    // must discard its preview first, not accidentally commit it as a change.
+    cancelActiveDrag();
     setHistory(current => recordEdit(current, updater(current.present)));
   }
 
@@ -922,6 +925,7 @@ function App() {
 
   function startFreshDesign() {
     if (!window.confirm(t.newDesignConfirm)) return;
+    cancelActiveDrag();
     setHistory(createHistory(createLocalizedPreset("pixel", language)));
     setSelectedId("heading");
     setDemoCount(PREVIEW_COUNT);
@@ -1078,7 +1082,7 @@ function App() {
 
           <div className="preview-modes">
             <button type="button" className={"mode-button" + (cleanPreview ? " active" : "")}
-              aria-pressed={cleanPreview} onClick={() => setCleanPreview(value => !value)}>
+              aria-pressed={cleanPreview} onClick={() => { cancelActiveDrag(); setCleanPreview(value => !value); }}>
               {cleanPreview ? "▣ " + t.editPreview : "◉ " + t.cleanPreview}
             </button>
             <button type="button" className={"mode-button mobile-only" + (moveMode ? " active" : "")}
@@ -1169,6 +1173,7 @@ function App() {
             className={mobileTab === tab.id ? "active" : ""}
             aria-current={mobileTab === tab.id ? "page" : undefined}
             onClick={() => {
+              cancelActiveDrag();
               setMobileTab(tab.id);
               if (tab.id !== "preview") setCleanPreview(false);
             }}>
