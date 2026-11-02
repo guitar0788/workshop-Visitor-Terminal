@@ -1,11 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, writeFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, writeFile, rm, symlink, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import {
   parseArgs, validateApiOrigin, readDesign, readAdminToken, execute,
-  assertSafePublishingTarget, assertLocalWorkerHostname
+  assertSafePublishingTarget, assertLocalWorkerHostname,
+  validateExportDesign, saveExportedDesign, assertExportDestinationAvailable
 } from "../scripts/self-host-publish.mjs";
 import { makeConfig } from "../scripts/self-host-setup.mjs";
 
@@ -54,7 +55,11 @@ test("parses complete options and rejects duplicates, unknown actions and incomp
     ["delete", "--api", origin, "--slug", "a"],
     ["list", "--api", origin, "--slug", "x"],
     ["list", "--api", origin, "--design", "x.json"],
-    ["list", "--api", origin, "--owner", "bob"]
+    ["list", "--api", origin, "--owner", "bob"],
+    ["export", "--api", origin, "--slug", "a", "--design", "x.json"],
+    ["export", "--api", origin, "--slug", "a", "--owner", "bob"],
+    ["export", "--api", origin, "--slug", "../path"],
+    ["export", "--api", origin, "--slug", "a", "--output", "../secret"]
   ]) assert.throws(() => parseArgs(args));
 });
 
@@ -380,4 +385,111 @@ test("self-host list rejects malformed and untrusted API results and old unsuppo
     environment: { WVT_ADMIN_TOKEN: token },
     fetchImpl: safeFetch(async () => response(405, { error: "Method not allowed" }))
   }), /HTTP 405/);
+});
+
+const recoveryDesign = {
+  schemaVersion: 1, theme: "mc-nether", width: 640, height: 240,
+  background: "#251323", accent: "#ffe1a3",
+  layers: [{
+    id: "heading", kind: "text", x: 252, y: 54, width: 302, height: 28,
+    text: "RECOVERED NETHER DESIGN", fontSize: 20,
+    color: "#ffe1a3", visible: true
+  }]
+};
+
+test("self-host export is an authenticated GET that saves only a private Studio JSON backup", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "wvt-recovered-design-"));
+  const remote = [];
+  try {
+    const mock = safeFetch(async (url, init) => {
+      remote.push({ url, init });
+      assert.equal(new URL(url).pathname, "/v1/admin/counters/my-counter/design");
+      assert.equal(init.method, "GET");
+      assert.equal(init.redirect, "error");
+      assert.equal(init.headers.Authorization, "Bearer " + token);
+      return response(200, {
+        slug: "my-counter", hits: 999, privateOwner: "never-export",
+        design: { ...recoveryDesign, remoteSecret: "not-to-be-exported",
+          layers: recoveryDesign.layers.map(layer => ({
+            ...layer, remoteSecret: "NEVER-IN-SAVED-DESIGN"
+          }))
+        }
+      });
+    });
+    assert.equal(parseArgs(["export", "--api", origin, "--slug", "my-counter"]).command, "export");
+    const output = await execute(opts("export"), {
+      environment: { WVT_ADMIN_TOKEN: token }, fetchImpl: mock, directory: dir
+    });
+    assert.match(output, /Saved existing Studio design locally/);
+    assert.match(output, /No remote counter or visit was modified/);
+    assert.equal(remote.length, 1);
+    const file = join(dir, "visitor-terminal-my-counter.design.json");
+    const text = await readFile(file, "utf8");
+    assert.deepEqual(JSON.parse(text), recoveryDesign);
+    assert(!text.includes("never-export"));
+    assert(!text.includes("NEVER-IN-SAVED-DESIGN"));
+    assert(!text.includes(token));
+    if (process.platform !== "win32") {
+      assert.equal((await stat(file)).mode & 0o777, 0o600);
+    }
+    const original = text;
+    await assert.rejects(() => execute(opts("export"), {
+      environment: { WVT_ADMIN_TOKEN: token }, fetchImpl: mock, directory: dir
+    }), /backup already exists/);
+    assert.equal(remote.length, 1, "Existing backup prevents even a Worker preflight");
+    assert.equal(await readFile(file, "utf8"), original);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("export output guard also protects dangling symlinks and never accepts paths", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "wvt-export-symlink-"));
+  const file = join(dir, "visitor-terminal-my-counter.design.json");
+  try {
+    await symlink(join(dir, "nonexistent-target"), file);
+    await assert.rejects(() =>
+      assertExportDestinationAvailable("my-counter", { directory: dir }),
+      /backup already exists/);
+    await assert.rejects(() =>
+      saveExportedDesign("my-counter", recoveryDesign, { directory: dir }),
+      /backup already exists/);
+    await assert.rejects(() => saveExportedDesign("../private", recoveryDesign, { directory: dir }),
+      /Invalid counter slug/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("malformed or spoofed recovery data never creates a local JSON", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "wvt-export-invalid-"));
+  const file = join(dir, "visitor-terminal-my-counter.design.json");
+  try {
+    const poisoned = [
+      { slug: "other", design: recoveryDesign },
+      { slug: "my-counter", design: { ...recoveryDesign, schemaVersion: 3 } },
+      { slug: "my-counter", design: { ...recoveryDesign, layers: [
+        { ...recoveryDesign.layers[0], x: -1 }
+      ] } },
+      { slug: "my-counter", design: { ...recoveryDesign, layers: [
+        { ...recoveryDesign.layers[0], id: "../private" }
+      ] } },
+      { slug: "my-counter", design: {
+        ...recoveryDesign, layers: Array.from({length: 33}, () => recoveryDesign.layers[0])
+      } },
+      { slug: "my-counter", design: null }
+    ];
+    for (const payload of poisoned) {
+      const mock = safeFetch(async () => response(200, payload));
+      await assert.rejects(() => execute(opts("export"), {
+        environment: { WVT_ADMIN_TOKEN: token }, fetchImpl: mock, directory: dir
+      }), /identity mismatch|invalid saved Studio design/);
+      await assert.rejects(() => readFile(file, "utf8"), { code: "ENOENT" });
+    }
+    assert.throws(() => validateExportDesign({
+      ...recoveryDesign, background: "url(#evil)"
+    }), /invalid saved Studio design/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 });
