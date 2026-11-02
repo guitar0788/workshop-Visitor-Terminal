@@ -56,17 +56,33 @@ function credentials(env) {
 }
 
 async function requestPolicies(accountId, token, method, body, fetchImpl) {
-  const response = await fetchImpl(API + encodeURIComponent(accountId) +
-    "/billing/spend-policies", {
-      method,
-      headers: {
-        Authorization: "Bearer " + token,
-        Accept: "application/json",
-        "Content-Type": "application/json"
-      },
-      ...(body ? { body: JSON.stringify(body) } : {}),
-      signal: AbortSignal.timeout(10_000)
-    });
+  if (typeof accountId !== "string" || !/^[a-f0-9]{32}$/i.test(accountId) ||
+      typeof token !== "string" || token.length < 20) {
+    throw new Error("Invalid local Cloudflare credentials.");
+  }
+  if (method !== "GET" && method !== "POST") {
+    throw new Error("Unsupported Cloudflare policy operation.");
+  }
+  if (method === "POST" && (!body || body.action !== "notification" ||
+      body.product_id !== "workers" || body.enabled !== true)) {
+    throw new Error("Only enabled Workers notification policies may be created.");
+  }
+  let response;
+  try {
+    response = await fetchImpl(API + encodeURIComponent(accountId) +
+      "/billing/spend-policies", {
+        method,
+        headers: {
+          Authorization: "Bearer " + token,
+          Accept: "application/json",
+          "Content-Type": "application/json"
+        },
+        ...(body ? { body: JSON.stringify(body) } : {}),
+        signal: AbortSignal.timeout(10_000)
+      });
+  } catch {
+    throw new Error("Cloudflare Billing API request could not be completed; details suppressed.");
+  }
   let payload;
   try { payload = await response.json(); } catch { payload = null; }
   if (!response.ok || !payload || payload.success !== true) {
@@ -88,6 +104,14 @@ export async function listWorkerSpendPolicies({ accountId, token, fetchImpl = fe
 export async function createWorkerSpendNotification({
   accountId, token, thresholdCents, email, fetchImpl = fetch
 }) {
+  if (!Number.isSafeInteger(thresholdCents) ||
+      thresholdCents < 1 || thresholdCents > 100000000) {
+    throw new Error("Invalid Workers notification threshold.");
+  }
+  if (typeof email !== "string" ||
+      !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email) || email.length > 254) {
+    throw new Error("Invalid Workers notification recipient.");
+  }
   const result = await requestPolicies(accountId, token, "POST", {
     action: "notification",
     enabled: true,
