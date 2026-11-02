@@ -4,7 +4,7 @@ import { isCardTheme } from "./card-art";
 import { restoreLocalDraft, saveLocalDraft } from "./local-draft";
 import { createRoot } from "react-dom/client";
 import {
-  addLayer, CARD_THEMES, MAX_VISITOR_COUNT, moveLayer, reorderLayer, renderSvg, resizeCanvas, sanitizeDesign,
+  addLayer, CARD_THEMES, duplicateLayer, MAX_VISITOR_COUNT, moveLayer, reorderLayer, renderSvg, resizeCanvas, sanitizeDesign,
   type Layer, type LayerKind, type TerminalDesign, type Theme
 } from "./model";
 import {
@@ -492,7 +492,21 @@ function App() {
     });
     setSelectedId(id);
     setCleanPreview(false);
+    // On a phone, show the new text field immediately rather than leaving the
+    // editable element hidden behind the Layers sheet.
+    setMobileTab("properties");
     setNoticeKey("noticeAdded");
+  }
+
+  function duplicateSelected() {
+    if (!selectedId || design.layers.length >= 32) return;
+    let id = "";
+    do { id = "custom_" + nextId.current++; }
+    while (design.layers.some(layer => layer.id === id));
+    edit(current => duplicateLayer(current, selectedId, id));
+    setSelectedId(id);
+    setCleanPreview(false);
+    setNoticeKey("noticeDuplicated");
   }
 
   function removeSelected() {
@@ -783,6 +797,9 @@ function App() {
             </div>
             <div className="layer-actions">
               <button type="button" className="secondary small"
+                disabled={design.layers.length >= 32}
+                onClick={duplicateSelected}>{t.duplicateLayer}</button>
+              <button type="button" className="secondary small"
                 onClick={() => edit(d => reorderLayer(d, selected.id, -1))}>
                 {t.sendBack}
               </button>
@@ -1010,6 +1027,14 @@ function App() {
           <div className="mobile-guidance mobile-only">
             {cleanPreview ? t.cleanTip : t.previewTip}
           </div>
+          {selected && !cleanPreview && (
+            <button type="button" className="selected-layer-shortcut mobile-only"
+              onClick={() => { setMobileTab("properties"); setMoveMode(false); }}>
+              <span aria-hidden="true">✎</span>
+              <span>{t.editSelectedLayer} · {layerName(selected)}</span>
+              <span aria-hidden="true">›</span>
+            </button>
+          )}
 
           {preciseOpen && !cleanPreview && (
             <div className="precision-panel" aria-label={t.toolsLabel}>
