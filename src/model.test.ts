@@ -167,6 +167,53 @@ describe("v0.6 illustrated visitor cards", () => {
 });
 
 
+describe("editable text alignment", () => {
+  it("keeps legacy presets left-aligned and supports left, center and right text anchors", () => {
+    const base = clonePreset("mc-nether");
+    expect(base.layers.every(layer => layer.textAlign === "left")).toBe(true);
+    const heading = base.layers.find(layer => layer.id === "heading")!;
+    const cases = [
+      { alignment: "left" as const, x: heading.x, anchor: null },
+      { alignment: "center" as const, x: heading.x + heading.width / 2, anchor: "middle" },
+      { alignment: "right" as const, x: heading.x + heading.width, anchor: "end" }
+    ];
+    for (const item of cases) {
+      const design = {
+        ...base,
+        layers: base.layers.map(layer => layer.id === "heading"
+          ? { ...layer, textAlign: item.alignment } : layer)
+      };
+      const svg = renderSvg(design, 12_847);
+      const headingMarkup = svg.match(/<text[^>]*>NETHER TRAVELERS<\/text>/)?.[0] ?? "";
+      expect(headingMarkup).toContain('x="' + item.x + '"');
+      if (item.anchor) expect(headingMarkup).toContain('text-anchor="' + item.anchor + '"');
+      else expect(headingMarkup).not.toContain("text-anchor=");
+    }
+  });
+
+  it("aligns visitor-count text inside the selected count box", () => {
+    const design = clonePreset("mc-nether");
+    const count = design.layers.find(layer => layer.kind === "count")!;
+    count.textAlign = "right";
+    const svg = renderSvg(design, 12_847);
+    const countMarkup = svg.match(/<text[^>]*>12,847<\/text>/)?.[0] ?? "";
+    expect(countMarkup).toContain('x="' + (count.x + count.width) + '"');
+    expect(countMarkup).toContain('text-anchor="end"');
+  });
+
+  it("supports alignment on approved raster count overlays without changing source artwork", () => {
+    const design = clonePreset("pixel-card");
+    const count = design.layers.find(layer => layer.kind === "count")!;
+    count.textAlign = "center";
+    const svg = renderSvg(design, 12_848);
+    expect(svg).toContain('href="data:image/avif;base64,');
+    expect(svg).toContain('text-anchor="middle"');
+    expect(svg).toContain('data-count-layer="true"');
+    expect(svg).not.toContain('opacity="0"');
+  });
+});
+
+
 describe("formatted count fit and long-term visitor growth", () => {
   it("keeps 5-digit values at the intended template font size", () => {
     for (const theme of CARD_THEMES) {
