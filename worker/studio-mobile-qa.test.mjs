@@ -39,6 +39,10 @@ test("mobile browser integration page exercises real app tabs and six current st
   assert(html.includes("invalid import overwrote local draft"));
   assert(html.includes("invalid import replaced current Studio design"));
   assert(html.includes("design JSON import control missing on phone"));
+  assert(html.includes("local autosave failure warning"));
+  assert(html.includes("autosave failure warning has unclear text"));
+  assert(html.includes("failed autosave overwrote previous valid local draft"));
+  assert(html.includes("draft-warning[role=alert]"));
   assert(html.includes("Invalid (?:or unsupported )?design JSON|设计 JSON 无效"));
   assert(html.includes("send('pointerup'"));
   assert(html.includes("undoButton.click()"));
