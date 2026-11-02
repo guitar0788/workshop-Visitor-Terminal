@@ -22,6 +22,13 @@ test("mobile browser integration page exercises real app tabs and six current st
   assert(html.includes("missing duplicate button in phone Properties"));
   assert(html.includes("selected-layer-shortcut.mobile-only"));
   assert(html.includes("no selected layer quick edit on phone preview"));
+  assert(html.includes("touch scroll accidentally moved a layer"));
+  assert(html.includes("pointer('pointercancel'"));
+  assert(html.includes("secondary pointer hijacked active drag"));
+  assert(html.includes("send('lostpointercapture'"));
+  assert(html.includes("send('pointerup'"));
+  assert(html.includes("undoButton.click()"));
+  assert(html.includes("redoButton.click()"));
   assert(html.includes("page.querySelector('.mobile-sheet .template-choice"));
   assert(!html.includes("fetch("));
   assert(!html.includes("https://"));
