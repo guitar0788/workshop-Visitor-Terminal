@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  addLayer, CARD_THEMES, clonePreset, escapeXml, fittedCountSize, moveLayer,
+  addLayer, CARD_THEMES, clonePreset, duplicateLayer, escapeXml, fittedCountSize, moveLayer,
   renderSvg, reorderLayer, resizeCanvas, sanitizeDesign
 } from "./model";
 import { isApprovedTheme, approvedCanvasWidth } from "./approved-reference-cards";
@@ -550,6 +550,67 @@ describe("in-bounds layer insertion on compact illustrated canvases", () => {
       const json = JSON.parse(JSON.stringify(design));
       expect(sanitizeDesign(json)).toEqual(design);
       expect(renderSvg(json, 42)).toContain(">42</text>");
+    }
+  });
+});
+
+describe("mobile overlay duplication across all supported cards", () => {
+  it("duplicates text, count, ornament and panel with styling, order and safe positions", () => {
+    for (const theme of [...CARD_THEMES, "pixel", "cyber", "minimal"] as const) {
+      for (const kind of ["text", "count", "dot", "panel"] as const) {
+        let original = clonePreset(theme);
+        original = addLayer(original, kind, "overlay_to_copy");
+        const input = sanitizeDesign({
+          ...original, layers: original.layers.map(layer => layer.id === "overlay_to_copy"
+            ? { ...layer, color: "#f12a5b", fontSize: 31, text: "COPY ME",
+              x: original.width - layer.width, y: original.height - layer.height }
+            : layer)
+        });
+        const index = input.layers.findIndex(layer => layer.id === "overlay_to_copy");
+        const output = duplicateLayer(input, "overlay_to_copy", "overlay_duplicate");
+        expect(output.layers.length).toBe(input.layers.length + 1);
+        const next = output.layers[index + 1];
+        expect(next.id).toBe("overlay_duplicate");
+        expect(next).toMatchObject({
+          kind, color: "#f12a5b", fontSize: 31, text: "COPY ME", visible: true
+        });
+        expect(next.x).toBe(input.width - next.width);
+        expect(next.y).toBe(input.height - next.height);
+        expect(input.layers.every(l => l.id !== "overlay_duplicate")).toBe(true);
+        expect(sanitizeDesign(JSON.parse(JSON.stringify(output)))).toEqual(output);
+        expect(renderSvg(output, 42)).toContain(">42</text>");
+      }
+    }
+  });
+
+  it("rejects missing or unsafe layer IDs, duplicate IDs and layer-limit overflow", () => {
+    const design = clonePreset("mc-end");
+    for (const [id, next] of [
+      ["not-real", "copy_x"], ["heading", "heading"],
+      ["heading", "../escape"], ["heading", "a".repeat(49)]
+    ]) {
+      expect(duplicateLayer(design, id, next)).toBe(design);
+    }
+    let full = design;
+    for (let i = full.layers.length; i < 32; i++) {
+      full = addLayer(full, "dot", "filler_" + i);
+    }
+    expect(full.layers).toHaveLength(32);
+    expect(duplicateLayer(full, "heading", "extra")).toBe(full);
+  });
+
+  it("keeps original approved pixels unchanged while duplicating an overlay", () => {
+    for (const theme of ["pixel-card", "terminal-card", "rpg-card"] as const) {
+      const design = clonePreset(theme);
+      const baseSvg = renderSvg(design, 12_847);
+      const duplicated = duplicateLayer(design, "visits", "duplicated_count");
+      expect(duplicated.layers.find(l => l.id === "duplicated_count")?.kind).toBe("count");
+      const result = renderSvg(duplicated, 12_847);
+      expect(result).toContain('href="data:image/avif;base64,');
+      expect(result).toContain(">12,847</text>");
+      expect(result).not.toContain("<foreignObject");
+      expect(baseSvg).toContain(">12,847</text>");
+      expect(design.layers).toHaveLength(1);
     }
   });
 });
