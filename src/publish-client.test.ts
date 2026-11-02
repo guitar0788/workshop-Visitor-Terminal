@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
-  PUBLISH_UI_ENABLED, deletePublishedCounter, markdownEmbed, readOAuthReturn,
-  verifyPublishedAccountExport
+  ACCOUNT_DELETION_UI_ENABLED, PUBLISH_UI_ENABLED, deletePublishedAccount,
+  deletePublishedCounter, markdownEmbed, readOAuthReturn, verifyPublishedAccountExport
 } from "./publish-client";
 
 afterEach(() => vi.unstubAllGlobals());
@@ -9,6 +9,16 @@ afterEach(() => vi.unstubAllGlobals());
 describe("v0.5 browser publishing safety", () => {
   it("remains disabled on an unconfigured public GitHub Pages build", () => {
     expect(PUBLISH_UI_ENABLED).toBe(false);
+  });
+  it("keeps the destructive account control hidden unless a separate build opts in", () => {
+    expect(ACCOUNT_DELETION_UI_ENABLED).toBe(false);
+  });
+  it("validates the exact GitHub login shape before account deletion", async () => {
+    for (const invalid of ["", "bad login", "-starts-with-dash", "ends-with-dash-",
+      "x".repeat(40), "login/name"]) {
+      await expect(deletePublishedAccount("session", invalid))
+        .rejects.toThrow("Invalid GitHub login");
+    }
   });
   it("refuses arbitrary images as published README embed links", () => {
     expect(() => markdownEmbed("https://malicious.example/counter.svg")).toThrow();
