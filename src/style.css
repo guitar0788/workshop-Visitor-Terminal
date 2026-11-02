@@ -26,6 +26,7 @@ h2 { font-size: 17px; font-weight: 700; letter-spacing: -.02em; margin: 0; }
 h3 { font-size: 14px; margin: 0; font-weight: 700; }
 .muted { font-size: 11px; color: #85929e; }
 .field { display: flex; flex-direction: column; gap: 8px; font-size: 12px; font-weight: 600; color: #b9c5cf; min-width: 0; }
+.field-hint { margin: -3px 0 12px; color: #8fa1ad; font-size: 11px; line-height: 1.5; }
 .field input:not([type="color"]), .field select {
   background: #0c141d; border: 1px solid #3a4654; color: #e6edf3;
   padding: 11px 12px; border-radius: 9px; width: 100%; min-width: 0;
