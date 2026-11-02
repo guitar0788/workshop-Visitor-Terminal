@@ -58,6 +58,8 @@ test("mobile browser integration page exercises real app tabs and six current st
   assert(html.includes("form controls without associated labels"));
   assert(html.includes("card picker is missing its named group role"));
   assert(html.includes("layer tools are missing their named group role"));
+  assert(html.includes("mobile sheet keyboard focus"));
+  assert(html.includes("mobile sheet heading is not its accessible region name"));
   assert(html.includes("Invalid (?:or unsupported )?design JSON|设计 JSON 无效"));
   assert(html.includes("send('pointerup'"));
   assert(html.includes("undoButton.click()"));
