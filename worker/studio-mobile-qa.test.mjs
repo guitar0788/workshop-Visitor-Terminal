@@ -26,6 +26,8 @@ test("mobile browser integration page exercises real app tabs and six current st
   assert(html.includes("pointer('pointercancel'"));
   assert(html.includes("secondary pointer hijacked active drag"));
   assert(html.includes("send('lostpointercapture'"));
+  assert(html.includes("frame.contentWindow.dispatchEvent(new frame.contentWindow.Event('blur'))"));
+  assert(html.includes("move mode toggle rollback"));
   assert(html.includes("send('pointerup'"));
   assert(html.includes("undoButton.click()"));
   assert(html.includes("redoButton.click()"));
