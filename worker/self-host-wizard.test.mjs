@@ -1,11 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { cp, mkdtemp, mkdir, readFile, readdir, writeFile, rm } from "node:fs/promises";
+import { cp, mkdtemp, mkdir, readFile, readdir, writeFile, rm, symlink } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { initialize, checkSetup } from "../scripts/self-host-setup.mjs";
 import {
-  parseWizardArgs, runGuidedSetup, checkWizard, explainWizardFailure, WIZARD_INTRO, WIZARD_NEXT
+  parseWizardArgs, runGuidedSetup, checkWizard, assertFreshWizardRoot, explainWizardFailure, WIZARD_INTRO, WIZARD_NEXT
 } from "../scripts/self-host-wizard.mjs";
 
 const WORKER = "my-new-visitor-worker";
@@ -127,10 +127,12 @@ test("interactive first-run creates only the three reviewed local files and veri
         /Remote account, billing, D1 writes and GitHub proxy NOT_TESTED/);
       assert.equal(calls, 0);
       // No automatic rerun/secret regeneration: existing local files remain intact.
+      const repeated = answers(["OWN", WORKER, DATABASE, UUID, "CREATE"]);
       await assert.rejects(() => runGuidedSetup({
-        root, ask: answers(["OWN", WORKER, DATABASE, UUID, "CREATE"]).ask,
-        nodeVersion: "22.12.0"
+        root, ask: repeated.ask, nodeVersion: "22.12.0"
       }), /already exists or is partial/);
+      assert.equal(repeated.prompts.length, 0,
+        "A completed installation must be detected BEFORE any private input");
       assert.equal(await readFile(join(root, ".wvt-admin-token"), "utf8"), admin);
       assert.equal(await readFile(join(root, ".wvt-visit-secret"), "utf8"), visit);
       assert.equal(await readFile(join(root, "wrangler.selfhost.toml"), "utf8"), toml);
@@ -144,10 +146,12 @@ test("partial existing setup is never overwritten, even if a new UUID is supplie
   await fixture(async root => {
     const file = join(root, ".wvt-admin-token");
     await writeFile(file, "owner-secret-KEEP-ME", "utf8");
+    const repeated = answers(["OWN", WORKER, DATABASE, UUID, "CREATE"]);
     await assert.rejects(() => runGuidedSetup({
-      root, ask: answers(["OWN", WORKER, DATABASE, UUID, "CREATE"]).ask,
-      nodeVersion: "22.12.0"
+      root, ask: repeated.ask, nodeVersion: "22.12.0"
     }), /already exists or is partial/);
+    assert.equal(repeated.prompts.length, 0,
+      "Partial installation must be detected BEFORE asking for a UUID");
     assert.equal(await readFile(file, "utf8"), "owner-secret-KEEP-ME");
     assert(!(await readdir(root)).includes("wrangler.selfhost.toml"));
     await assert.rejects(() => checkWizard({ root, nodeVersion: "22.12.0" }));
@@ -201,4 +205,18 @@ test("first-run input errors have fixed instructions without private values", ()
     assert(!result.includes("/Users/person"));
     assert(result.length < 550);
   }
+});
+
+test("broken symlink placeholder is treated as an occupied private file", async () => {
+  await fixture(async root => {
+    const broken = join(root, "wrangler.selfhost.toml");
+    await symlink(join(root, "does-not-exist-anywhere"), broken);
+    const input = answers(["OWN", WORKER, DATABASE, UUID, "CREATE"]);
+    await assert.rejects(() => runGuidedSetup({
+      root, ask: input.ask, nodeVersion: "22.12.0"
+    }), /already exists or is partial/);
+    assert.equal(input.prompts.length, 0);
+    await assert.rejects(() => assertFreshWizardRoot(root), /already exists or is partial/);
+    assert(!(await readdir(root)).includes(".wvt-admin-token"));
+  });
 });
