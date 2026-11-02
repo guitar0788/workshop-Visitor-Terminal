@@ -1,15 +1,15 @@
 import { clonePreset, renderSvg, sanitizeDesign } from "../src/model";
-import { handlePublishingRequest, prunePublishAuth, type PublishEnv } from "./publishing";
+import {
+  handlePublishingRequest, prunePublishAuth,
+  type PublishDatabase, type PublishEnv, type PublishStatement
+} from "./publishing";
 
 // Structural subset of the Cloudflare D1 Worker binding for offline testing.
 export interface D1Result { success: boolean; meta?: { changes?: number } }
-export interface D1Statement {
-  bind(...values: Array<string | number | null>): D1Statement;
-  first<T = Record<string, unknown>>(): Promise<T | null>;
-  all<T = Record<string, unknown>>(): Promise<{ results: T[]; success: boolean }>;
-  run(): Promise<D1Result>;
+export interface D1Statement extends PublishStatement {}
+export interface D1Binding extends PublishDatabase {
+  prepare(query: string): D1Statement;
 }
-export interface D1Binding { prepare(query: string): D1Statement }
 export interface WorkerRateLimiter {
   limit(input: { key: string }): Promise<{ success: boolean }>;
 }
