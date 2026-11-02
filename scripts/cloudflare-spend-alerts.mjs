@@ -5,6 +5,8 @@
  * account IDs, API tokens, notification email addresses, or API response bodies.
  */
 import process from "node:process";
+import { resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 
 const API = "https://api.cloudflare.com/client/v4/accounts/";
 export const POLICY_NAME = "Workshop Visitor Terminal — Workers spend notification";
@@ -142,7 +144,7 @@ export async function runUsageAlertCommand(argv, env = process.env, io = {}, fet
 }
 
 const invoked = process.argv[1] &&
-  new URL(import.meta.url).pathname === new URL("file://" + process.argv[1]).pathname;
+  pathToFileURL(resolve(process.argv[1])).href === import.meta.url;
 if (invoked) {
   runUsageAlertCommand(process.argv.slice(2)).then(code => {
     process.exitCode = code;
