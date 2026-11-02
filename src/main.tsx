@@ -845,9 +845,14 @@ function App() {
                 <label className="field" key={key}>
                   {key === "x" ? t.xLabel : key === "y" ? t.yLabel :
                     key === "width" ? t.widthLabel : t.heightLabel}
-                  <input type="number"
+                  <input type="number" step={1}
                     min={key === "width" || key === "height" ? 8 : 0}
-                    max={key === "x" || key === "width" ? design.width : design.height}
+                    max={
+                      key === "x" ? design.width - selected.width :
+                      key === "y" ? design.height - selected.height :
+                      key === "width" ? design.width - selected.x :
+                      design.height - selected.y
+                    }
                     value={selected[key]}
                     onChange={event => {
                       if (Number.isFinite(event.target.valueAsNumber)) {
@@ -871,6 +876,7 @@ function App() {
                   onChange={event => updateSelected({ color: event.target.value })}/>
               </label>
             </div>
+            <p className="field-hint" role="note">{t.layerBoundsHelp}</p>
             <div className="layer-actions">
               <button type="button" className="secondary small"
                 disabled={design.layers.length >= 32}
