@@ -4,6 +4,8 @@
 
 The authenticated, verified-user publishing flow is described in [PUBLISHING.md](PUBLISHING.md). It requires separate GitHub OAuth setup and a security-reviewed enablement. See [the Cloudflare staging guide](STAGING.md).
 
+v0.6 safety references: [account controls](V06_ACCOUNT_CONTROLS.md), [owner-scoped counter deletion](V06_DATA_LIFECYCLE.md), [complete application-account data deletion](V06_ACCOUNT_DELETION.md), [Cloudflare usage and spend alerts](CLOUDFLARE_USAGE_ALERTS.md), [recovery and tenant isolation](V06_RECOVERY_AND_TENANTS.md), and [abuse/cost guards](V06_ABUSE_LIMITS.md).
+
 ## Endpoints
 
 | Method | Path | Purpose | Auth |

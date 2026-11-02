@@ -37,7 +37,8 @@ export function offlineEnvironment(original = process.env) {
     VITE_OFFLINE_DEMO: "true",
     VITE_PUBLISH_ENABLED: "false",
     VITE_PUBLISH_PILOT: "false",
-    VITE_PUBLISH_API_ORIGIN: ""
+    VITE_PUBLISH_API_ORIGIN: "",
+    VITE_ACCOUNT_DELETION_UI_ENABLED: "false"
   };
 }
 

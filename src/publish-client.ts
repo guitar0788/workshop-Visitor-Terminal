@@ -1,22 +1,14 @@
 import type { TerminalDesign } from "./model";
 
-/**
- * Build-time safety gate. GitHub Pages remains in preview mode unless a
- * separate, reviewed publish release opts in to both variables.
- */
-const vars = (import.meta as ImportMeta & {
-  env?: Record<string, string | undefined>
-}).env ?? {};
-/** Immutable standalone build gate: never call OAuth or Cloudflare from the offline edition. */
-export const OFFLINE_DEMO_MODE = vars.VITE_OFFLINE_DEMO === "true";
-const configured = OFFLINE_DEMO_MODE ? "" : vars.VITE_PUBLISH_API_ORIGIN?.trim() ?? "";
-export const PUBLIC_API_ORIGIN =
-  /^https:\/\/workshop-visitor-terminal-staging\.[a-z0-9-]+\.workers\.dev\/?$/i.test(configured)
-    ? configured.replace(/\/+$/, "") : "";
-export const PUBLISH_PILOT_MODE = vars.VITE_PUBLISH_PILOT === "true";
-export const PUBLISH_UI_ENABLED =
-  !OFFLINE_DEMO_MODE && vars.VITE_PUBLISH_ENABLED === "true" && PUBLISH_PILOT_MODE &&
-  PUBLIC_API_ORIGIN.length > 0;
+/** Keep all publish/security build flags centralized and fail-closed. */
+import {
+  ACCOUNT_DELETION_UI_ENABLED, OFFLINE_DEMO_MODE, PUBLIC_API_ORIGIN,
+  PUBLISH_PILOT_MODE, PUBLISH_UI_ENABLED
+} from "./publish-config";
+export {
+  ACCOUNT_DELETION_UI_ENABLED, OFFLINE_DEMO_MODE, PUBLIC_API_ORIGIN,
+  PUBLISH_PILOT_MODE, PUBLISH_UI_ENABLED
+} from "./publish-config";
 const OAUTH_VERIFIER = "workshop-publish-oauth-verifier";
 const OAUTH_STATE = "workshop-publish-oauth-state";
 
@@ -196,6 +188,23 @@ export async function revokeAllPublishedSessions(token: string): Promise<void> {
   );
   if (response.signedOutEverywhere !== true) {
     throw Error("Account sessions could not be revoked");
+  }
+}
+
+/** Permanently remove app-owned data for the verified account and revoke all sessions. */
+export async function deletePublishedAccount(token: string, exactLogin: string): Promise<void> {
+  if (!ACCOUNT_DELETION_UI_ENABLED) throw Error("Account deletion is not available.");
+  if (!/^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$/.test(exactLogin)) {
+    throw Error("Invalid GitHub login");
+  }
+  const result = await api<{
+    deleted: boolean; signedOutEverywhere: boolean; deletedCounters: number
+  }>("/v1/my/account", "DELETE", {
+    confirm: "DELETE_MY_ACCOUNT", confirmLogin: exactLogin
+  }, token);
+  if (result.deleted !== true || result.signedOutEverywhere !== true ||
+      !Number.isSafeInteger(result.deletedCounters) || result.deletedCounters < 0) {
+    throw Error("Account deletion could not be confirmed");
   }
 }
 

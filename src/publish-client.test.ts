@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
-  PUBLISH_UI_ENABLED, deletePublishedCounter, markdownEmbed, readOAuthReturn,
-  verifyPublishedAccountExport
+  ACCOUNT_DELETION_UI_ENABLED, PUBLISH_UI_ENABLED, deletePublishedAccount,
+  deletePublishedCounter, markdownEmbed, readOAuthReturn, verifyPublishedAccountExport
 } from "./publish-client";
 
 afterEach(() => vi.unstubAllGlobals());
@@ -9,6 +9,13 @@ afterEach(() => vi.unstubAllGlobals());
 describe("v0.5 browser publishing safety", () => {
   it("remains disabled on an unconfigured public GitHub Pages build", () => {
     expect(PUBLISH_UI_ENABLED).toBe(false);
+  });
+  it("keeps the destructive account control hidden unless a separate build opts in", () => {
+    expect(ACCOUNT_DELETION_UI_ENABLED).toBe(false);
+  });
+  it("refuses account deletion API calls while the separate feature flag is off", async () => {
+    await expect(deletePublishedAccount("session", "guitar0788"))
+      .rejects.toThrow("Account deletion is not available");
   });
   it("refuses arbitrary images as published README embed links", () => {
     expect(() => markdownEmbed("https://malicious.example/counter.svg")).toThrow();

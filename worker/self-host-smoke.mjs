@@ -8,7 +8,7 @@
  */
 import assert from "node:assert/strict";
 import { execFileSync, spawn } from "node:child_process";
-import { randomBytes, randomInt } from "node:crypto";
+import { createHash, createHmac, randomBytes, randomInt } from "node:crypto";
 import { readFile, writeFile, rm, mkdtemp, stat, cp, mkdir } from "node:fs/promises";
 import { setTimeout as sleep } from "node:timers/promises";
 import { tmpdir } from "node:os";
@@ -184,7 +184,7 @@ async function publishAndVerifyCatalog(api) {
 }
 async function verifyCatalogAfterRestart(api, catalog) {
   assert.equal(catalog.length, 12);
-  for (const { slug, theme, ip, svgMarker } of catalog) {
+  for (const { slug, theme, svgMarker } of catalog) {
     // Emit only a non-sensitive stage label on failure. Never print response
     // bodies, request headers, local tokens or private Worker configuration.
     smokeStage = "restart-catalog:" + theme + ":read-count";
@@ -193,13 +193,15 @@ async function verifyCatalogAfterRestart(api, catalog) {
     }), 200);
     assert.equal(state.hits, 1, "D1 count lost on restart for " + theme);
     smokeStage = "restart-catalog:" + theme + ":fetch-svg";
+    // Use a fresh client fingerprint so the expected post-restart visit is
+    // deterministic even if CI crosses the five-minute dedupe bucket.
     const response = await api("/v1/counters/" + slug + ".svg", {
-      headers: { "CF-Connecting-IP": ip }
+      headers: { "CF-Connecting-IP": "198.51.100.10" }
     });
     assert.equal(response.status, 200, "Persisted SVG failed for " + theme);
     const svg = await response.text();
     smokeStage = "restart-catalog:" + theme + ":validate-counter";
-    assert(svg.includes(">1</text>"), "Counter lost from persisted SVG: " + theme);
+    assert(svg.includes(">2</text>"), "Post-restart visit was not reflected for " + theme);
     if (svgMarker) {
       smokeStage = "restart-catalog:" + theme + ":validate-scene";
       assert(svg.includes(svgMarker), "Scene lost after restart: " + theme);
@@ -217,7 +219,7 @@ async function verifyCatalogAfterRestart(api, catalog) {
     const again = await checked(await api("/v1/admin/counters/" + slug, {
       headers: { Authorization: "Bearer " + ADMIN_TOKEN }
     }), 200);
-    assert.equal(again.hits, 1, "Restart reread must not double-count " + theme);
+    assert.equal(again.hits, 2, "One fresh post-restart client must add exactly one visit for " + theme);
   }
 }
 
@@ -446,10 +448,12 @@ export async function smokeSelfHostedCounter() {
     // the already-counted test IP rather than adding a new visit to our
     // counter while verifying only the design persisted.
     const afterRestart = await api(imagePath, {
-      method: "GET", headers: { "CF-Connecting-IP": "203.0.113.17" }
+      method: "GET", headers: { "CF-Connecting-IP": "203.0.113.18" }
     });
     assert.equal(afterRestart.status, 200);
     assert.match(await afterRestart.text(), /UPDATED AND PERSISTED/);
+    assert.match(await cli("inspect"), /Recorded upstream requests: 2/,
+      "A fresh post-restart client should be counted once");
     smokeStage = "post-restart-read-only-design-recovery";
     const restoredExportDir = join(designDir, "after-restart");
     await mkdir(restoredExportDir, { recursive: true });
@@ -461,8 +465,8 @@ export async function smokeSelfHostedCounter() {
         "visitor-terminal-" + SLUG + ".design.json"), "utf8")),
       modified, "Export after Worker restart must recover the exact saved design"
     );
-    smokeStage = "post-restart-no-double-count";
-    assert.match(await cli("inspect"), /Recorded upstream requests: 1/);
+    smokeStage = "post-restart-persisted-count";
+    assert.match(await cli("inspect"), /Recorded upstream requests: 2/);
     smokeStage = "simulate-consented-remote-acceptance-locally";
     const liveReport = await runLiveCheck({
       api: origin, owner: "self-host-tester",
@@ -476,6 +480,231 @@ export async function smokeSelfHostedCounter() {
     assert.equal(liveReport.result, "PASS");
     assert.equal(liveReport.observed.sameClientRequestDeduplication, "PASS");
     assert.equal(liveReport.independentCloudflareAccountOwnership, "NOT_VERIFIED");
+
+    // Account deletion integration: restart this same disposable local D1 with
+    // synthetic OAuth settings and a seeded verified session. No GitHub or
+    // Cloudflare network request is made; the OAuth credentials are fake.
+    smokeStage = "account-delete-local-publishing-config";
+    const accountId = randomInt(2_000_000, 3_000_000);
+    const foreignId = accountId + 1;
+    const accountLogin = "local-delete-test";
+    const foreignLogin = "local-foreign-test";
+    const ownTokenA = randomBytes(32).toString("hex");
+    const ownTokenB = randomBytes(32).toString("hex");
+    const foreignToken = randomBytes(32).toString("hex");
+    const ownTicket = randomBytes(32).toString("hex");
+    const foreignTicket = randomBytes(32).toString("hex");
+    const ownVerifier = randomBytes(32).toString("base64url");
+    const foreignVerifier = randomBytes(32).toString("base64url");
+    const ownChallenge = createHash("sha256").update(ownVerifier).digest("base64url");
+    const foreignChallenge = createHash("sha256").update(foreignVerifier).digest("base64url");
+    const hash = value => createHash("sha256").update(value).digest("hex");
+    const ownSessionHashA = hash(ownTokenA);
+    const ownSessionHashB = hash(ownTokenB);
+    const foreignSessionHash = hash(foreignToken);
+    const ownTicketHash = hash(ownTicket);
+    const foreignTicketHash = hash(foreignTicket);
+    const ownSlugs = [
+      "v" + randomBytes(12).toString("hex"),
+      "v" + randomBytes(12).toString("hex")
+    ];
+    const foreignSlug = "v" + randomBytes(12).toString("hex");
+    const legacySlug = "v" + randomBytes(12).toString("hex");
+    let bucket = 0;
+    const ip = "203.0.113.77";
+    const receipt = slug => createHmac("sha256", VISIT_SECRET)
+      .update(slug + "\0" + ip).digest("hex");
+    const sqlText = value => "'" + String(value).replace(/'/g, "''") + "'";
+    const localD1 = sql => {
+      const invocation = wranglerInvocation(ROOT, [
+        "d1", "execute", "DB", "--local", "--config", CONFIG,
+        "--persist-to", persistence, "--command", sql
+      ]);
+      execFileSync(invocation.executable, invocation.args, {
+        cwd: ROOT, env: LOCAL_ENV, stdio: "pipe", timeout: 30000
+      });
+    };
+    const writePublishingVars = async (pilotId, deletionEnabled) => {
+      const values = [
+        "ADMIN_TOKEN=" + ADMIN_TOKEN,
+        "VISIT_HASH_SECRET=" + VISIT_SECRET,
+        "PUBLISHING_ENABLED=true",
+        "GITHUB_CLIENT_ID=localtest_123",
+        "GITHUB_CLIENT_SECRET=local-test-client-secret-123456789",
+        "PUBLIC_API_ORIGIN=https://workshop-visitor-terminal-staging.localtest.workers.dev/",
+        "STUDIO_ORIGIN=https://guitar0788.github.io/workshop-Visitor-Terminal/",
+        "PILOT_GITHUB_USER_ID=" + pilotId
+      ];
+      if (deletionEnabled) values.push("ACCOUNT_DELETION_ENABLED=true");
+      await writeFile(DEV_VARS, values.join("\n") + "\n", { mode: 0o600 });
+    };
+    const restartLocalWorker = async () => {
+      await shutdown(running.child);
+      running = await start(port, persistence);
+    };
+    await writePublishingVars(accountId, false);
+    await restartLocalWorker();
+    // Seed and replay within one five-minute receipt bucket, even on slower CI hosts.
+    bucket = Math.floor(Date.now() / 300_000);
+
+    smokeStage = "account-delete-seed-local-only-d1-records";
+    const createdAt = new Date().toISOString();
+    const expiresAt = Date.now() + 60 * 60_000;
+    const counterRows = [
+      ...ownSlugs.map(slug => "(" + sqlText(slug) + ", " + sqlText(accountLogin) +
+        ", 0, '{}', " + sqlText(createdAt) + ", " + accountId + ")"),
+      "(" + sqlText(foreignSlug) + ", " + sqlText(foreignLogin) +
+        ", 0, '{}', " + sqlText(createdAt) + ", " + foreignId + ")",
+      "(" + sqlText(legacySlug) + ", 'legacy-admin', 0, '{}', " +
+        sqlText(createdAt) + ", NULL)"
+    ];
+    const receiptRows = [
+      ...ownSlugs.map(slug => "(" + sqlText(slug) + ", " + sqlText(receipt(slug)) +
+        ", " + bucket + ")"),
+      "(" + sqlText(foreignSlug) + ", " + sqlText(receipt(foreignSlug)) + ", " + bucket + ")",
+      "(" + sqlText(legacySlug) + ", " + sqlText(receipt(legacySlug)) + ", " + bucket + ")"
+    ];
+    localD1(
+      "INSERT INTO counters (slug, owner, hits, design_json, created_at, owner_user_id) VALUES " +
+      counterRows.join(", ") + ";" +
+      "INSERT INTO request_windows (slug, fingerprint, bucket) VALUES " +
+      receiptRows.join(", ") + ";" +
+      "INSERT INTO publish_sessions (session_hash, github_user_id, github_login, created_at, expires_at) VALUES " +
+      "(" + sqlText(ownSessionHashA) + ", " + accountId + ", " + sqlText(accountLogin) + ", " +
+        Date.now() + ", " + expiresAt + ")," +
+      "(" + sqlText(ownSessionHashB) + ", " + accountId + ", " + sqlText(accountLogin) + ", " +
+        Date.now() + ", " + expiresAt + ")," +
+      "(" + sqlText(foreignSessionHash) + ", " + foreignId + ", " + sqlText(foreignLogin) + ", " +
+        Date.now() + ", " + expiresAt + ");" +
+      "INSERT INTO publish_login_tickets (ticket_hash, challenge, github_user_id, github_login, expires_at) VALUES " +
+      "(" + sqlText(ownTicketHash) + ", " + sqlText(ownChallenge) + ", " + accountId + ", " +
+        sqlText(accountLogin) + ", " + expiresAt + ")," +
+      "(" + sqlText(foreignTicketHash) + ", " + sqlText(foreignChallenge) + ", " + foreignId + ", " +
+        sqlText(foreignLogin) + ", " + expiresAt + ");"
+    );
+    const deleteOrigin = "https://guitar0788.github.io";
+    const deleteHeaders = {
+      Origin: deleteOrigin, Authorization: "Bearer " + ownTokenA,
+      "Content-Type": "application/json"
+    };
+    const deletionBody = { confirm: "DELETE_MY_ACCOUNT", confirmLogin: accountLogin };
+    const usageBeforeDeletion = await checked(await api("/v1/admin/usage", {
+      headers: { Authorization: "Bearer " + ADMIN_TOKEN }
+    }), 200);
+
+    smokeStage = "account-delete-default-disabled-gate";
+    const disabledDeletion = await api("/v1/my/account", {
+      method: "DELETE", headers: deleteHeaders, body: JSON.stringify(deletionBody)
+    });
+    assert.equal(disabledDeletion.status, 404,
+      "Account deletion must remain disabled without the explicit Worker flag");
+    assert.equal((await api("/v1/admin/counters/" + ownSlugs[0], {
+      headers: { Authorization: "Bearer " + ADMIN_TOKEN }
+    })).status, 200, "Disabled deletion must leave owned data untouched");
+
+    smokeStage = "account-delete-enable-local-only-feature-flag";
+    await writePublishingVars(accountId, true);
+    await restartLocalWorker();
+    const wrongConfirmation = await api("/v1/my/account", {
+      method: "DELETE", headers: deleteHeaders,
+      body: JSON.stringify({ confirm: "DELETE", confirmLogin: accountLogin })
+    });
+    assert.equal(wrongConfirmation.status, 400,
+      "Account deletion must require the exact destructive phrase");
+    const wrongLogin = await api("/v1/my/account", {
+      method: "DELETE", headers: deleteHeaders,
+      body: JSON.stringify({ confirm: "DELETE_MY_ACCOUNT", confirmLogin: foreignLogin })
+    });
+    assert.equal(wrongLogin.status, 400,
+      "Account deletion must require the exact verified GitHub login");
+
+    smokeStage = "account-delete-atomic-local-d1-transaction";
+    const deletedResponse = await api("/v1/my/account", {
+      method: "DELETE", headers: deleteHeaders, body: JSON.stringify(deletionBody)
+    });
+    assert.equal(deletedResponse.status, 200, "Local D1 account deletion failed");
+    const deletedResult = await deletedResponse.json();
+    assert.deepEqual(deletedResult, {
+      deleted: true, signedOutEverywhere: true, deletedCounters: 2
+    });
+    for (const slug of ownSlugs) {
+      assert.equal((await api("/v1/admin/counters/" + slug, {
+        headers: { Authorization: "Bearer " + ADMIN_TOKEN }
+      })).status, 404, "Owned counter survived account deletion");
+    }
+    for (const slug of [foreignSlug, legacySlug, SLUG]) {
+      assert.equal((await api("/v1/admin/counters/" + slug, {
+        headers: { Authorization: "Bearer " + ADMIN_TOKEN }
+      })).status, 200, "Foreign or legacy counter was deleted");
+    }
+    assert.equal((await api("/v1/me", {
+      headers: { Origin: deleteOrigin, Authorization: "Bearer " + ownTokenA }
+    })).status, 401, "First account session survived deletion");
+    assert.equal((await api("/v1/me", {
+      headers: { Origin: deleteOrigin, Authorization: "Bearer " + ownTokenB }
+    })).status, 401, "Second account session survived deletion");
+    const deletedTicketExchange = await api("/v1/auth/exchange", {
+      method: "POST", headers: { Origin: deleteOrigin, "Content-Type": "application/json" },
+      body: JSON.stringify({ ticket: ownTicket, verifier: ownVerifier })
+    });
+    assert.equal(deletedTicketExchange.status, 401, "Account login ticket survived deletion");
+    const usageAfterDeletion = await checked(await api("/v1/admin/usage", {
+      headers: { Authorization: "Bearer " + ADMIN_TOKEN }
+    }), 200);
+    assert.deepEqual(usageAfterDeletion, usageBeforeDeletion,
+      "Deleting an account must not reset or rewrite the global aggregate daily budget");
+
+    // Recreate one synthetic owned slug directly in the disposable D1 and
+    // request it from the same IP/bucket. The prior receipt must be gone.
+    smokeStage = "account-delete-receipt-cleanup-local-d1";
+    localD1("INSERT INTO counters (slug, owner, hits, design_json, created_at, owner_user_id) VALUES (" +
+      sqlText(ownSlugs[0]) + ", " + sqlText(accountLogin) + ", 0, '{}', " +
+      sqlText(new Date().toISOString()) + ", " + accountId + ");");
+    const reissuedImage = await api("/v1/counters/" + ownSlugs[0] + ".svg", {
+      headers: { "CF-Connecting-IP": ip }
+    });
+    assert.equal(reissuedImage.status, 200);
+    assert.match(await reissuedImage.text(), />1<\/text>/,
+      "A stale visit receipt survived deletion and blocked a fresh counter's first visit");
+    const foreignBefore = await checked(await api("/v1/admin/counters/" + foreignSlug, {
+      headers: { Authorization: "Bearer " + ADMIN_TOKEN }
+    }), 200);
+    const legacyBefore = await checked(await api("/v1/admin/counters/" + legacySlug, {
+      headers: { Authorization: "Bearer " + ADMIN_TOKEN }
+    }), 200);
+    assert.equal(foreignBefore.hits, 1);
+    assert.equal(legacyBefore.hits, 1);
+    assert.equal((await api("/v1/counters/" + foreignSlug + ".svg", {
+      headers: { "CF-Connecting-IP": ip }
+    })).status, 200);
+    assert.equal((await api("/v1/counters/" + legacySlug + ".svg", {
+      headers: { "CF-Connecting-IP": ip }
+    })).status, 200);
+    assert.equal((await checked(await api("/v1/admin/counters/" + foreignSlug, {
+      headers: { Authorization: "Bearer " + ADMIN_TOKEN }
+    }), 200)).hits, 1, "Foreign visit receipt was deleted");
+    assert.equal((await checked(await api("/v1/admin/counters/" + legacySlug, {
+      headers: { Authorization: "Bearer " + ADMIN_TOKEN }
+    }), 200)).hits, 1, "Legacy visit receipt was deleted");
+
+    // Change only the local pilot ID to prove a second numeric account's
+    // session and ticket were not revoked by the first account's deletion.
+    smokeStage = "account-delete-cross-account-preservation";
+    await writePublishingVars(foreignId, true);
+    await restartLocalWorker();
+    assert.equal((await api("/v1/me", {
+      headers: { Origin: deleteOrigin, Authorization: "Bearer " + foreignToken }
+    })).status, 200, "Foreign account session was revoked");
+    const foreignTicketExchange = await api("/v1/auth/exchange", {
+      method: "POST", headers: { Origin: deleteOrigin, "Content-Type": "application/json" },
+      body: JSON.stringify({ ticket: foreignTicket, verifier: foreignVerifier })
+    });
+    assert.equal(foreignTicketExchange.status, 200,
+      "Foreign account login ticket was deleted");
+    const foreignProfile = await foreignTicketExchange.json();
+    assert.equal(foreignProfile.user.id, foreignId);
+    console.log("PASS: local D1 account deletion is opt-in, exact-confirmed and atomic; " +
+      "own counters/receipts/tickets/sessions are removed while foreign/legacy data and global budget survive.");
 
     console.log("PASS: self-hosted Wrangler local migrations, private CLI publishing, " +
       "all 6 active/6 retired D1 designs, read-only design recovery, SVG, deduplication, updates, restart persistence, closed OAuth and local acceptance simulation.");

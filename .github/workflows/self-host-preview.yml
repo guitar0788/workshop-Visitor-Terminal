@@ -27,9 +27,9 @@ concurrency:
 
 jobs:
   package:
-    # Only the reviewed in-repository preview branch may publish a test ZIP.
+    # Only reviewed in-repository preview branches may publish a test ZIP.
     # Untrusted fork pull requests must not create a similarly named artifact.
-    if: github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'feat/v06-independent-self-hosting'
+    if: github.event.pull_request.head.repo.full_name == github.repository && (github.head_ref == 'feat/v06-independent-self-hosting' || github.head_ref == 'feat/account-usage-safety')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -75,7 +75,7 @@ jobs:
 
   windows-zip-smoke:
     name: Windows standalone ZIP / Worker+D1
-    if: github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'feat/v06-independent-self-hosting'
+    if: github.event.pull_request.head.repo.full_name == github.repository && (github.head_ref == 'feat/v06-independent-self-hosting' || github.head_ref == 'feat/account-usage-safety')
     needs: package
     runs-on: windows-latest
     steps:
@@ -104,7 +104,7 @@ jobs:
 
   macos-zip-smoke:
     name: macOS standalone ZIP / Worker+D1
-    if: github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'feat/v06-independent-self-hosting'
+    if: github.event.pull_request.head.repo.full_name == github.repository && (github.head_ref == 'feat/v06-independent-self-hosting' || github.head_ref == 'feat/account-usage-safety')
     needs: package
     runs-on: macos-latest
     steps:
@@ -131,7 +131,7 @@ jobs:
 
   validated-preview:
     name: Publish validated PREVIEW only (not a Release)
-    if: github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'feat/v06-independent-self-hosting'
+    if: github.event.pull_request.head.repo.full_name == github.repository && (github.head_ref == 'feat/v06-independent-self-hosting' || github.head_ref == 'feat/account-usage-safety')
     needs: [package, windows-zip-smoke, macos-zip-smoke]
     runs-on: ubuntu-latest
     permissions:
