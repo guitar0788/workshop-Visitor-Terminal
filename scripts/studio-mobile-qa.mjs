@@ -172,7 +172,7 @@ export function createMobileQA(){
     "await until(()=>page.querySelector('.precision-panel[role=group][aria-label]'));",
     "precisionToggle.click();",
     "await until(()=>!page.querySelector('.precision-panel'));",
-    "const quickEdit=await until(()=>page.querySelector('.selected-layer-shortcut.mobile-only'));";
+    "const quickEdit=await until(()=>page.querySelector('.selected-layer-shortcut.mobile-only'));",
     "if(!/(Edit selected|编辑当前)/i.test(quickEdit.textContent))",
     "errors.push('no selected layer quick edit on phone preview');",
     "quickEdit.click();",
