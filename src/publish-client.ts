@@ -1,25 +1,14 @@
 import type { TerminalDesign } from "./model";
 
-/**
- * Build-time safety gate. GitHub Pages remains in preview mode unless a
- * separate, reviewed publish release opts in to both variables.
- */
-const vars = (import.meta as ImportMeta & {
-  env?: Record<string, string | undefined>
-}).env ?? {};
-/** Immutable standalone build gate: never call OAuth or Cloudflare from the offline edition. */
-export const OFFLINE_DEMO_MODE = vars.VITE_OFFLINE_DEMO === "true";
-const configured = OFFLINE_DEMO_MODE ? "" : vars.VITE_PUBLISH_API_ORIGIN?.trim() ?? "";
-export const PUBLIC_API_ORIGIN =
-  /^https:\/\/workshop-visitor-terminal-staging\.[a-z0-9-]+\.workers\.dev\/?$/i.test(configured)
-    ? configured.replace(/\/+$/, "") : "";
-export const PUBLISH_PILOT_MODE = vars.VITE_PUBLISH_PILOT === "true";
-export const PUBLISH_UI_ENABLED =
-  !OFFLINE_DEMO_MODE && vars.VITE_PUBLISH_ENABLED === "true" && PUBLISH_PILOT_MODE &&
-  PUBLIC_API_ORIGIN.length > 0;
-/** UI stays hidden unless a separately reviewed build opts in; server flag is also required. */
-export const ACCOUNT_DELETION_UI_ENABLED =
-  PUBLISH_UI_ENABLED && vars.VITE_ACCOUNT_DELETION_UI_ENABLED === "true";
+/** Keep all publish/security build flags centralized and fail-closed. */
+import {
+  ACCOUNT_DELETION_UI_ENABLED, OFFLINE_DEMO_MODE, PUBLIC_API_ORIGIN,
+  PUBLISH_PILOT_MODE, PUBLISH_UI_ENABLED
+} from "./publish-config";
+export {
+  ACCOUNT_DELETION_UI_ENABLED, OFFLINE_DEMO_MODE, PUBLIC_API_ORIGIN,
+  PUBLISH_PILOT_MODE, PUBLISH_UI_ENABLED
+} from "./publish-config";
 const OAUTH_VERIFIER = "workshop-publish-oauth-verifier";
 const OAUTH_STATE = "workshop-publish-oauth-state";
 

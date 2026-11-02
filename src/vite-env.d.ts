@@ -5,4 +5,5 @@ interface ImportMetaEnv {
   readonly VITE_PUBLISH_ENABLED?: string;
   readonly VITE_PUBLISH_PILOT?: string;
   readonly VITE_PUBLISH_API_ORIGIN?: string;
+  readonly VITE_ACCOUNT_DELETION_UI_ENABLED?: string;
 }

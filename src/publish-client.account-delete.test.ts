@@ -2,17 +2,20 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 afterEach(() => {
   vi.unstubAllGlobals();
-  vi.unstubAllEnvs();
+  vi.doUnmock("./publish-config");
   vi.resetModules();
 });
 
 function enableDeletionBuild() {
-  vi.stubEnv("VITE_PUBLISH_API_ORIGIN",
-    "https://workshop-visitor-terminal-staging.test.workers.dev");
-  vi.stubEnv("VITE_PUBLISH_ENABLED", "true");
-  vi.stubEnv("VITE_PUBLISH_PILOT", "true");
-  vi.stubEnv("VITE_ACCOUNT_DELETION_UI_ENABLED", "true");
-  vi.stubEnv("VITE_OFFLINE_DEMO", "false");
+  // Vitest 5 can inline import.meta.env before vi.stubEnv(). Simulate a
+  // separately reviewed build without adding any production runtime override.
+  vi.doMock("./publish-config", () => ({
+    OFFLINE_DEMO_MODE: false,
+    PUBLIC_API_ORIGIN: "https://workshop-visitor-terminal-staging.test.workers.dev",
+    PUBLISH_PILOT_MODE: true,
+    PUBLISH_UI_ENABLED: true,
+    ACCOUNT_DELETION_UI_ENABLED: true
+  }));
 }
 
 describe("separately gated account deletion client", () => {
