@@ -31,6 +31,22 @@ describe("local-only Studio draft persistence", () => {
     }
   });
 
+  it("persists alignment and restores older local drafts as left-aligned", () => {
+    const storage = fakeStorage();
+    const centered = clonePreset("mc-nether");
+    centered.layers[0].textAlign = "center";
+    expect(saveLocalDraft(storage, centered)).toBe(true);
+    expect(restoreLocalDraft(storage)).toEqual(centered);
+
+    const legacy = {
+      ...centered,
+      layers: centered.layers.map(({ textAlign: _textAlign, ...layer }) => layer)
+    };
+    storage.data.set(DRAFT_STORAGE_KEY, JSON.stringify(legacy));
+    const restored = restoreLocalDraft(storage);
+    expect(restored?.layers.every(layer => layer.textAlign === "left")).toBe(true);
+  });
+
   it("saves only sanitized design fields, never arbitrary authentication metadata", () => {
     const storage = fakeStorage();
     const raw = {
