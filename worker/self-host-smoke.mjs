@@ -399,8 +399,23 @@ export async function smokeSelfHostedCounter() {
     ) };
     await writeFile(designPath, JSON.stringify(modified));
     assert.match(await cli("update", { design: designPath }), /Counter ready/);
+    smokeStage = "recover-stored-design-with-read-only-cli";
+    const exported = await execute({
+      command: "export", api: origin, slug: SLUG, "token-file": tokenPath
+    }, { directory: designDir });
+    assert.match(exported, /Saved existing Studio design locally/);
+    const exportPath = join(designDir, "visitor-terminal-" + SLUG + ".design.json");
+    const recovered = JSON.parse(await readFile(exportPath, "utf8"));
+    assert.deepEqual(recovered, modified, "Recovered JSON must preserve the edited Studio design");
+    assert(!exported.includes(ADMIN_TOKEN), "Export must not log admin token");
+    assert.equal((await api("/v1/admin/counters/" + SLUG + "/design")).status, 401,
+      "Anonymous callers must not retrieve stored editable designs");
+    await assert.rejects(() => execute({
+      command: "export", api: origin, slug: SLUG, "token-file": tokenPath
+    }, { directory: designDir }), /backup already exists/,
+    "Export must not overwrite a previous local backup");
     assert.match(await cli("inspect"), /Recorded upstream requests: 1/,
-      "Changing a design must preserve accumulated hits");
+      "Design export must not record an additional visit or reset hits");
     const updated = await api(imagePath, { method: "HEAD" });
     assert.equal(updated.status, 200, "HEAD must never add a visit");
 
@@ -422,6 +437,17 @@ export async function smokeSelfHostedCounter() {
     });
     assert.equal(afterRestart.status, 200);
     assert.match(await afterRestart.text(), /UPDATED AND PERSISTED/);
+    smokeStage = "post-restart-read-only-design-recovery";
+    const restoredExportDir = join(designDir, "after-restart");
+    await mkdir(restoredExportDir, { recursive: true });
+    assert.match(await execute({
+      command: "export", api: origin, slug: SLUG, "token-file": tokenPath
+    }, { directory: restoredExportDir }), /Saved existing Studio design locally/);
+    assert.deepEqual(
+      JSON.parse(await readFile(join(restoredExportDir,
+        "visitor-terminal-" + SLUG + ".design.json"), "utf8")),
+      modified, "Export after Worker restart must recover the exact saved design"
+    );
     smokeStage = "post-restart-no-double-count";
     assert.match(await cli("inspect"), /Recorded upstream requests: 1/);
     smokeStage = "simulate-consented-remote-acceptance-locally";
@@ -439,7 +465,7 @@ export async function smokeSelfHostedCounter() {
     assert.equal(liveReport.independentCloudflareAccountOwnership, "NOT_VERIFIED");
 
     console.log("PASS: self-hosted Wrangler local migrations, private CLI publishing, " +
-      "all 6 active/6 retired D1 designs, SVG, deduplication, updates, restart persistence, closed OAuth and local acceptance simulation.");
+      "all 6 active/6 retired D1 designs, read-only design recovery, SVG, deduplication, updates, restart persistence, closed OAuth and local acceptance simulation.");
   } finally {
     if (running) await shutdown(running.child);
     if (devVarsCreated) await rm(DEV_VARS, { force: true });
