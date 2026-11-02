@@ -1,0 +1,154 @@
+name: Illustrated Card Visual Audit
+# Real browser rendering with no publish credentials, remote images or D1.
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/card-visual-audit.yml"
+      - "scripts/card-visual-audit.mjs"
+      - "scripts/card-image-context-audit.mjs"
+      - "worker/card-image-context-audit.test.mjs"
+      - "src/approved-reference-cards.ts"
+      - "src/approved-three-card-image.ts"
+      - "src/approved-clean-card-image.ts"
+      - "docs/qa/**"
+      - "worker/github-readme-probe.test.mjs"
+      - "worker/card-visual-audit.test.mjs"
+      - "src/model.ts"
+      - "src/card-art.ts"
+      - "src/minecraft-card-art.ts"
+      - "src/main.tsx"
+      - "src/i18n.ts"
+      - "scripts/studio-mobile-qa.mjs"
+      - "worker/studio-mobile-qa.test.mjs"
+      - "src/style.css"
+      - "package.json"
+      - "package-lock.json"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: card-visual-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  browser-render:
+    name: Render six selectable cards in headless Chrome
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'feat/v06-independent-self-hosting'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install exact locked dependencies
+        run: npm ci
+      - name: Validate GitHub README SVG proxy samples without network access
+        run: node --test worker/github-readme-probe.test.mjs
+      - name: Test contact-sheet source validation
+        run: node --test worker/card-visual-audit.test.mjs
+      - name: Generate 12 SVG cards using the actual shared renderer
+        run: node scripts/card-visual-audit.mjs build
+      - name: Capture real browser visual contact sheet
+        run: |
+          set -euo pipefail
+          google-chrome --headless=new --no-sandbox --disable-gpu \
+            --disable-dev-shm-usage --disable-extensions --hide-scrollbars \
+            --window-size=1590,2450 \
+            --screenshot="$PWD/dist/WVT-Six-Cards-Visual-Review.png" \
+            "file://$PWD/dist/Card-Visual-Review.html" 2> /dev/null
+          test -s dist/WVT-Six-Cards-Visual-Review.png
+      - name: Measure actual Chrome SVG text clipping
+        run: |
+          set -euo pipefail
+          command -v google-chrome
+          google-chrome --headless=new --no-sandbox --disable-gpu \
+            --disable-dev-shm-usage --disable-extensions \
+            --virtual-time-budget=3000 \
+            --dump-dom "file://$PWD/dist/Card-Visual-Review.html" \
+            > dist/card-browser-dom.html 2> /dev/null
+          node scripts/card-visual-audit.mjs check dist/card-browser-dom.html
+      - name: Test all six illustrations in external SVG image context
+        run: node --test worker/card-image-context-audit.test.mjs
+      - name: Build eighteen real SVG image-loading cases
+        run: node scripts/card-image-context-audit.mjs build
+      - name: Check Chrome decodes raster-backed SVG through HTML img
+        run: |
+          set -euo pipefail
+          google-chrome --headless=new --no-sandbox --disable-gpu \
+            --disable-dev-shm-usage --disable-extensions \
+            --virtual-time-budget=12000 \
+            --dump-dom "file://$PWD/dist/Six-Cards-External-Image-Review.html" \
+            > dist/six-cards-external-image-browser-dom.html 2> /dev/null
+          node scripts/card-image-context-audit.mjs check dist/six-cards-external-image-browser-dom.html
+      - name: Capture external img rendering as review-only screenshot
+        if: always()
+        run: |
+          set -euo pipefail
+          test -s dist/Six-Cards-External-Image-Review.html
+          google-chrome --headless=new --no-sandbox --disable-gpu \
+            --disable-dev-shm-usage --disable-extensions --hide-scrollbars \
+            --window-size=1590,2320 \
+            --screenshot="$PWD/dist/WVT-Six-Cards-External-Image-Mode.png" \
+            "file://$PWD/dist/Six-Cards-External-Image-Review.html" 2> /dev/null
+          test -s dist/WVT-Six-Cards-External-Image-Mode.png
+      - name: Exercise actual Studio six-card picker in phone viewport
+        run: |
+          set -euo pipefail
+          node --test worker/studio-mobile-qa.test.mjs
+          npm run build
+          node scripts/studio-mobile-qa.mjs build
+          npm run preview -- --host 127.0.0.1 --port 4173 > dist/mobile-preview-server.log 2>&1 &
+          preview_pid=$!
+          trap 'kill "$preview_pid" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 40); do
+            if curl --fail --silent --output /dev/null http://127.0.0.1:4173/; then break; fi
+            sleep 0.25
+          done
+          curl --fail --silent --output /dev/null http://127.0.0.1:4173/
+          google-chrome --headless=new --no-sandbox --disable-gpu \
+            --disable-dev-shm-usage --disable-extensions \
+            --virtual-time-budget=20000 \
+            --window-size=440,940 \
+            --dump-dom http://127.0.0.1:4173/workshop-Visitor-Terminal/WVT-Mobile-Studio-QA.html \
+            > dist/mobile-studio-dom.html 2> /dev/null
+          node scripts/studio-mobile-qa.mjs check dist/mobile-studio-dom.html
+          google-chrome --headless=new --no-sandbox --disable-gpu \
+            --disable-dev-shm-usage --disable-extensions --hide-scrollbars \
+            --virtual-time-budget=18000 --window-size=440,940 \
+            --screenshot="$PWD/dist/WVT-Studio-Phone-Preview.png" \
+            http://127.0.0.1:4173/workshop-Visitor-Terminal/WVT-Mobile-Studio-QA.html 2> /dev/null
+          test -s dist/WVT-Studio-Phone-Preview.png
+      - name: Capture public GitHub-rendered diagnostic README (read-only)
+        # This is a best-effort external compatibility observation, not a
+        # release check. Public GitHub may throttle anonymous CI browsers.
+        continue-on-error: true
+        timeout-minutes: 2
+        run: |
+          set -euo pipefail
+          url="https://github.com/guitar0788/workshop-Visitor-Terminal/blob/feat/v06-independent-self-hosting/docs/qa/README.md"
+          google-chrome --headless=new --no-sandbox --disable-gpu \
+            --disable-dev-shm-usage --disable-extensions --hide-scrollbars \
+            --virtual-time-budget=9000 --window-size=1480,2350 \
+            --screenshot="$PWD/dist/WVT-GitHub-Actual-README-Proxy-Preview.png" \
+            "$url" 2> /dev/null
+          test -s dist/WVT-GitHub-Actual-README-Proxy-Preview.png
+      - name: Upload browser preview image and self-contained HTML (not a release)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: WVT-Six-Cards-Browser-Preview-Not-A-Release
+          path: |
+            dist/WVT-Six-Cards-Visual-Review.png
+            dist/Card-Visual-Review.html
+            dist/card-browser-dom.html
+            dist/Six-Cards-External-Image-Review.html
+            dist/WVT-Six-Cards-External-Image-Mode.png
+            dist/WVT-GitHub-Actual-README-Proxy-Preview.png
+            dist/WVT-Studio-Phone-Preview.png
+            dist/mobile-studio-dom.html
+          retention-days: 7
+          if-no-files-found: warn

@@ -11,9 +11,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-      - run: npm install
+      - run: npm ci
       - name: Audit runtime dependencies
         run: npm audit --omit=dev --audit-level=high
+      - name: Audit locked development dependencies too
+        run: npm audit --audit-level=moderate
       - name: Apply D1 migrations to a disposable local database
         run: |
           cp wrangler.example.toml wrangler.toml
@@ -24,9 +26,15 @@ jobs:
         run: node --test worker/*.test.mjs
       - run: npm test
       - run: npm run build
+      - name: Compile independent self-host Worker without deploying
+        run: node worker/self-host-dryrun.mjs
       - name: Build a single-file offline editor with OAuth and network disabled
         run: npm run build:offline
       - name: Exercise real local Worker and persistent D1 across restart
         run: node worker/local-smoke.mjs
+      - name: Run self-hosted Worker end-to-end on disposable local D1
+        run: node worker/self-host-smoke.mjs
       - name: Export and restore only the disposable local D1 database
         run: node worker/backup-restore-drill.mjs
+      - name: Build standalone self-host ZIP and SHA256 manifest
+        run: node scripts/build-selfhost-package.mjs

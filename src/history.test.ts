@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { clonePreset, moveLayer, renderSvg } from "./model";
+import { clonePreset, duplicateLayer, moveLayer, renderSvg } from "./model";
 import {
-  createHistory, finishDrag, previewDrag, recordEdit, redoEdit, undoEdit
+  cancelDrag, createHistory, finishDrag, previewDrag, recordEdit, redoEdit, undoEdit
 } from "./history";
 
 describe("mobile studio history and editing", () => {
@@ -39,6 +39,57 @@ describe("mobile studio history and editing", () => {
     const committed = finishDrag(history, original);
     expect(committed.past).toHaveLength(1);
     expect(undoEdit(committed).present).toEqual(original);
+  });
+
+  it("cancels a touch drag and restores exact design without an undo step", () => {
+    const original = clonePreset("mc-nether");
+    const initial = createHistory(original);
+    const intermediate = previewDrag(initial, moveLayer(original, "heading", 17, 9));
+    expect(intermediate.past).toHaveLength(0);
+    const cancelled = cancelDrag(intermediate, original);
+    expect(cancelled.present).toEqual(original);
+    expect(cancelled.past).toEqual(initial.past);
+    expect(cancelled.future).toEqual(initial.future);
+    expect(cancelDrag(cancelled, original)).toBe(cancelled);
+    expect(undoEdit(cancelled)).toBe(cancelled);
+  });
+
+  it("preserves redo across interrupted pointer gestures without moving content", () => {
+    const before = clonePreset("pixel");
+    const withEdit = recordEdit(createHistory(before), moveLayer(before, "heading", 8, 0));
+    const undone = undoEdit(withEdit);
+    const during = previewDrag(undone, moveLayer(undone.present, "heading", 50, 30));
+    const cancelled = cancelDrag(during, undone.present);
+    expect(cancelled.future).toEqual(undone.future);
+    expect(cancelled.past).toEqual(undone.past);
+    expect(redoEdit(cancelled).present).toEqual(withEdit.present);
+  });
+
+  it("commits one drag only when finished after multiple moves", () => {
+    const before = clonePreset("pixel");
+    let history = createHistory(before);
+    history = previewDrag(history, moveLayer(before, "heading", 5, 5));
+    history = previewDrag(history, moveLayer(before, "heading", 10, 7));
+    history = previewDrag(history, moveLayer(before, "heading", 14, 9));
+    const committed = finishDrag(history, before);
+    expect(committed.past).toHaveLength(1);
+    expect(committed.past[0]).toEqual(before);
+    expect(committed.present.layers[0].x).toBe(before.layers[0].x + 14);
+    expect(undoEdit(committed).present).toEqual(before);
+    expect(redoEdit(undoEdit(committed)).present).toEqual(committed.present);
+  });
+
+  it("records duplication as one undoable and redoable edit without altering the source", () => {
+    const original = clonePreset("mc-nether");
+    const copied = duplicateLayer(original, "heading", "heading_copy");
+    const history = recordEdit(createHistory(original), copied);
+    expect(history.past).toHaveLength(1);
+    expect(history.present.layers.some(layer => layer.id === "heading_copy")).toBe(true);
+    const undone = undoEdit(history);
+    expect(undone.present).toEqual(original);
+    expect(undone.future).toHaveLength(1);
+    expect(redoEdit(undone).present).toEqual(copied);
+    expect(original.layers.some(layer => layer.id === "heading_copy")).toBe(false);
   });
 
   it("ignores a no-op gesture", () => {

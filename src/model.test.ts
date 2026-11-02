@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
-  addLayer, clonePreset, escapeXml, moveLayer,
-  renderSvg, reorderLayer, sanitizeDesign
+  addLayer, CARD_THEMES, clonePreset, duplicateLayer, escapeXml, fittedCountSize, moveLayer,
+  renderSvg, reorderLayer, resizeCanvas, sanitizeDesign
 } from "./model";
+import { isApprovedTheme, approvedCanvasWidth } from "./approved-reference-cards";
 
 describe("visitor terminal SVG layer model", () => {
   it("starts with editable layers and isolated presets", () => {
@@ -82,5 +83,534 @@ describe("visitor terminal SVG layer model", () => {
     const svg = renderSvg({ theme: "cyber", layers: "bad", width: "wrong" }, 10);
     expect(svg).toContain("<svg");
     expect(svg).toContain("10 visits");
+  });
+});
+
+
+describe("v0.6 illustrated visitor cards", () => {
+  it("offers six illustrated cards with live editable visitor counts", () => {
+    expect(CARD_THEMES).toHaveLength(6);
+    expect(new Set(CARD_THEMES).size).toBe(6);
+    for (const theme of CARD_THEMES) {
+      const design = clonePreset(theme);
+      expect(design.theme).toBe(theme);
+      expect(design.layers.find(layer => layer.kind === "count")?.visible).toBe(true);
+      const first = renderSvg(design, 12_847);
+      const updated = renderSvg(design, 12_848);
+      expect(first).toContain("12,847 visits");
+      expect(first).toContain(">12,847</text>");
+      expect(updated).toContain(">12,848</text>");
+      expect(updated).not.toContain(">12,847</text>");
+      expect(first).toMatch(/<rect|<path|<circle/);
+      expect(first).toContain("scale(1 1)");
+      if (isApprovedTheme(theme)) {
+        expect(first).toContain('href="data:image/avif;base64,');
+        expect(first).not.toMatch(/<script|<foreignObject|href="https?:/i);
+      } else {
+        expect(first).not.toMatch(/<script|<foreignObject|<image|href=|url\(https?:/i);
+      }
+      expect(sanitizeDesign(JSON.parse(JSON.stringify(design)))).toEqual(design);
+    }
+  });
+
+  it("keeps old pixel, minimal and cyber presets and SVG rendering unchanged", () => {
+    for (const theme of ["pixel", "minimal", "cyber"] as const) {
+      const design = clonePreset(theme);
+      expect(design.layers).toHaveLength(5);
+      expect(design.layers[0].id).toBe("heading");
+      expect(renderSvg(design, 127)).toContain(">127</text>");
+      expect(renderSvg(design, 127)).not.toContain("scale(1 1)");
+    }
+  });
+
+  it("does not let imported designs inject SVG markup into card artwork or layers", () => {
+    for (const theme of CARD_THEMES) {
+      const design = clonePreset(theme);
+      const injected = {
+        ...design.layers[0],
+        id: "hostile_label", kind: "text" as const,
+        text: '<image href="https://evil.example"/>'
+      };
+      const live = design.layers.find(layer => layer.kind === "count")!;
+      const hostile = sanitizeDesign({
+        ...design, theme, accent: 'url("https://evil.example")',
+        layers: [injected, live]
+      });
+      const output = renderSvg(hostile, 4);
+      if (isApprovedTheme(theme)) {
+        expect(output.match(/<image\b/g)).toHaveLength(1);
+        expect(output).toContain('data:image/avif;base64,');
+      } else {
+        expect(output).not.toContain('<image');
+      }
+      expect(output).not.toContain('href="https://evil.example"');
+      expect(output).not.toContain('fill="url(&quot;https://evil.example&quot;)"');
+      expect(output).toContain("&lt;image");
+      expect(output).toContain(">4</text>");
+      expect(hostile.layers).toHaveLength(2);
+      expect(hostile.accent).toBe(design.accent);
+    }
+  });
+
+  it("changes customizable text/count layers without losing the illustrated scene", () => {
+    const design = clonePreset("modern-card");
+    design.layers[0].text = "My Workshop";
+    design.layers[0].color = "#aabbcc";
+    const svg = renderSvg(design, 25);
+    expect(svg).toContain("My Workshop");
+    expect(svg).toContain('fill="#aabbcc"');
+    expect(svg).toContain("25 visits");
+    expect(svg).toContain("rect");
+    expect(renderSvg({ ...design, width: 600, height: 300 }, 25))
+      .toContain("scale(1 1.4285714285714286)");
+  });
+});
+
+
+describe("formatted count fit and long-term visitor growth", () => {
+  it("keeps 5-digit values at the intended template font size", () => {
+    for (const theme of CARD_THEMES) {
+      const design = clonePreset(theme);
+      const layer = design.layers.find(layer => layer.kind === "count")!;
+      if (isApprovedTheme(theme)) continue;
+      expect(fittedCountSize(layer, "12,847")).toBe(layer.fontSize);
+      const svg = renderSvg(design, 12_847);
+      expect(svg).toContain('font-size="' + layer.fontSize + '"');
+    }
+  });
+
+  it("shrinks 12-digit counts to fit all selectable illustrated count boxes", () => {
+    for (const theme of CARD_THEMES) {
+      const d = clonePreset(theme);
+      const counter = "999,999,999,999";
+      const layer = d.layers.find(l => l.kind === "count")!;
+      const sized = fittedCountSize(layer, counter);
+      expect(sized).toBeLessThan(layer.fontSize);
+      expect(sized).toBeGreaterThanOrEqual(8);
+      expect(sized * counter.length * 0.63).toBeLessThanOrEqual(layer.width - 4);
+      const svg = renderSvg(d, 999_999_999_999);
+      if (!isApprovedTheme(theme)) expect(svg).toContain('font-size="' + sized + '"');
+      expect(svg).toContain('>999,999,999,999</text>');
+      expect(svg).toContain("999,999,999,999 visits");
+    }
+  });
+
+  it("can render a complete count even in a user-customized very narrow layer", () => {
+    const d = clonePreset("neon-card");
+    const count = d.layers.find(l => l.kind === "count")!;
+    count.width = 8;
+    count.fontSize = 80;
+    const output = renderSvg(d, 999_999_999_999);
+    expect(output).toContain('textLength="4" lengthAdjust="spacingAndGlyphs"');
+    expect(output).toContain('>999,999,999,999</text>');
+    expect(output).not.toContain('href=');
+  });
+
+  it("does not change legacy exported markup for typical small values", () => {
+    for (const theme of ["pixel","cyber","minimal"] as const) {
+      const d = clonePreset(theme);
+      const layer = d.layers.find(l => l.kind === "count")!;
+      expect(fittedCountSize(layer, "125")).toBe(layer.fontSize);
+      expect(renderSvg(d, 125)).toContain('>125</text>');
+      expect(renderSvg(d, 125)).not.toContain('textLength=');
+    }
+  });
+});
+
+
+describe("inline gallery fragment isolation", () => {
+  it("never shares a clip or gradient identifier across 12 rendered cards", () => {
+    const ids = new Set<string>();
+    let total = 0;
+    for (const theme of CARD_THEMES) {
+      for (const count of [12_847, 999_999_999_999]) {
+        const svg = renderSvg(clonePreset(theme), count);
+        const local = new Set<string>();
+        for (const [, id] of svg.matchAll(/\bid="([^"]+)"/g)) {
+          expect(id).toMatch(/^[a-zA-Z0-9_-]+$/);
+          expect(ids.has(id)).toBe(false);
+          expect(local.has(id)).toBe(false);
+          ids.add(id);
+          local.add(id);
+          total++;
+        }
+        for (const [, refId] of svg.matchAll(/url\(#([a-zA-Z0-9_-]+)\)/g)) {
+          expect(local.has(refId)).toBe(true);
+        }
+        expect(svg).not.toContain('id="clip-heading"');
+        expect([...svg.matchAll(/<clipPath\b/g)]).toHaveLength(
+          isApprovedTheme(theme) ? 1 : 3);
+      }
+    }
+    expect(total).toBeGreaterThanOrEqual(24);
+  });
+
+  it("keeps SVG fragment targets distinct when a user moves a layer", () => {
+    const initial = clonePreset("pixel-card");
+    const moved = moveLayer(initial, "visits", 15, 0);
+    const a = renderSvg(initial, 125);
+    const b = renderSvg(moved, 125);
+    const idsA = [...a.matchAll(/\bid="(clip-[^"]+)"/g)].map(v => v[1]);
+    const idsB = [...b.matchAll(/\bid="(clip-[^"]+)"/g)].map(v => v[1]);
+    expect(idsA).toHaveLength(1);
+    expect(idsB).toHaveLength(1);
+    expect(idsA.filter(x => idsB.includes(x))).toHaveLength(0);
+  });
+});
+
+
+describe("visual fidelity — approved three plus three Minecraft-inspired voxel scenes", () => {
+  it("uses the original wide-banner canvas instead of old tall placeholder proportions", () => {
+    for (const theme of CARD_THEMES) {
+      const card = clonePreset(theme);
+      const isReference = isApprovedTheme(theme);
+      expect(card.width).toBe(isReference ? approvedCanvasWidth(theme) : 600);
+      expect(card.height).toBe(isReference ? 362 : 210);
+      expect(card.layers.filter(l => l.kind === "count")).toHaveLength(1);
+      expect(card.layers[0].visible).toBe(true);
+      const actual = renderSvg(card, 12_847);
+      expect(actual).toContain(isReference ?
+        'width="' + approvedCanvasWidth(theme) + '" height="362" viewBox="0 0 ' + approvedCanvasWidth(theme) + ' 362"' :
+        'width="600" height="210" viewBox="0 0 600 210"');
+      if (!isReference) expect(actual).toContain('scale(1 1)');
+      expect(actual).toContain('>12,847</text>');
+      expect(actual).not.toContain('>999,999,999,999</text>');
+    }
+    const old = clonePreset("pixel");
+    expect(old.width).toBe(420);
+    expect(old.height).toBe(220);
+  });
+
+  it("renders distinct actual vector scenes rather than switching only colors or text", () => {
+    const scenes = CARD_THEMES.map(theme => renderSvg(clonePreset(theme), 12_847));
+    expect(new Set(scenes).size).toBe(6);
+    for (const [i, svg] of scenes.entries()) {
+      const theme = CARD_THEMES[i];
+      if (isApprovedTheme(theme)) {
+        expect(svg).toContain('data:image/avif;base64,');
+        expect(svg.match(/<image\b/g)).toHaveLength(1);
+      } else {
+        expect(svg.match(/<(?:path|rect|circle|ellipse)\b/g)?.length ?? 0).toBeGreaterThan(8);
+        expect(svg).not.toMatch(/<image\b|<script\b|<foreignObject\b|\shref\s*=/i);
+      }
+      expect(svg).toContain("<defs>");
+    }
+    expect(scenes[3]).toContain("ovsky");
+    expect(scenes[4]).toContain("lavaGlow");
+    expect(scenes[5]).toContain("eGlow");
+  });
+});
+
+describe("exact approved raster cards, and nothing else", () => {
+  it("bundles the approved three-card artwork without external URLs", () => {
+    for (const theme of ["pixel-card","terminal-card","rpg-card"] as const) {
+      const art=renderSvg(clonePreset(theme),12_847);
+      expect(art.match(/<image\b/g)).toHaveLength(1);
+      expect(art).toContain('href="data:image/avif;base64,');
+      expect(art).not.toMatch(/href="https?:/i);
+      expect(art).toContain('opacity="0"');
+      expect(art).toContain('>12,847</text>');
+      const updated=renderSvg(clonePreset(theme),12_848);
+      expect(updated).toContain('>12,848</text>');
+      expect(updated).not.toContain('>12,847</text>');
+      expect(updated).not.toContain('opacity="0"');
+    }
+  });
+  it("leaves all six other illustrated and three classic template widths unchanged", () => {
+    for(const theme of CARD_THEMES.filter(t=>!isApprovedTheme(t))) {
+      const card=clonePreset(theme);
+      expect(card.width).toBe(600);
+      expect(card.height).toBe(210);
+      expect(renderSvg(card, 12_847)).not.toContain('data:image/avif');
+    }
+    for(const theme of ["pixel","minimal","cyber"] as const) {
+      const card=clonePreset(theme);
+      expect(card.width).toBe(420);
+      expect(card.height).toBe(220);
+    }
+  });
+});
+
+
+describe("owner-approved 1 / 3 / 5 composition fidelity", () => {
+  const visualFamilies = {
+    "pixel-card": "Impact, Arial Black, sans-serif",
+    "terminal-card": "Consolas, Menlo, monospace",
+    "rpg-card": "Georgia, Times New Roman, serif"
+  } as const;
+
+  it("preserves exact source artwork at the approved 12,847 demo count", () => {
+    for (const theme of Object.keys(visualFamilies) as Array<keyof typeof visualFamilies>) {
+      const d = clonePreset(theme);
+      const original = renderSvg(d, 12_847);
+      const updated = renderSvg(d, 12_848);
+      expect(original).toContain('data:image/avif;base64,');
+      expect(original).toContain('data-count-layer="true"');
+      expect(original).toContain('opacity="0"');
+      expect(original).toContain('>12,847</text>');
+      expect(updated).toContain('data-count-layer="true"');
+      expect(updated).toContain('>12,848</text>');
+      expect(updated).not.toContain('>12,847</text>');
+      expect(updated).not.toContain('opacity="0"');
+      // The clean plate is a separate source image; the original reference
+      // pixels remain untouched at the approved demo count.
+      const imageOf = (svg: string) =>
+        svg.match(/<image\b[^>]*\shref="(data:image\/avif;base64,[^"]+)"/)?.[1];
+      expect(imageOf(original)).toBeTruthy();
+      expect(imageOf(updated)).toBeTruthy();
+      expect(imageOf(original)).not.toBe(imageOf(updated));
+      expect(updated).toContain('font-family="' + visualFamilies[theme] + '"');
+    }
+  });
+
+  it("keeps other six illustrated cards free of embedded reference art", () => {
+    for (const theme of CARD_THEMES.filter(theme => !isApprovedTheme(theme))) {
+      const svg = renderSvg(clonePreset(theme), 12_848);
+      expect(svg).not.toContain('data:image/avif;base64,');
+      expect(svg).not.toMatch(/<image\b/);
+    }
+  });
+
+  it("supports a real count of zero without ever displaying the original 12,847", () => {
+    for (const theme of Object.keys(visualFamilies) as Array<keyof typeof visualFamilies>) {
+      const svg = renderSvg(clonePreset(theme), 0);
+      expect(svg).toContain('>0</text>');
+      expect(svg).not.toContain('>12,847</text>');
+      expect(svg).toContain('data-count-layer="true"');
+      expect(svg).not.toContain('opacity="0"');
+    }
+  });
+});
+
+
+describe("selectable Minecraft styles and retired-card compatibility", () => {
+  const active = ["pixel-card","terminal-card","rpg-card",
+    "mc-overworld","mc-nether","mc-end"] as const;
+  const retired = ["modern-card","cozy-card","space-card",
+    "notebook-card","neon-card","minimal-card"] as const;
+
+  it("only offers the approved three plus Overworld/Nether/End; all preserve real counts", () => {
+    expect([...CARD_THEMES]).toEqual([...active]);
+    for (const theme of active) {
+      const svg = renderSvg(clonePreset(theme), 12_848);
+      expect(svg).toContain(">12,848</text>");
+      expect(svg).not.toContain("<script");
+      expect(svg).not.toContain("https://");
+      if (theme.startsWith("mc-")) {
+        expect(svg).not.toMatch(/<image\b/);
+        expect(svg).toContain('shape-rendering="crispEdges"');
+      }
+    }
+  });
+
+  it("can still reopen and render all six retired serialized designs", () => {
+    for (const theme of retired) {
+      expect(CARD_THEMES as readonly string[]).not.toContain(theme);
+      const original=clonePreset(theme);
+      const restored=sanitizeDesign(JSON.parse(JSON.stringify(original)));
+      expect(restored.theme).toBe(theme);
+      expect(restored).toEqual(original);
+      expect(renderSvg(restored, 50)).toContain(">50</text>");
+    }
+  });
+
+  it("keeps every approved illustrated card byte-for-byte consistent at demo count", () => {
+    for (const theme of ["pixel-card","terminal-card","rpg-card"] as const) {
+      const a=renderSvg(clonePreset(theme),12_847);
+      expect(a).toContain('href="data:image/avif;base64,');
+      expect(a).toContain('opacity="0"');
+      expect(a).toContain('>12,847</text>');
+    }
+  });
+});
+
+describe("six illustrated-card editing and exported-design parity", () => {
+  it("keeps custom labels and a live count through design JSON round trips", () => {
+    for (const theme of CARD_THEMES) {
+      const base = clonePreset(theme);
+      const decorated = addLayer(base, "text", "personal_title");
+      const edited = sanitizeDesign({
+        ...decorated,
+        layers: decorated.layers.map(layer => layer.id === "personal_title"
+          ? { ...layer, text: "MY WORLD & WORKSHOP", color: "#abcd12", x: 12, y: 12 }
+          : layer)
+      });
+      const restored = sanitizeDesign(JSON.parse(JSON.stringify(edited)));
+      expect(restored).toEqual(edited);
+      const original = renderSvg(base, 12_848);
+      const rendered = renderSvg(restored, 12_848);
+      expect(rendered).toContain("MY WORLD &amp; WORKSHOP");
+      expect(rendered).toContain('fill="#abcd12"');
+      expect(rendered).toContain(">12,848</text>");
+      expect(rendered).not.toContain('<script');
+      if (isApprovedTheme(theme)) {
+        // Editing text overlays must preserve the approved raster plate.
+        const image = (svg: string) =>
+          svg.split('href="data:image/avif;base64,')[1]?.split('"')[0];
+        expect(image(rendered)).toBe(image(original));
+      } else {
+        expect(rendered).toContain('shape-rendering="crispEdges"');
+      }
+    }
+  });
+
+  it("does not silently discard extra count layers on approved raster cards", () => {
+    for (const theme of ["pixel-card", "terminal-card", "rpg-card"] as const) {
+      const original = clonePreset(theme);
+      const withSecondCount = addLayer(original, "count", "custom_second_count");
+      const restored = sanitizeDesign(JSON.parse(JSON.stringify(withSecondCount)));
+      const rendered = renderSvg(restored, 12_848);
+      expect(rendered.split('>12,848</text>').length - 1).toBe(2);
+      expect(rendered.split('<clipPath').length - 1).toBe(2);
+
+      // Hiding the original slot must not also hide the extra count.
+      const hiddenMain = sanitizeDesign({
+        ...restored, layers: restored.layers.map(layer =>
+          layer.id === "visits" ? { ...layer, visible: false } : layer)
+      });
+      const hiddenSvg = renderSvg(hiddenMain, 12_848);
+      expect(hiddenSvg.split('>12,848</text>').length - 1).toBe(1);
+      expect(hiddenSvg).not.toContain('>12,847</text>');
+      expect(hiddenSvg).not.toContain('href="https://');
+    }
+  });
+
+  it("supports the same 12-digit visit count bound in all illustrated cards", () => {
+    for (const theme of CARD_THEMES) {
+      const design = clonePreset(theme);
+      expect(renderSvg(design, 999_999_999_999)).toContain('>999,999,999,999</text>');
+      expect(renderSvg(design, 1_000_000_000_000)).toContain('>999,999,999,999</text>');
+    }
+  });
+});
+
+describe("canvas resizing preserves illustrated art and overlay alignment", () => {
+  it("scales each existing editable layer with the artwork instead of leaving it behind", () => {
+    for (const theme of CARD_THEMES) {
+      const original = clonePreset(theme);
+      const originalJson = JSON.stringify(original);
+      const resized = resizeCanvas(original, 800, 420);
+      const sx = 800 / original.width;
+      const sy = 420 / original.height;
+      expect(resized.width).toBe(800);
+      expect(resized.height).toBe(420);
+      expect(JSON.stringify(original)).toBe(originalJson);
+      for (const old of original.layers) {
+        const layer = resized.layers.find(l => l.id === old.id);
+        expect(layer).toBeTruthy();
+        expect(Math.abs(layer!.x - Math.round(old.x * sx))).toBeLessThanOrEqual(1);
+        expect(Math.abs(layer!.y - Math.round(old.y * sy))).toBeLessThanOrEqual(1);
+        expect(layer!.width).toBe(Math.max(8, Math.round(old.width * sx)));
+        expect(layer!.height).toBe(Math.max(8, Math.round(old.height * sy)));
+        expect(layer!.x + layer!.width).toBeLessThanOrEqual(resized.width);
+        expect(layer!.y + layer!.height).toBeLessThanOrEqual(resized.height);
+      }
+      const svg = renderSvg(resized, 12_848);
+      expect(svg).toContain('width="800" height="420" viewBox="0 0 800 420"');
+      expect(svg).toContain(">12,848</text>");
+      expect(sanitizeDesign(JSON.parse(JSON.stringify(resized)))).toEqual(resized);
+      if (isApprovedTheme(theme)) {
+        expect(svg).toContain('href="data:image/avif;base64,');
+      } else {
+        expect(svg).toContain('shape-rendering="crispEdges"');
+      }
+    }
+  });
+
+  it("bounds invalid resize input and leaves an already correct canvas untouched", () => {
+    const design = clonePreset("mc-overworld");
+    expect(resizeCanvas(design, design.width, design.height)).toEqual(design);
+    const clamped = resizeCanvas(design, 50_000, -3);
+    expect(clamped.width).toBe(800);
+    expect(clamped.height).toBe(160);
+    expect(clamped.layers.some(l => l.kind === "count")).toBe(true);
+  });
+});
+
+describe("in-bounds layer insertion on compact illustrated canvases", () => {
+  it("keeps every inserted tool visible at minimum size through the 32-layer limit", () => {
+    const kinds = ["text", "count", "dot", "panel"] as const;
+    for (const theme of CARD_THEMES) {
+      let design = resizeCanvas(clonePreset(theme), 280, 160);
+      for (let index = 0; index < 36; index++) {
+        const previous = design;
+        design = addLayer(design, kinds[index % kinds.length], "extra_" + index);
+        const inserted = design.layers.find(l => l.id === "extra_" + index);
+        if (!inserted) {
+          expect(previous.layers).toHaveLength(32);
+          expect(design).toBe(previous);
+          continue;
+        }
+        expect(inserted.x).toBeGreaterThanOrEqual(0);
+        expect(inserted.y).toBeGreaterThanOrEqual(0);
+        expect(inserted.x + inserted.width).toBeLessThanOrEqual(280);
+        expect(inserted.y + inserted.height).toBeLessThanOrEqual(160);
+        expect(design.layers.length).toBeLessThanOrEqual(32);
+      }
+      const json = JSON.parse(JSON.stringify(design));
+      expect(sanitizeDesign(json)).toEqual(design);
+      expect(renderSvg(json, 42)).toContain(">42</text>");
+    }
+  });
+});
+
+describe("mobile overlay duplication across all supported cards", () => {
+  it("duplicates text, count, ornament and panel with styling, order and safe positions", () => {
+    for (const theme of [...CARD_THEMES, "pixel", "cyber", "minimal"] as const) {
+      for (const kind of ["text", "count", "dot", "panel"] as const) {
+        let original = clonePreset(theme);
+        original = addLayer(original, kind, "overlay_to_copy");
+        const input = sanitizeDesign({
+          ...original, layers: original.layers.map(layer => layer.id === "overlay_to_copy"
+            ? { ...layer, color: "#f12a5b", fontSize: 31, text: "COPY ME",
+              x: original.width - layer.width, y: original.height - layer.height }
+            : layer)
+        });
+        const index = input.layers.findIndex(layer => layer.id === "overlay_to_copy");
+        const output = duplicateLayer(input, "overlay_to_copy", "overlay_duplicate");
+        expect(output.layers.length).toBe(input.layers.length + 1);
+        const next = output.layers[index + 1];
+        expect(next.id).toBe("overlay_duplicate");
+        expect(next).toMatchObject({
+          kind, color: "#f12a5b", fontSize: 31, text: "COPY ME", visible: true
+        });
+        expect(next.x).toBe(input.width - next.width);
+        expect(next.y).toBe(input.height - next.height);
+        expect(input.layers.every(l => l.id !== "overlay_duplicate")).toBe(true);
+        expect(sanitizeDesign(JSON.parse(JSON.stringify(output)))).toEqual(output);
+        expect(renderSvg(output, 42)).toContain(">42</text>");
+      }
+    }
+  });
+
+  it("rejects missing or unsafe layer IDs, duplicate IDs and layer-limit overflow", () => {
+    const design = clonePreset("mc-end");
+    for (const [id, next] of [
+      ["not-real", "copy_x"], ["heading", "heading"],
+      ["heading", "../escape"], ["heading", "a".repeat(49)]
+    ]) {
+      expect(duplicateLayer(design, id, next)).toBe(design);
+    }
+    let full = design;
+    for (let i = full.layers.length; i < 32; i++) {
+      full = addLayer(full, "dot", "filler_" + i);
+    }
+    expect(full.layers).toHaveLength(32);
+    expect(duplicateLayer(full, "heading", "extra")).toBe(full);
+  });
+
+  it("keeps original approved pixels unchanged while duplicating an overlay", () => {
+    for (const theme of ["pixel-card", "terminal-card", "rpg-card"] as const) {
+      const design = clonePreset(theme);
+      const baseSvg = renderSvg(design, 12_847);
+      const duplicated = duplicateLayer(design, "visits", "duplicated_count");
+      expect(duplicated.layers.find(l => l.id === "duplicated_count")?.kind).toBe("count");
+      const result = renderSvg(duplicated, 12_847);
+      expect(result).toContain('href="data:image/avif;base64,');
+      expect(result).toContain(">12,847</text>");
+      expect(result).not.toContain("<foreignObject");
+      expect(baseSvg).toContain(">12,847</text>");
+      expect(design.layers).toHaveLength(1);
+    }
   });
 });

@@ -1,7 +1,10 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { isApprovedTheme, approvedCanvasWidth } from "./approved-reference-cards";
+import { isCardTheme } from "./card-art";
+import { restoreLocalDraft, saveLocalDraft } from "./local-draft";
 import { createRoot } from "react-dom/client";
 import {
-  addLayer, moveLayer, reorderLayer, renderSvg, sanitizeDesign,
+  addLayer, CARD_THEMES, duplicateLayer, MAX_VISITOR_COUNT, moveLayer, reorderLayer, renderSvg, resizeCanvas, sanitizeDesign,
   type Layer, type LayerKind, type TerminalDesign, type Theme
 } from "./model";
 import {
@@ -9,7 +12,7 @@ import {
   type Language
 } from "./i18n";
 import {
-  createHistory, finishDrag, previewDrag, recordEdit, redoEdit, undoEdit,
+  cancelDrag, createHistory, finishDrag, previewDrag, recordEdit, redoEdit, undoEdit,
   type EditHistory
 } from "./history";
 import {
@@ -20,27 +23,41 @@ import {
 } from "./publish-client";
 import "./style.css";
 
+// Preserve the original sample count on all six untouched illustrated styles
+// and the three legacy themes. Only the owner-approved 1 / 3 / 5 artwork uses
+// its exact 12,847 source-image sample when first selected.
 const PREVIEW_COUNT = 12856;
+const APPROVED_PREVIEW_COUNT = 12847;
 type MessageKey = keyof typeof translations.en;
 type MobileTab = "preview" | "layers" | "properties" | "export";
+function readBrowserDraft(): TerminalDesign | null {
+  if (typeof window === "undefined") return null;
+  try { return restoreLocalDraft(window.localStorage); } catch { return null; }
+}
+
 type DragState = {
   id: string;
   pointerId: number;
   startX: number;
   startY: number;
   before: TerminalDesign;
+  target: HTMLButtonElement;
 };
 
 function App() {
   const [language, setLanguage] = useState<Language>(readPreferredLanguage);
+  const [initialDraft] = useState<TerminalDesign | null>(readBrowserDraft);
   const [history, setHistory] = useState<EditHistory>(
-    () => createHistory(createLocalizedPreset("pixel", readPreferredLanguage()))
+    () => createHistory(initialDraft ?? createLocalizedPreset("pixel", language))
   );
-  const [selectedId, setSelectedId] = useState<string | null>("heading");
+  const [selectedId, setSelectedId] = useState<string | null>(
+    () => initialDraft ? initialDraft.layers.find(layer => layer.visible)?.id ?? null : "heading"
+  );
   const [demoCount, setDemoCount] = useState(PREVIEW_COUNT);
-  const [noticeKey, setNoticeKey] = useState<MessageKey>("noticeInitial");
+  const [noticeKey, setNoticeKey] = useState<MessageKey>(initialDraft ? "noticeDraftRestored" : "noticeInitial");
   const [mobileTab, setMobileTab] = useState<MobileTab>("preview");
   const [cleanPreview, setCleanPreview] = useState(false);
+  const [galleryExpanded, setGalleryExpanded] = useState(false);
   const [moveMode, setMoveMode] = useState(false);
   const [preciseOpen, setPreciseOpen] = useState(false);
   const [publishSession, setPublishSession] = useState<PublishSession | null>(null);
@@ -64,6 +81,14 @@ function App() {
   const selected = design.layers.find(layer => layer.id === selectedId) ?? null;
   const svg = renderSvg(design, demoCount);
   const preview = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
+  // Re-render thumbnails only when their localized stock captions change,
+  // not on every pointer drag, counter update or undo/redo operation.
+  const cardPreviews = useMemo(() => CARD_THEMES.map(theme => ({
+    theme,
+    src: "data:image/svg+xml;charset=utf-8," +
+      encodeURIComponent(renderSvg(createLocalizedPreset(theme, language),
+        isApprovedTheme(theme) ? APPROVED_PREVIEW_COUNT : PREVIEW_COUNT))
+  })), [language]);
   const layerName = (layer: Layer) =>
     layer.kind === "text" ? layer.text || t.blankText : names[layer.kind];
 
@@ -75,6 +100,39 @@ function App() {
       // Language switching continues to work without persistent browser storage.
     }
   }, [language]);
+
+  // Save only a sanitized design on this device. No remote requests or account
+  // secrets are involved; inaccessible/private-mode storage is optional.
+  useEffect(() => {
+    try { saveLocalDraft(window.localStorage, history.present); } catch {
+      // An offline HTML file or privacy mode can refuse localStorage access.
+    }
+  }, [history.present]);
+
+  // The browser can cancel capture without a final pointerup (phone call,
+  // system gesture, tab hidden, app switch). Roll back those uncommitted
+  // previews; never turn an interrupted touch into an undoable edit.
+  useEffect(() => {
+    const cancelInterrupted = () => {
+      const state = dragRef.current;
+      if (!state) return;
+      dragRef.current = null;
+      setHistory(current => cancelDrag(current, state.before));
+      if (state.target.hasPointerCapture(state.pointerId)) {
+        state.target.releasePointerCapture(state.pointerId);
+      }
+    };
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "hidden") cancelInterrupted();
+    };
+    window.addEventListener("blur", cancelInterrupted);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      window.removeEventListener("blur", cancelInterrupted);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      cancelInterrupted();
+    };
+  }, []);
 
   // OAuth return values are one-use. Remove them from the URL immediately;
   // React StrictMode may execute effects twice during local development.
@@ -268,6 +326,7 @@ function App() {
             {OFFLINE_DEMO_MODE ? "OFFLINE" : PUBLISH_UI_ENABLED ? "BETA" : "PREVIEW"}
           </span>
         </div>
+        <p className="publish-cache-caveat" role="note">{t.githubProxyCountingNotice}</p>
         {PUBLISH_UI_ENABLED && PUBLISH_PILOT_MODE && (
           <p className="publish-hint" role="note">{t.publishPilotNotice}</p>
         )}
@@ -410,11 +469,19 @@ function App() {
   }
 
   function edit(updater: (current: TerminalDesign) => TerminalDesign) {
+    // Changing properties, templates or layers during an in-flight gesture
+    // must discard its preview first, not accidentally commit it as a change.
+    cancelActiveDrag();
     setHistory(current => recordEdit(current, updater(current.present)));
   }
 
   function updateDesign(patch: Partial<TerminalDesign>) {
-    edit(current => sanitizeDesign({ ...current, ...patch }));
+    edit(current => {
+      const next = patch.width !== undefined || patch.height !== undefined
+        ? resizeCanvas(current, patch.width ?? current.width, patch.height ?? current.height)
+        : current;
+      return sanitizeDesign({ ...next, ...patch, width: next.width, height: next.height });
+    });
   }
 
   function updateSelected(patch: Partial<Layer>) {
@@ -428,8 +495,13 @@ function App() {
 
   function changePreset(theme: Theme) {
     edit(() => createLocalizedPreset(theme, language));
-    setSelectedId("heading");
+    setDemoCount(isApprovedTheme(theme) ? APPROVED_PREVIEW_COUNT : PREVIEW_COUNT);
+    setSelectedId(isApprovedTheme(theme) || theme.startsWith("mc-") ? "visits" : "heading");
     setCleanPreview(false);
+    // On phones the picker lives in the Layers sheet: immediately show the
+    // selected card, rather than leaving the new design hidden behind a sheet.
+    setMobileTab("preview");
+    setGalleryExpanded(false);
     setNoticeKey("noticeTemplate");
   }
 
@@ -449,7 +521,21 @@ function App() {
     });
     setSelectedId(id);
     setCleanPreview(false);
+    // On a phone, show the new text field immediately rather than leaving the
+    // editable element hidden behind the Layers sheet.
+    setMobileTab("properties");
     setNoticeKey("noticeAdded");
+  }
+
+  function duplicateSelected() {
+    if (!selectedId || design.layers.length >= 32) return;
+    let id = "";
+    do { id = "custom_" + nextId.current++; }
+    while (design.layers.some(layer => layer.id === id));
+    edit(current => duplicateLayer(current, selectedId, id));
+    setSelectedId(id);
+    setCleanPreview(false);
+    setNoticeKey("noticeDuplicated");
   }
 
   function removeSelected() {
@@ -470,11 +556,22 @@ function App() {
     }
   }
 
+  function cancelActiveDrag() {
+    const state = dragRef.current;
+    if (!state) return;
+    dragRef.current = null;
+    setHistory(current => cancelDrag(current, state.before));
+    if (state.target.hasPointerCapture(state.pointerId)) {
+      state.target.releasePointerCapture(state.pointerId);
+    }
+  }
+
   function startDrag(event: React.PointerEvent<HTMLButtonElement>, layer: Layer) {
-    if (event.button !== 0 || cleanPreview) return;
+    // Only one *primary* pointer may own a gesture. A second finger must not
+    // replace the initial snapshot or move another selected layer.
+    if (dragRef.current || !event.isPrimary || event.button !== 0 || cleanPreview) return;
     selectLayer(layer.id);
-    // On touch screens, a tap selects. Only explicit move mode captures
-    // the pointer, so normal vertical page scrolling remains usable.
+    // Tap selects, but normal phone scrolling stays enabled until Move Layers.
     if (event.pointerType === "touch" && !moveMode) return;
     event.preventDefault();
     dragRef.current = {
@@ -482,30 +579,56 @@ function App() {
       pointerId: event.pointerId,
       startX: event.clientX,
       startY: event.clientY,
-      before: design
+      before: design,
+      target: event.currentTarget
     };
-    event.currentTarget.setPointerCapture(event.pointerId);
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    } catch {
+      // Invalid pointer IDs (or browser removal of the target) cannot start
+      // a reliable drag. No preview or undo entry should remain.
+      dragRef.current = null;
+    }
+  }
+
+  function draggedDesign(state: DragState, x: number, y: number): TerminalDesign | null {
+    const bounds = stageRef.current?.getBoundingClientRect();
+    if (!bounds || bounds.width === 0 || bounds.height === 0) return null;
+    const dx = (x - state.startX) * state.before.width / bounds.width;
+    const dy = (y - state.startY) * state.before.height / bounds.height;
+    return moveLayer(state.before, state.id, dx, dy);
   }
 
   function drag(event: React.PointerEvent<HTMLButtonElement>) {
     const state = dragRef.current;
     if (!state || state.pointerId !== event.pointerId) return;
-    const bounds = stageRef.current?.getBoundingClientRect();
-    if (!bounds || bounds.width === 0 || bounds.height === 0) return;
-    const dx = (event.clientX - state.startX) * state.before.width / bounds.width;
-    const dy = (event.clientY - state.startY) * state.before.height / bounds.height;
-    const next = moveLayer(state.before, state.id, dx, dy);
-    setHistory(current => previewDrag(current, next));
+    const next = draggedDesign(state, event.clientX, event.clientY);
+    if (next) setHistory(current => previewDrag(current, next));
   }
 
-  function stopDrag(event: React.PointerEvent<HTMLButtonElement>) {
+  function finishPointerDrag(event: React.PointerEvent<HTMLButtonElement>) {
     const state = dragRef.current;
     if (!state || state.pointerId !== event.pointerId) return;
     dragRef.current = null;
-    setHistory(current => finishDrag(current, state.before));
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-      event.currentTarget.releasePointerCapture(event.pointerId);
+    // Capture the final coordinates even if the last pointermove was coalesced.
+    const next = draggedDesign(state, event.clientX, event.clientY);
+    setHistory(current => finishDrag(
+      next ? previewDrag(current, next) : current, state.before
+    ));
+    if (state.target.hasPointerCapture(state.pointerId)) {
+      state.target.releasePointerCapture(state.pointerId);
     }
+  }
+
+  function cancelPointerDrag(event: React.PointerEvent<HTMLButtonElement>) {
+    const state = dragRef.current;
+    if (state && state.pointerId === event.pointerId) cancelActiveDrag();
+  }
+
+  function lostPointerCapture(event: React.PointerEvent<HTMLButtonElement>) {
+    // A normal pointerup clears dragRef before releasing capture; unexpected
+    // lostpointercapture (including app switches) instead restores pre-drag.
+    cancelPointerDrag(event);
   }
 
   function nudge(event: React.KeyboardEvent<HTMLButtonElement>, id: string) {
@@ -529,12 +652,17 @@ function App() {
   }
 
   function undo() {
+    // Undo during a gesture must not preserve an uncommitted drag preview.
+    const state = dragRef.current;
+    if (state) cancelActiveDrag();
     setHistory(undoEdit);
     setSelectedId(null); // Avoid highlighting a layer that might no longer exist.
     setNoticeKey("noticeInitial");
   }
 
   function redo() {
+    const state = dragRef.current;
+    if (state) cancelActiveDrag();
     setHistory(redoEdit);
     setSelectedId(null);
     setNoticeKey("noticeInitial");
@@ -583,15 +711,66 @@ function App() {
   }
 
   function renderTemplates() {
+    const cardLabels = [
+      t.pixelCardTemplate, t.terminalCardTemplate, t.rpgCardTemplate,
+      t.minecraftOverworldTemplate, t.minecraftNetherTemplate,
+      t.minecraftEndTemplate
+    ];
     return (
-      <label className="field">{t.templateLabel}
-        <select value={design.theme}
-          onChange={event => changePreset(event.target.value as Theme)}>
-          <option value="pixel">{t.pixelTemplate}</option>
-          <option value="cyber">{t.cyberTemplate}</option>
-          <option value="minimal">{t.minimalTemplate}</option>
-        </select>
-      </label>
+      <div className="template-picker">
+        <label className="field">{t.templateLabel}
+          <select value={design.theme}
+            onChange={event => changePreset(event.target.value as Theme)}>
+            <optgroup label={t.cardTemplates}>
+              {CARD_THEMES.map((theme, index) =>
+                <option key={theme} value={theme}>{cardLabels[index]}</option>)}
+              {!CARD_THEMES.includes(design.theme as typeof CARD_THEMES[number]) &&
+                !["pixel", "cyber", "minimal"].includes(design.theme) && (
+                  <option value={design.theme}>{t.legacyTemplate} · {design.theme}</option>
+                )}
+            </optgroup>
+            <optgroup label={t.classicTemplates}>
+              <option value="pixel">{t.pixelTemplate}</option>
+              <option value="cyber">{t.cyberTemplate}</option>
+              <option value="minimal">{t.minimalTemplate}</option>
+            </optgroup>
+          </select>
+        </label>
+        <div className="template-gallery-head">
+          <strong>{t.cardTemplates}</strong>
+          <button type="button" className="gallery-expand"
+            aria-expanded={galleryExpanded}
+            onClick={() => setGalleryExpanded(current => !current)}>
+            {galleryExpanded ? t.galleryCollapse : t.galleryExpand}
+          </button>
+        </div>
+        <p className="template-gallery-hint">{t.galleryHint}</p>
+        <div className={"template-gallery" + (galleryExpanded ? " expanded" : " compact")}
+          aria-label={t.cardTemplates}>
+          {cardPreviews.map(({ theme, src }, index) => {
+            return (
+              <button key={theme} type="button"
+                className={"template-choice" + (design.theme === theme ? " active" : "")}
+                aria-pressed={design.theme === theme}
+                aria-label={cardLabels[index]}
+                title={cardLabels[index]}
+                onClick={() => changePreset(theme)}>
+                <img alt="" loading="lazy" draggable={false}
+                  width={isApprovedTheme(theme) ? approvedCanvasWidth(theme) : 600}
+                  height={isApprovedTheme(theme) ? 362 : 210}
+                  style={{aspectRatio: isApprovedTheme(theme) ? `${approvedCanvasWidth(theme)} / 362` : "600 / 210"}}
+                  src={src}/>
+                <span>{cardLabels[index]}</span>
+              </button>
+            );
+          })}
+        </div>
+        {isCardTheme(design.theme) && (
+          <p className="template-gallery-hint" role="note">
+            {isApprovedTheme(design.theme) ? t.approvedArtworkLimit : t.vectorArtworkLimit}
+          </p>
+        )}
+      </div>
     );
   }
 
@@ -689,6 +868,9 @@ function App() {
             </div>
             <div className="layer-actions">
               <button type="button" className="secondary small"
+                disabled={design.layers.length >= 32}
+                onClick={duplicateSelected}>{t.duplicateLayer}</button>
+              <button type="button" className="secondary small"
                 onClick={() => edit(d => reorderLayer(d, selected.id, -1))}>
                 {t.sendBack}
               </button>
@@ -710,11 +892,13 @@ function App() {
           <h3>{t.canvas}</h3><span>{t.readmeReady}</span>
         </div>
         <div className="form-grid canvas-settings">
-          <label className="field">{t.background}
-            <input type="color" value={design.background}
-              onChange={event => updateDesign({ background: event.target.value })}/>
-          </label>
-          <label className="field">{t.border}
+          {!isCardTheme(design.theme) && (
+            <label className="field">{t.background}
+              <input type="color" value={design.background}
+                onChange={event => updateDesign({ background: event.target.value })}/>
+            </label>
+          )}
+          <label className="field">{isCardTheme(design.theme) ? t.newLayerColor : t.border}
             <input type="color" value={design.accent}
               onChange={event => updateDesign({ accent: event.target.value })}/>
           </label>
@@ -739,14 +923,26 @@ function App() {
     );
   }
 
+  function startFreshDesign() {
+    if (!window.confirm(t.newDesignConfirm)) return;
+    cancelActiveDrag();
+    setHistory(createHistory(createLocalizedPreset("pixel", language)));
+    setSelectedId("heading");
+    setDemoCount(PREVIEW_COUNT);
+    setCleanPreview(false);
+    setMoveMode(false);
+    setMobileTab("preview");
+    setNoticeKey("noticeNewDesign");
+  }
+
   function renderExport() {
     return (
       <>
         <div className="preview-footer">
           <label className="field demo-count">{t.exampleCount}
-            <input type="number" min={0} max={999999999} value={demoCount}
+            <input type="number" min={0} max={MAX_VISITOR_COUNT} step={1} value={demoCount}
               onChange={event => setDemoCount(Math.max(
-                0, Math.min(999999999, Number(event.target.value) || 0)
+                0, Math.min(MAX_VISITOR_COUNT, Math.floor(Number(event.target.value) || 0))
               ))}/>
           </label>
           <span className="muted">{t.demoWarning}</span>
@@ -761,6 +957,8 @@ function App() {
               JSON.stringify(design, null, 2),
               "visitor-terminal.design.json", "application/json"
             )}>{t.saveDesign}</button>
+          <button type="button" className="secondary"
+            onClick={startFreshDesign}>{t.newDesign}</button>
           <label className="secondary import-label">{t.loadDesign}
             <input type="file" aria-label={t.importLabel}
               accept=".json,application/json" onChange={importDesign}/>
@@ -768,6 +966,7 @@ function App() {
           <button type="button" className="secondary"
             onClick={copySvg}>{t.copySvg}</button>
         </div>
+        <p className="hint" role="note">{t.localDraftHelp}</p>
         <p className="notice" role="status">{t[noticeKey]}</p>
         {!OFFLINE_DEMO_MODE && (
           <section className="offline-distribution" aria-label={t.offlineDownloadTitle}>
@@ -873,8 +1072,9 @@ function App() {
                   }}
                   onPointerDown={event => startDrag(event, layer)}
                   onPointerMove={drag}
-                  onPointerUp={stopDrag}
-                  onPointerCancel={stopDrag}
+                  onPointerUp={finishPointerDrag}
+                  onPointerCancel={cancelPointerDrag}
+                  onLostPointerCapture={lostPointerCapture}
                   onKeyDown={event => nudge(event, layer.id)}/>
               ))}
             </div>
@@ -882,12 +1082,12 @@ function App() {
 
           <div className="preview-modes">
             <button type="button" className={"mode-button" + (cleanPreview ? " active" : "")}
-              aria-pressed={cleanPreview} onClick={() => setCleanPreview(value => !value)}>
+              aria-pressed={cleanPreview} onClick={() => { cancelActiveDrag(); setCleanPreview(value => !value); }}>
               {cleanPreview ? "▣ " + t.editPreview : "◉ " + t.cleanPreview}
             </button>
             <button type="button" className={"mode-button mobile-only" + (moveMode ? " active" : "")}
               aria-pressed={moveMode} disabled={cleanPreview}
-              onClick={() => setMoveMode(value => !value)}>
+              onClick={() => { cancelActiveDrag(); setMoveMode(value => !value); }}>
               {moveMode ? t.moveModeOff : t.moveModeOn}
             </button>
             <button type="button" className="mode-button"
@@ -900,6 +1100,14 @@ function App() {
           <div className="mobile-guidance mobile-only">
             {cleanPreview ? t.cleanTip : t.previewTip}
           </div>
+          {selected && !cleanPreview && (
+            <button type="button" className="selected-layer-shortcut mobile-only"
+              onClick={() => { setMobileTab("properties"); setMoveMode(false); }}>
+              <span aria-hidden="true">✎</span>
+              <span>{t.editSelectedLayer} · {layerName(selected)}</span>
+              <span aria-hidden="true">›</span>
+            </button>
+          )}
 
           {preciseOpen && !cleanPreview && (
             <div className="precision-panel" aria-label={t.toolsLabel}>
@@ -965,6 +1173,7 @@ function App() {
             className={mobileTab === tab.id ? "active" : ""}
             aria-current={mobileTab === tab.id ? "page" : undefined}
             onClick={() => {
+              cancelActiveDrag();
               setMobileTab(tab.id);
               if (tab.id !== "preview") setCleanPreview(false);
             }}>

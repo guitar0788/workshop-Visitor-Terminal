@@ -1,4 +1,5 @@
 import { clonePreset, type TerminalDesign, type Theme } from "./model";
+import { isCardTheme } from "./card-art";
 
 export type Language = "zh-CN" | "en";
 export const LANGUAGE_STORAGE_KEY = "workshop-studio-language";
@@ -15,6 +16,24 @@ const english = {
   pixelTemplate: "🎮 Pixel Terminal",
   cyberTemplate: "✧ Cyber HUD",
   minimalTemplate: "◻ Minimal",
+  classicTemplates: "Classic styles",
+  legacyTemplate: "Previously saved style (no longer offered)",
+  cardTemplates: "Illustrated cards · 6",
+  galleryHint: "Swipe for more styles, including Overworld, Nether and The End. Tap a card to preview it.",
+  galleryExpand: "Show all 6",
+  galleryCollapse: "Swipe gallery",
+  pixelCardTemplate: "Pixel Card · Garden",
+  modernCardTemplate: "Modern Card",
+  terminalCardTemplate: "Terminal",
+  cozyCardTemplate: "Cozy Cat",
+  rpgCardTemplate: "RPG Badge",
+  spaceCardTemplate: "Space Explorer",
+  notebookCardTemplate: "Notebook",
+  neonCardTemplate: "Neon Tech",
+  minimalCardTemplate: "Minimal Badge",
+  minecraftOverworldTemplate: "Minecraft · Overworld",
+  minecraftNetherTemplate: "Minecraft · Nether",
+  minecraftEndTemplate: "Minecraft · The End",
   addLayer: "Add a layer",
   maxLayers: "MAX 32",
   layerList: "Layers",
@@ -28,6 +47,8 @@ const english = {
   hidden: "hidden",
   edit: "Edit",
   delete: "Delete",
+  duplicateLayer: "Duplicate layer",
+  editSelectedLayer: "Edit selected layer",
   textLabel: "Text",
   visibilityLabel: "Show this layer",
   xLabel: "X",
@@ -43,6 +64,9 @@ const english = {
   readmeReady: "README READY",
   background: "Background",
   border: "Border",
+  newLayerColor: "Default color for new layers",
+  approvedArtworkLimit: "The original title and decorations are baked into this approved image. Its live visitor count is editable; add text layers for extra wording without altering the original artwork.",
+  vectorArtworkLimit: "The illustrated scene is fixed. Its title, caption and visitor count are editable layers; you can add your own overlays." ,
   livePreview: "Live preview",
   svgPreview: "SVG PREVIEW",
   designSurface: "DESIGN SURFACE",
@@ -65,6 +89,9 @@ const english = {
   demoWarning: "Preview only · Not a live counter",
   downloadSvg: "Download SVG ↗",
   saveDesign: "Save design",
+  newDesign: "Start fresh",
+  newDesignConfirm: "Start a new design? Your current local draft will be replaced. Download a JSON backup first if needed. Published counters will not be deleted.",
+  localDraftHelp: "Drafts are saved in this browser when local storage is available. Download JSON for a portable backup; drafts do not sync across devices or publish online.",
   loadDesign: "Load design",
   copySvg: "Copy SVG",
   importLabel: "Load design JSON",
@@ -72,14 +99,17 @@ const english = {
   footerOpenSource: "OPEN SOURCE",
   footerAlpha: "STUDIO ALPHA",
   noticeInitial: "Drag an element to move it, or use arrow keys.",
-  noticeTemplate: "Template loaded. You can change every layer.",
-  noticeAdded: "Layer added. Drag it in the preview.",
+  noticeTemplate: "Template loaded. Select an editable layer or add an overlay.",
+  noticeAdded: "Layer added. Edit its properties now, then return to preview to position it.",
+  noticeDuplicated: "Layer copied with its appearance and position. Edit the new layer or adjust it in preview.",
   noticeRemoved: "Layer removed.",
   noticeCopied: "SVG source copied.",
   noticeClipboardError: "Clipboard access unavailable. Use Download SVG instead.",
   noticeTooLarge: "Design file exceeds the 64 KB limit.",
   noticeImported: "Design loaded locally.",
   noticeBadFile: "Invalid design JSON. Import a file exported from this editor.",
+  noticeDraftRestored: "Your previous local draft was restored on this device.",
+  noticeNewDesign: "Started a new editor design. Published counters were not changed.",
   mobilePreview: "Preview",
   mobileLayers: "Layers",
   mobileProperties: "Properties",
@@ -147,6 +177,7 @@ const english = {
   publishError: "Publishing action failed. Check your connection and sign in again if needed.",
   publishReadme: "README Markdown",
   publishVisits: "upstream requests",
+  githubProxyCountingNotice: "GitHub may serve a cached README image without contacting your Worker. The displayed number counts eligible image requests that reach your Worker, not profile views or unique people; refresh is not guaranteed.",
   publishPreviewWarning: "Publishing is currently disabled on this public Studio site. No real visitor data is generated here.",
   publishBusy: "Working…",
   publishSession: "Signed in as",
@@ -169,6 +200,24 @@ const chinese: TranslationCatalog = {
   pixelTemplate: "🎮 像素终端",
   cyberTemplate: "✧ 赛博仪表盘",
   minimalTemplate: "◻ 极简风格",
+  classicTemplates: "经典风格",
+  legacyTemplate: "已保存的旧风格（不再提供新建）",
+  cardTemplates: "插画卡片 · 6 款",
+  galleryHint: "左右滑动可查看主世界、下界和末地；点击卡片即可预览并编辑。",
+  galleryExpand: "展开全部 6 款",
+  galleryCollapse: "收起为滑动图库",
+  pixelCardTemplate: "像素卡片 · 花园",
+  modernCardTemplate: "现代卡片",
+  terminalCardTemplate: "终端风",
+  cozyCardTemplate: "萌系猫咪",
+  rpgCardTemplate: "RPG 徽章",
+  spaceCardTemplate: "太空探索",
+  notebookCardTemplate: "手账卡片",
+  neonCardTemplate: "霓虹科技",
+  minimalCardTemplate: "简约徽章",
+  minecraftOverworldTemplate: "我的世界 · 主世界",
+  minecraftNetherTemplate: "我的世界 · 下界",
+  minecraftEndTemplate: "我的世界 · 末地",
   addLayer: "添加图层",
   maxLayers: "最多 32 层",
   layerList: "图层列表",
@@ -182,6 +231,8 @@ const chinese: TranslationCatalog = {
   hidden: "已隐藏",
   edit: "编辑",
   delete: "删除",
+  duplicateLayer: "复制图层",
+  editSelectedLayer: "编辑当前图层",
   textLabel: "文字内容",
   visibilityLabel: "显示此图层",
   xLabel: "横坐标 X",
@@ -197,6 +248,9 @@ const chinese: TranslationCatalog = {
   readmeReady: "适用于 README",
   background: "背景颜色",
   border: "边框颜色",
+  newLayerColor: "新增图层的默认颜色",
+  approvedArtworkLimit: "这三款已批准的插画中，原有标题和装饰文字属于图片本身，不能直接改写。访客数字可以编辑；需要其他文字可新增图层覆盖，原图不变。",
+  vectorArtworkLimit: "场景插画本身固定不变，标题、说明和访客数字是可编辑图层，也可以新增文字或装饰。",
   livePreview: "实时预览",
   svgPreview: "SVG 预览",
   designSurface: "设计画布",
@@ -219,6 +273,9 @@ const chinese: TranslationCatalog = {
   demoWarning: "仅供预览 · 非真实访问统计",
   downloadSvg: "下载 SVG ↗",
   saveDesign: "保存设计",
+  newDesign: "重新开始设计",
+  newDesignConfirm: "确定重新开始设计吗？当前浏览器内的草稿将被新设计替换。建议先导出 JSON 备份；已发布计数器不会被删除。",
+  localDraftHelp: "浏览器允许本地存储时会自动保存草稿；跨设备或防止数据丢失请另外导出 JSON。草稿不会自动发布或同步到云端。",
   loadDesign: "导入设计",
   copySvg: "复制 SVG",
   importLabel: "导入设计 JSON",
@@ -226,14 +283,17 @@ const chinese: TranslationCatalog = {
   footerOpenSource: "开源项目",
   footerAlpha: "工作台测试版",
   noticeInitial: "拖动元素以调整位置，也可以使用方向按钮或键盘方向键。",
-  noticeTemplate: "模板已载入，所有图层都可以继续编辑。",
-  noticeAdded: "已添加图层，可以在预览区拖动调整。",
+  noticeTemplate: "模板已载入，可编辑现有图层或添加覆盖图层。",
+  noticeAdded: "已添加图层，直接修改属性，完成后返回预览调整位置。",
+  noticeDuplicated: "已复制图层并保留样式与位置，可以继续修改或移动。",
   noticeRemoved: "已删除图层。",
   noticeCopied: "SVG 源码已复制。",
   noticeClipboardError: "无法访问剪贴板，请改用“下载 SVG”。",
   noticeTooLarge: "设计文件超过 64 KB 大小限制。",
   noticeImported: "已在本地载入设计。",
   noticeBadFile: "设计 JSON 无效，请导入本编辑器导出的文件。",
+  noticeDraftRestored: "已恢复此浏览器上次保存的本地草稿。",
+  noticeNewDesign: "已重新开始设计，线上已发布的计数器未受影响。",
   mobilePreview: "预览",
   mobileLayers: "图层",
   mobileProperties: "属性",
@@ -301,6 +361,7 @@ const chinese: TranslationCatalog = {
   publishError: "发布操作失败，请检查网络；必要时重新登录。",
   publishReadme: "README Markdown",
   publishVisits: "上游图片请求",
+  githubProxyCountingNotice: "GitHub 可能直接返回缓存的 README 图片，不会每次都请求你的 Worker。卡片数字统计的是实际到达 Worker 的合格图片请求，不代表个人主页浏览量或独立访客，更新速度也不保证。",
   publishPreviewWarning: "当前公开工作台尚未开启发布服务，因此不会产生真实访问统计。",
   publishBusy: "正在处理…",
   publishSession: "已登录",
@@ -342,6 +403,22 @@ export function readPreferredLanguage(): Language {
 export function createLocalizedPreset(theme: Theme, language: Language): TerminalDesign {
   const design = clonePreset(theme);
   if (language !== "zh-CN") return design;
+  if (isCardTheme(theme)) {
+    const minecraftText: Record<string, [string, string]> = {
+      "mc-overworld": ["主世界访客", "方块探索 · 世界在线"],
+      "mc-nether": ["下界探索者", "传送门已开启 · 继续冒险"],
+      "mc-end": ["末地探索者", "越过传送门 · 探索虚空"]
+    };
+    return { ...design, layers: design.layers.map(layer => {
+      if (minecraftText[theme]) {
+        if (layer.id === "heading") return { ...layer, text: minecraftText[theme][0], fontSize: 20 };
+        if (layer.id === "caption") return { ...layer, text: minecraftText[theme][1], fontSize: 11 };
+        return layer;
+      }
+      return layer.id === "heading" ? { ...layer, text: theme === "minimal-card" ? "工坊" : "工坊访客" } :
+        layer.id === "caption" ? { ...layer, text: theme === "minimal-card" ? "访客" : "累计访问 · 谢谢你" } : layer;
+    }) };
+  }
   const title = theme === "pixel" ? "工坊访客终端" : theme === "cyber" ? "赛博访客终端" : "主页访问统计";
   return {
     ...design,
