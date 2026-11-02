@@ -506,7 +506,7 @@ export async function smokeSelfHostedCounter() {
     ];
     const foreignSlug = "v" + randomBytes(12).toString("hex");
     const legacySlug = "v" + randomBytes(12).toString("hex");
-    const bucket = Math.floor(Date.now() / 300_000);
+    let bucket = 0;
     const ip = "203.0.113.77";
     const receipt = slug => createHmac("sha256", VISIT_SECRET)
       .update(slug + "\0" + ip).digest("hex");
@@ -540,6 +540,8 @@ export async function smokeSelfHostedCounter() {
     };
     await writePublishingVars(accountId, false);
     await restartLocalWorker();
+    // Seed and replay within one five-minute receipt bucket, even on slower CI hosts.
+    bucket = Math.floor(Date.now() / 300_000);
 
     smokeStage = "account-delete-seed-local-only-d1-records";
     const createdAt = new Date().toISOString();
