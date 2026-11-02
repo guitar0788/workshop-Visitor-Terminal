@@ -197,12 +197,19 @@ async function verifyCatalogAfterRestart(api, catalog) {
       headers: { "CF-Connecting-IP": ip }
     });
     assert.equal(response.status, 200, "Persisted SVG failed for " + theme);
-    smokeStage = "restart-catalog:" + theme + ":validate-svg";
     const svg = await response.text();
+    smokeStage = "restart-catalog:" + theme + ":validate-counter";
     assert(svg.includes(">1</text>"), "Counter lost from persisted SVG: " + theme);
-    if (svgMarker) assert(svg.includes(svgMarker), "Scene lost after restart: " + theme);
-    if (theme === "mc-nether") assert(svg.includes("PERSISTED NETHER CARD"));
+    if (svgMarker) {
+      smokeStage = "restart-catalog:" + theme + ":validate-scene";
+      assert(svg.includes(svgMarker), "Scene lost after restart: " + theme);
+    }
+    if (theme === "mc-nether") {
+      smokeStage = "restart-catalog:" + theme + ":validate-updated-design";
+      assert(svg.includes("PERSISTED NETHER CARD"));
+    }
     if (ACTIVE_CARDS.includes(theme) && !theme.startsWith("mc-")) {
+      smokeStage = "restart-catalog:" + theme + ":validate-raster-image";
       assert(svg.includes("data:image/avif;base64,"),
         "Approved raster artwork lost after restart: " + theme);
     }
