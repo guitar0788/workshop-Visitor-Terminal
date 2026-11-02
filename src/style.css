@@ -8,7 +8,7 @@
 body { margin: 0; }
 button, input, select { font: inherit; }
 button { cursor: pointer; }
-button:focus-visible, input:focus-visible, select:focus-visible, .import-label:focus-within {
+button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible, .import-label:focus-within {
   outline: 2px solid #7ee787; outline-offset: 2px;
 }
 button:disabled { opacity: .42; cursor: not-allowed; }
@@ -117,7 +117,7 @@ footer span { margin: 0 8px; }
   .site-head p { font-size: 14px; }
   .site-brand { font-size: 11px; }
 }
-@media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; } }
 
 /* Touch editing: provide button alternatives to pixel-sized drag targets. */
 .touch-tools {
