@@ -12,7 +12,7 @@ import {
   type Language
 } from "./i18n";
 import {
-  createHistory, finishDrag, previewDrag, recordEdit, redoEdit, undoEdit,
+  cancelDrag, createHistory, finishDrag, previewDrag, recordEdit, redoEdit, undoEdit,
   type EditHistory
 } from "./history";
 import {
@@ -41,6 +41,7 @@ type DragState = {
   startX: number;
   startY: number;
   before: TerminalDesign;
+  target: HTMLButtonElement;
 };
 
 function App() {
@@ -107,6 +108,31 @@ function App() {
       // An offline HTML file or privacy mode can refuse localStorage access.
     }
   }, [history.present]);
+
+  // The browser can cancel capture without a final pointerup (phone call,
+  // system gesture, tab hidden, app switch). Roll back those uncommitted
+  // previews; never turn an interrupted touch into an undoable edit.
+  useEffect(() => {
+    const cancelInterrupted = () => {
+      const state = dragRef.current;
+      if (!state) return;
+      dragRef.current = null;
+      setHistory(current => cancelDrag(current, state.before));
+      if (state.target.hasPointerCapture(state.pointerId)) {
+        state.target.releasePointerCapture(state.pointerId);
+      }
+    };
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "hidden") cancelInterrupted();
+    };
+    window.addEventListener("blur", cancelInterrupted);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      window.removeEventListener("blur", cancelInterrupted);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      cancelInterrupted();
+    };
+  }, []);
 
   // OAuth return values are one-use. Remove them from the URL immediately;
   // React StrictMode may execute effects twice during local development.
@@ -527,11 +553,22 @@ function App() {
     }
   }
 
+  function cancelActiveDrag() {
+    const state = dragRef.current;
+    if (!state) return;
+    dragRef.current = null;
+    setHistory(current => cancelDrag(current, state.before));
+    if (state.target.hasPointerCapture(state.pointerId)) {
+      state.target.releasePointerCapture(state.pointerId);
+    }
+  }
+
   function startDrag(event: React.PointerEvent<HTMLButtonElement>, layer: Layer) {
-    if (event.button !== 0 || cleanPreview) return;
+    // Only one *primary* pointer may own a gesture. A second finger must not
+    // replace the initial snapshot or move another selected layer.
+    if (dragRef.current || !event.isPrimary || event.button !== 0 || cleanPreview) return;
     selectLayer(layer.id);
-    // On touch screens, a tap selects. Only explicit move mode captures
-    // the pointer, so normal vertical page scrolling remains usable.
+    // Tap selects, but normal phone scrolling stays enabled until Move Layers.
     if (event.pointerType === "touch" && !moveMode) return;
     event.preventDefault();
     dragRef.current = {
@@ -539,30 +576,56 @@ function App() {
       pointerId: event.pointerId,
       startX: event.clientX,
       startY: event.clientY,
-      before: design
+      before: design,
+      target: event.currentTarget
     };
-    event.currentTarget.setPointerCapture(event.pointerId);
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    } catch {
+      // Invalid pointer IDs (or browser removal of the target) cannot start
+      // a reliable drag. No preview or undo entry should remain.
+      dragRef.current = null;
+    }
+  }
+
+  function draggedDesign(state: DragState, x: number, y: number): TerminalDesign | null {
+    const bounds = stageRef.current?.getBoundingClientRect();
+    if (!bounds || bounds.width === 0 || bounds.height === 0) return null;
+    const dx = (x - state.startX) * state.before.width / bounds.width;
+    const dy = (y - state.startY) * state.before.height / bounds.height;
+    return moveLayer(state.before, state.id, dx, dy);
   }
 
   function drag(event: React.PointerEvent<HTMLButtonElement>) {
     const state = dragRef.current;
     if (!state || state.pointerId !== event.pointerId) return;
-    const bounds = stageRef.current?.getBoundingClientRect();
-    if (!bounds || bounds.width === 0 || bounds.height === 0) return;
-    const dx = (event.clientX - state.startX) * state.before.width / bounds.width;
-    const dy = (event.clientY - state.startY) * state.before.height / bounds.height;
-    const next = moveLayer(state.before, state.id, dx, dy);
-    setHistory(current => previewDrag(current, next));
+    const next = draggedDesign(state, event.clientX, event.clientY);
+    if (next) setHistory(current => previewDrag(current, next));
   }
 
-  function stopDrag(event: React.PointerEvent<HTMLButtonElement>) {
+  function finishPointerDrag(event: React.PointerEvent<HTMLButtonElement>) {
     const state = dragRef.current;
     if (!state || state.pointerId !== event.pointerId) return;
     dragRef.current = null;
-    setHistory(current => finishDrag(current, state.before));
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-      event.currentTarget.releasePointerCapture(event.pointerId);
+    // Capture the final coordinates even if the last pointermove was coalesced.
+    const next = draggedDesign(state, event.clientX, event.clientY);
+    setHistory(current => finishDrag(
+      next ? previewDrag(current, next) : current, state.before
+    ));
+    if (state.target.hasPointerCapture(state.pointerId)) {
+      state.target.releasePointerCapture(state.pointerId);
     }
+  }
+
+  function cancelPointerDrag(event: React.PointerEvent<HTMLButtonElement>) {
+    const state = dragRef.current;
+    if (state && state.pointerId === event.pointerId) cancelActiveDrag();
+  }
+
+  function lostPointerCapture(event: React.PointerEvent<HTMLButtonElement>) {
+    // A normal pointerup clears dragRef before releasing capture; unexpected
+    // lostpointercapture (including app switches) instead restores pre-drag.
+    cancelPointerDrag(event);
   }
 
   function nudge(event: React.KeyboardEvent<HTMLButtonElement>, id: string) {
@@ -586,12 +649,17 @@ function App() {
   }
 
   function undo() {
+    // Undo during a gesture must not preserve an uncommitted drag preview.
+    const state = dragRef.current;
+    if (state) cancelActiveDrag();
     setHistory(undoEdit);
     setSelectedId(null); // Avoid highlighting a layer that might no longer exist.
     setNoticeKey("noticeInitial");
   }
 
   function redo() {
+    const state = dragRef.current;
+    if (state) cancelActiveDrag();
     setHistory(redoEdit);
     setSelectedId(null);
     setNoticeKey("noticeInitial");
@@ -1000,8 +1068,9 @@ function App() {
                   }}
                   onPointerDown={event => startDrag(event, layer)}
                   onPointerMove={drag}
-                  onPointerUp={stopDrag}
-                  onPointerCancel={stopDrag}
+                  onPointerUp={finishPointerDrag}
+                  onPointerCancel={cancelPointerDrag}
+                  onLostPointerCapture={lostPointerCapture}
                   onKeyDown={event => nudge(event, layer.id)}/>
               ))}
             </div>
@@ -1014,7 +1083,7 @@ function App() {
             </button>
             <button type="button" className={"mode-button mobile-only" + (moveMode ? " active" : "")}
               aria-pressed={moveMode} disabled={cleanPreview}
-              onClick={() => setMoveMode(value => !value)}>
+              onClick={() => { cancelActiveDrag(); setMoveMode(value => !value); }}>
               {moveMode ? t.moveModeOff : t.moveModeOn}
             </button>
             <button type="button" className="mode-button"
