@@ -140,7 +140,7 @@ export function createMobileQA(){
     "const currentDraft=()=>frame.contentWindow.localStorage.getItem('workshop-studio-draft-v1');",
     "const draftBeforeDrag=await until(()=>{const json=currentDraft();",
     "return json&&json.includes('MOBILE EDIT DUPLICATE')?json:null});",
-    "checkpoint='drag cancel rollback';"
+    "checkpoint='drag cancel rollback';",
     "// Cancel must roll back a visible preview and must NOT consume Undo.",
     "pointer('pointerdown',102,130,140);",
     "pointer('pointermove',102,182,184);await until(onMoved);",
@@ -149,7 +149,7 @@ export function createMobileQA(){
     "errors.push('uncommitted drag preview leaked into saved local draft');",
     "pointer('pointercancel',102,182,184);await until(onOriginal);",
     "await sleep(150);if(currentDraft()!==draftBeforeDrag)",
-    "errors.push('canceled touch modified saved local draft');"
+    "errors.push('canceled touch modified saved local draft');",
     "if(captureId!==null)errors.push('canceled pointer retained capture');",
     "const undoButton=page.querySelectorAll('.preview-actions .history-button')[0];",
     "const redoButton=page.querySelectorAll('.preview-actions .history-button')[1];",
@@ -162,7 +162,7 @@ export function createMobileQA(){
     "checkpoint='canceled drag redo stack';",
     "redoButton.click();await until(()=>duplicates()>=2);",
     "await until(()=>currentDraft()===draftBeforeDrag);",
-    "// React clears selection on Undo/Redo. Re-select the same existing copy."
+    "// React clears selection on Undo/Redo. Re-select the same existing copy.",
     "const targetAgain=[...page.querySelectorAll('.stage .target')].find(el=>",
     "el.getAttribute('aria-label')?.includes('MOBILE EDIT DUPLICATE'));",
     "if(!targetAgain)throw Error('Duplicated layer not visible after redo');",
@@ -186,7 +186,7 @@ export function createMobileQA(){
     "await until(()=>targetAgain.style.left===origX&&targetAgain.style.top===origY);",
     "if(currentDraft()!==draftBeforeDrag)",
     "errors.push('multitouch cancellation modified saved local draft');",
-    "checkpoint='lost pointer capture rollback';"
+    "checkpoint='lost pointer capture rollback';",
     "// Unexpected capture loss is a rollback, not a committed drag.",
     "send('pointerdown',105,130,140);send('pointermove',105,180,175);",
     "await until(()=>targetAgain.style.left!==origX||targetAgain.style.top!==origY);",
@@ -198,7 +198,7 @@ export function createMobileQA(){
     "frame.contentWindow.dispatchEvent(new frame.contentWindow.Event('blur'));",
     "await until(()=>targetAgain.style.left===origX&&targetAgain.style.top===origY);",
     "if(ownedId!==null)errors.push('window blur left stale pointer capture');",
-    "if(currentDraft()!==draftBeforeDrag)errors.push('focus loss saved canceled drag');"
+    "if(currentDraft()!==draftBeforeDrag)errors.push('focus loss saved canceled drag');",
     "checkpoint='move mode toggle rollback';",
     "send('pointerdown',109,130,140);send('pointermove',109,172,169);",
     "await until(()=>targetAgain.style.left!==origX||targetAgain.style.top!==origY);",
@@ -218,13 +218,13 @@ export function createMobileQA(){
     "checkpoint='committed draft persistence';",
     "const committedDraft=await until(()=>{const json=currentDraft();",
     "return json&&json!==draftBeforeDrag?json:null});",
-    "checkpoint='completed drag undo';"
+    "checkpoint='completed drag undo';",
     "undoButton.click();await until(()=>targetAgain.style.left===origX&&targetAgain.style.top===origY);",
     "await until(()=>currentDraft()===draftBeforeDrag);",
     "checkpoint='completed drag redo';",
     "redoButton.click();await until(()=>targetAgain.style.left===committed.x&&",
     "targetAgain.style.top===committed.y);",
-    "await until(()=>currentDraft()===committedDraft);"
+    "await until(()=>currentDraft()===committedDraft);",
     "if(captureId!==null||ownedId!==null)errors.push('pointer capture leaked after drag');",
     "nav[3].click();",
     "const previewCount=await until(()=>page.querySelector('.mobile-sheet .demo-count input[type=number]'));",
