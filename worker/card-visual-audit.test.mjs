@@ -23,6 +23,7 @@ test("gallery builds from actual bundled model with all six selectable cards at 
     assert.match(html,/getBBox\(\)/);
     assert(html.includes("remote SVG")==false);
     assert.equal(html.split("data:image/avif;base64,").length-1,6);
+    assert.equal(html.split("data:image/webp;base64,").length-1,6);
     assert(!html.includes('href="https://'));
     assert(!/https:\/\/evil\.example|<foreignObject\b/i.test(html));
     assert(html.includes("NOT cloud statistics."));

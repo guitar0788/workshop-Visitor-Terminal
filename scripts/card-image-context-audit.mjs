@@ -18,7 +18,9 @@ export function makeImageReview(samples){
     const images=typeof s.svg==="string" ? s.svg.match(/<image\b[^>]*>/g)||[] : [];
     if(!IMAGE_THEMES.includes(s.theme)||!IMAGE_COUNTS.includes(s.count)||
       typeof s.svg!=="string"||!s.svg.startsWith('<svg xmlns="http://www.w3.org/2000/svg"')||
-      (approved ? images.length!==1 || !images[0].includes('href="data:image/avif;base64,') : images.length!==0)||
+      (images.length!==1 || !(approved ?
+        /href="data:image\/avif;base64,[A-Za-z0-9+/=]+"/.test(images[0]) :
+        /href="data:image\/webp;base64,[A-Za-z0-9+/=]{6000,40000}"/.test(images[0])))||
       /<script\b|<foreignObject\b|\shref="https?:|url\(https?:/i.test(s.svg)||
       seen.has(s.theme+":"+s.count))throw Error("Unapproved SVG image sample");
     seen.add(s.theme+":"+s.count);

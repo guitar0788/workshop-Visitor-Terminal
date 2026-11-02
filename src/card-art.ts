@@ -1,7 +1,7 @@
-/** Original vector recreation of the owner's nine-card visual reference.
- *  Artwork contains no headings or numbers: live visitor data is drawn by the
- *  existing editable layers. Native canvas for new cards: 600 × 210.
- *  No script, image href, remote font, CDN or external resource.
+/** Self-contained illustrated card assets: no remote fonts, CDNs or scripts.
+ * Minecraft-inspired scenes use generated local WebP art, not primitive SVG
+ * constructions. Live visitor metrics remain independent editable layers.
+ * The three approved source plates are handled in approved-reference-cards.
  */
 import { minecraftArtwork, isMinecraftTheme, type MinecraftTheme } from "./minecraft-card-art";
 export { MINECRAFT_THEMES } from "./minecraft-card-art";

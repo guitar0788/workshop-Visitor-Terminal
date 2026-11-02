@@ -52,8 +52,10 @@ const browserScript = [
   "}}",
   "if(svg.querySelector('script,foreignObject'))failures.push('unsafe svg');",
   "const images=[...svg.querySelectorAll('image')];",
-  "if(images.length!==(approved?1:0))failures.push('unexpected artwork images');",
-  "for(const im of images){if(!/^data:image\\/avif;base64,[A-Za-z0-9+/=]+$/.test(im.getAttribute('href')||''))failures.push('external artwork image');}",
+  "if(images.length!==1)failures.push('unexpected artwork images');",
+  "for(const im of images){const mime=approved?'avif':'webp';",
+  "if(!(new RegExp('^data:image/'+mime+';base64,[A-Za-z0-9+/=]+$')).test(im.getAttribute('href')||''))",
+  "failures.push('external or wrong-format artwork image');}",
   "}",
   "document.getElementById('visual-audit').textContent=JSON.stringify({",
   "schemaVersion:1,kind:'workshop-visitor-terminal-browser-svg-audit',",
@@ -75,14 +77,17 @@ export function createGallery(samples) {
     }
     const approved = ["pixel-card","terminal-card","rpg-card"].includes(s.name);
     const embeddedImages = s.svg.match(/<image\b[^>]*>/g) || [];
-    if(embeddedImages.length!==(approved?1:0))throw Error("Unexpected SVG image element");
-    let checked = s.svg;
+    if(embeddedImages.length!==1) throw Error("Unexpected SVG image element");
+    const tag = embeddedImages[0];
     if(approved) {
-      const tag=embeddedImages[0];
-      if(!/href="data:image\/avif;base64,[A-Za-z0-9+/=]{90000,120000}"/.test(tag) ||
-        !/^<image\b/.test(tag))throw Error("Non-approved external image reference");
-      checked=checked.replace(tag,"");
+      if(!/href="data:image\/avif;base64,[A-Za-z0-9+/=]{90000,120000}"/.test(tag))
+        throw Error("Non-approved reference image");
+    } else {
+      if(!/href="data:image\/webp;base64,[A-Za-z0-9+/=]{6000,40000}"/.test(tag) ||
+        !/width="600" height="210"/.test(tag))
+        throw Error("Unapproved Minecraft image or dimensions");
     }
+    const checked=s.svg.replace(tag,"");
     if(/<script\b|<foreignObject\b|<image\b|\shref\s*=/i.test(checked)) {
       throw Error("Active, extra or external image markup");
     }

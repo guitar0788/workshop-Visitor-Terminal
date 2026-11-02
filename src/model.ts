@@ -246,7 +246,8 @@ export function renderSvg(input: unknown, visits: number): string {
     parts.push(approvedBackdrop(d.theme, d.width, d.height, !pristine));
     parts.push(approvedCountMarkup(d.theme, counter, countLayer ?? null, scope));
   } else if (isCardTheme(d.theme)) {
-    // All other six illustrated cards retain their existing vector artwork.
+    // Minecraft-inspired scenes use image-authored self-contained plates;
+    // visitor numbers and labels remain editable overlay layers.
     parts.push('<g transform="scale(', String(d.width / 600), ' ', String(d.height / 210),
       ')">', scopedCardArtwork(cardArtwork(d.theme), scope), '</g>');
   } else {
