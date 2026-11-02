@@ -6,7 +6,7 @@ import { MAX_DESIGN_FILE_BYTES, parseDesignFile } from "./design-file";
 import { createRoot } from "react-dom/client";
 import {
   addLayer, CARD_THEMES, duplicateLayer, MAX_VISITOR_COUNT, moveLayer, reorderLayer, renderSvg, resizeCanvas, sanitizeDesign,
-  type Layer, type LayerKind, type TerminalDesign, type Theme
+  type Layer, type LayerKind, type TerminalDesign, type TextAlign, type Theme
 } from "./model";
 import {
   createLocalizedPreset, LANGUAGE_STORAGE_KEY, readPreferredLanguage, translations,
@@ -869,6 +869,16 @@ function App() {
                         updateSelected({ fontSize: event.target.valueAsNumber });
                       }
                     }}/>
+                </label>
+              )}
+              {(selected.kind === "text" || selected.kind === "count") && (
+                <label className="field">{t.textAlignment}
+                  <select aria-label={t.textAlignment} value={selected.textAlign ?? "left"}
+                    onChange={event => updateSelected({ textAlign: event.target.value as TextAlign })}>
+                    <option value="left">{t.alignLeft}</option>
+                    <option value="center">{t.alignCenter}</option>
+                    <option value="right">{t.alignRight}</option>
+                  </select>
                 </label>
               )}
               <label className="field">{t.color}
