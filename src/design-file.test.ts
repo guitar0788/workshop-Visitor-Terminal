@@ -22,6 +22,17 @@ describe("strict, lossless Studio design-file import", () => {
     }
   });
 
+  it("imports older schema-v1 designs without alignment as left-aligned layers", () => {
+    const current = clonePreset("mc-nether");
+    const legacy = {
+      ...current,
+      layers: current.layers.map(({ textAlign: _textAlign, ...layer }) => layer)
+    };
+    const imported = parseDesignFile(encode(legacy));
+    expect(imported).toEqual(current);
+    expect(imported.layers.every(layer => layer.textAlign === "left")).toBe(true);
+  });
+
   it("rejects malformed JSON, unsupported schema versions and unknown themes", () => {
     for (const json of [
       "", "{ broken", "null", "[]",
@@ -60,7 +71,8 @@ describe("strict, lossless Studio design-file import", () => {
       { ...sample, layers: [{ ...layer, text: "x".repeat(121) }] },
       { ...sample, layers: [{ ...layer, text: "unsafe\u0001text" }] },
       { ...sample, layers: [{ ...layer, color: "red" }] },
-      { ...sample, layers: [{ ...layer, visible: "yes" }] }
+      { ...sample, layers: [{ ...layer, visible: "yes" }] },
+      { ...sample, layers: [{ ...layer, textAlign: "justify" }] }
     ];
     for (const value of cases) {
       expect(() => parseDesignFile(encode(value))).toThrow();
