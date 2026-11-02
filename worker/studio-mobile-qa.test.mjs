@@ -35,6 +35,10 @@ test("mobile browser integration page exercises real app tabs and six current st
   assert(html.includes("checkpoint='committed draft persistence'"));
   assert(html.includes("currentDraft()===draftBeforeDrag"));
   assert(html.includes("currentDraft()===committedDraft"));
+  assert(html.includes("invalid import safety"));
+  assert(html.includes("invalid import overwrote local draft"));
+  assert(html.includes("invalid import replaced current Studio design"));
+  assert(html.includes("design JSON import control missing on phone"));
   assert(html.includes("send('pointerup'"));
   assert(html.includes("undoButton.click()"));
   assert(html.includes("redoButton.click()"));
