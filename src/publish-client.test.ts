@@ -13,12 +13,9 @@ describe("v0.5 browser publishing safety", () => {
   it("keeps the destructive account control hidden unless a separate build opts in", () => {
     expect(ACCOUNT_DELETION_UI_ENABLED).toBe(false);
   });
-  it("validates the exact GitHub login shape before account deletion", async () => {
-    for (const invalid of ["", "bad login", "-starts-with-dash", "ends-with-dash-",
-      "x".repeat(40), "login/name"]) {
-      await expect(deletePublishedAccount("session", invalid))
-        .rejects.toThrow("Invalid GitHub login");
-    }
+  it("refuses account deletion API calls while the separate feature flag is off", async () => {
+    await expect(deletePublishedAccount("session", "guitar0788"))
+      .rejects.toThrow("Account deletion is not available");
   });
   it("refuses arbitrary images as published README embed links", () => {
     expect(() => markdownEmbed("https://malicious.example/counter.svg")).toThrow();
