@@ -23,3 +23,5 @@ selfhost-readonly-*.json
 selfhost-ci-report.json
 local-readiness.json
 live-check.json
+# Local-only recovered self-host Studio designs; inspect before sharing.
+visitor-terminal-*.design.json
