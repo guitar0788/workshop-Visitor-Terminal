@@ -355,6 +355,7 @@ button, a, input, select { -webkit-tap-highlight-color: transparent; }
     border-bottom: 1px solid #354550;
   }
   .sheet-heading h2 { font-size: 16px; }
+  .sheet-heading h2:focus-visible { outline: 2px solid #7ee787; outline-offset: 4px; border-radius: 2px; }
   .sheet-heading button {
     width: 36px; height: 36px; border-radius: 9px;
     background: #263640; border: 1px solid #465865;
