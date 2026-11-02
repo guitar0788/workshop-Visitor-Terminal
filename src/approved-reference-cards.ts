@@ -124,7 +124,6 @@ export function approvedCountMarkup(theme: ApprovedTheme, counter: string,
   const font = Math.max(8, Math.min(layer.fontSize,
     Math.floor((layer.width - 5) / (counter.length * 0.65)),
     Math.floor(layer.height * .78)));
-  const x = layer.x;
   // Keep resized counts vertically centered at the approved numeral row.
   const alignment = layer.textAlign ?? "left";
   const textAnchor = alignment === "center" ? "middle" : alignment === "right" ? "end" : "start";
