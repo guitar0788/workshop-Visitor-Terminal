@@ -386,7 +386,7 @@ export function addLayer(input: TerminalDesign, kind: LayerKind, id: string): Te
   const layer: Layer = {
     id, kind, x, y, width, height,
     text: kind === "text" ? "YOUR TEXT" : "", fontSize: 18,
-    color: input.accent, visible: true
+    color: input.accent, visible: true, textAlign: "left"
   };
   return { ...input, layers: [...input.layers, layer] };
 }
