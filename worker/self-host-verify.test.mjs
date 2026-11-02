@@ -89,6 +89,41 @@ test("all checks are read-only, secret sent only to authenticated usage and no e
   assert(mock.calls.slice(0, 3).every(x => !x.init.headers.Authorization));
 });
 
+test("read-only verifier never opens a local admin token until anonymous safety gates pass", async () => {
+  const missingSecret = "/private/DO-NOT-LOG-my-admin-token";
+  const examples = [
+    { health: 503 },
+    { publishing: 200 },
+    { adminAnonymous: 200 }
+  ];
+  for (const unsafe of examples) {
+    const mock = responses(unsafe);
+    await assert.rejects(() => verifySelfHost({
+      api: ORIGIN, "token-file": missingSecret
+    }, {
+      environment: {}, ...mock
+    }), /Health|Publishing gate|Anonymous admin/);
+    assert(mock.calls.length <= 3,
+      "Unsafe Worker must be rejected before reading its local admin secret");
+    assert(mock.calls.every(c => !c.init.headers.Authorization));
+  }
+
+  const legitimate = responses();
+  await assert.rejects(() => verifySelfHost({
+    api: ORIGIN, "token-file": missingSecret
+  }, {
+    environment: {}, ...legitimate
+  }), error => {
+    assert.match(error.message, /Could not read local administrator token file/);
+    assert(!error.message.includes(missingSecret));
+    return true;
+  });
+  assert.deepEqual(legitimate.calls.map(x => new URL(x.url).pathname), [
+    "/health", "/v1/my/counters", "/v1/admin/usage"
+  ]);
+  assert(legitimate.calls.every(c => !c.init.headers.Authorization));
+});
+
 test("optional known slug uses HEAD and verifies real SVG media type", async () => {
   const mock = responses({ image: 200 });
   const result = await verifySelfHost({ api: ORIGIN, slug: "my-counter" },
