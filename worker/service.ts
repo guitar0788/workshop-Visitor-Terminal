@@ -255,7 +255,20 @@ async function admin(request: Request, env: WorkerEnv, path: string, now: number
       baselineCapturedAt: row.baseline_captured_at, baselineAppliedAt: row.baseline_applied_at
     }) : error("Counter not found", 404);
   }
-  if (request.method !== "POST") return methodNotAllowed("POST");
+  if (action === "design" && request.method === "GET") {
+    // Explicitly opt-in self-hosted installations only: never expose the
+    // stored Studio design from an OAuth/pilot installation or anonymously.
+    if (env.SELF_HOST_ADMIN_LIST_ENABLED !== "true" ||
+        env.PUBLISHING_ENABLED !== "false") return methodNotAllowed("POST");
+    const row = await getCounter(env.DB, slug);
+    if (!row) return error("Counter not found", 404);
+    const stored = JSON.parse(row.design_json) as unknown;
+    if (!isObject(stored) || stored.schemaVersion !== 1 ||
+        !Array.isArray(stored.layers)) throw Error("Invalid stored Studio design");
+    // Whitelist design fields; never return owner, IP hashes or D1 metadata.
+    return json({ slug, design: sanitizeDesign(stored) });
+  }
+  if (request.method !== "POST") return methodNotAllowed(action === "design" ? "GET, POST" : "POST");
   return action === "design" ? updateDesign(request, env, slug) :
     seedLegacy(request, env, slug, now);
 }
