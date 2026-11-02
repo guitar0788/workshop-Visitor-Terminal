@@ -4,7 +4,7 @@
  * The administrator token stays in the local environment or an ignored file;
  * never embed it in HTML, a GitHub Action, a URL, or a public README.
  */
-import { readFile, open, writeFile } from "node:fs/promises";
+import { readFile, open, writeFile, lstat } from "node:fs/promises";
 import { resolve, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { resolveSelfHostApi } from "./self-host-api.mjs";
@@ -306,13 +306,35 @@ export function validateExportDesign(value) {
   };
 }
 
-/** Save only into the operator's current directory. Never overwrite any file
- * (including symlinks). Backup data is a Studio design, NOT a D1 export. */
-export async function saveExportedDesign(slug, design, { directory = process.cwd() } = {}) {
+const BACKUP_EXISTS = "Local design backup already exists; no file was overwritten. Move the existing backup before exporting again.";
+
+function exportFileName(slug) {
   if (typeof slug !== "string" || !SLUG.test(slug)) {
     throw Error("Invalid counter slug for local design recovery");
   }
-  const fileName = "visitor-terminal-" + slug + ".design.json";
+  return "visitor-terminal-" + slug + ".design.json";
+}
+
+/** Reject unnecessary remote requests if the local output is already occupied. */
+export async function assertExportDestinationAvailable(slug, { directory = process.cwd() } = {}) {
+  const fileName = exportFileName(slug);
+  let occupied = false;
+  try {
+    await lstat(join(directory, fileName));
+    occupied = true;
+  } catch (error) {
+    if (error?.code !== "ENOENT") {
+      throw Error("Could not inspect local design backup location; no remote request was made.");
+    }
+  }
+  if (occupied) throw Error(BACKUP_EXISTS);
+  return fileName;
+}
+
+/** Save only into the operator's current directory. Never overwrite any file
+ * (including symlinks). Backup data is a Studio design, NOT a D1 export. */
+export async function saveExportedDesign(slug, design, { directory = process.cwd() } = {}) {
+  const fileName = exportFileName(slug);
   const sanitized = validateExportDesign(design);
   const contents = JSON.stringify(sanitized, null, 2) + "\n";
   if (Buffer.byteLength(contents, "utf8") > MAX_DESIGN_FILE_BYTES) {
@@ -322,7 +344,7 @@ export async function saveExportedDesign(slug, design, { directory = process.cwd
     await writeFile(join(directory, fileName), contents, { flag: "wx", mode: 0o600 });
   } catch (error) {
     if (error?.code === "EEXIST") {
-      throw Error("Local design backup already exists; no file was overwritten. Move the existing backup before exporting again.");
+      throw Error(BACKUP_EXISTS);
     }
     // Avoid echoing private local directory names or native filesystem errors.
     throw Error("Could not save recovered Studio design in the current directory; no existing file was replaced.");
@@ -339,6 +361,9 @@ export async function execute(options, { fetchImpl = fetch, environment = proces
   const design = options.command === "create" || options.command === "update"
     ? await readDesign(options.design)
     : null;
+  if (options.command === "export") {
+    await assertExportDestinationAvailable(options.slug, { directory });
+  }
   await assertSafePublishingTarget(origin, fetchImpl);
   const token = await readAdminToken({ tokenFile: options["token-file"], environment });
   if (options.command === "list") {
