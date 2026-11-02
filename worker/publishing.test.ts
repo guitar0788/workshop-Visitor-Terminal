@@ -98,6 +98,10 @@ class MockD1 implements PublishDatabase {
             challenge: args[1], github_user_id: args[2],
             github_login: args[3], expires_at: args[4]
           }); changes = 1;
+        } else if (sql.startsWith("DELETE FROM publish_login_tickets WHERE github_user_id = ?")) {
+          for (const [hash, row] of db.tickets) {
+            if (row.github_user_id === args[0]) { db.tickets.delete(hash); changes++; }
+          }
         } else if (sql.startsWith("DELETE FROM publish_login_tickets")) {
           const row = db.tickets.get(String(args[0]));
           if (row && Number(row.expires_at) > Number(args[1])) {
@@ -136,10 +140,6 @@ class MockD1 implements PublishDatabase {
         } else if (sql.startsWith("DELETE FROM counters WHERE owner_user_id = ?")) {
           for (const [slug, row] of db.counters) {
             if (row.owner_user_id === args[0]) { db.counters.delete(slug); changes++; }
-          }
-        } else if (sql.startsWith("DELETE FROM publish_login_tickets WHERE github_user_id = ?")) {
-          for (const [hash, row] of db.tickets) {
-            if (row.github_user_id === args[0]) { db.tickets.delete(hash); changes++; }
           }
         } else if (sql.startsWith("DELETE FROM publish_sessions WHERE github_user_id = ?")) {
           for (const [hash, row] of db.sessions) {
