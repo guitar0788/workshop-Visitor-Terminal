@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { isApprovedTheme, approvedCanvasWidth } from "./approved-reference-cards";
 import { isCardTheme } from "./card-art";
 import { restoreLocalDraft, saveLocalDraft } from "./local-draft";
+import { MAX_DESIGN_FILE_BYTES, parseDesignFile } from "./design-file";
 import { createRoot } from "react-dom/client";
 import {
   addLayer, CARD_THEMES, duplicateLayer, MAX_VISITOR_COUNT, moveLayer, reorderLayer, renderSvg, resizeCanvas, sanitizeDesign,
@@ -696,15 +697,11 @@ function App() {
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file) return;
-    if (file.size > 65536) { setNoticeKey("noticeTooLarge"); return; }
+    if (file.size > MAX_DESIGN_FILE_BYTES) { setNoticeKey("noticeTooLarge"); return; }
     try {
-      const parsed: unknown = JSON.parse(await file.text());
-      if (!parsed || typeof parsed !== "object" || !("schemaVersion" in parsed) ||
-          (parsed as { schemaVersion: unknown }).schemaVersion !== 1 ||
-          !("layers" in parsed) || !Array.isArray((parsed as { layers: unknown }).layers)) {
-        throw Error("Invalid schema");
-      }
-      const restored = sanitizeDesign(parsed);
+      // Reject malformed/lossy backups before replacing the current design.
+      // sanitizeDesign remains the forgiving boundary for legacy runtime data.
+      const restored = parseDesignFile(await file.text());
       edit(() => restored);
       setSelectedId(restored.layers[0]?.id ?? null);
       setCleanPreview(false);
