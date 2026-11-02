@@ -306,6 +306,19 @@ button, a, input, select { -webkit-tap-highlight-color: transparent; }
     font-size: 11px; line-height: 1.3;
   }
   .mobile-guidance { display: block; margin: 10px 1px 0; }
+  .selected-layer-shortcut.mobile-only {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    width: 100%; min-height: 46px; margin-top: 10px; padding: 10px 13px;
+    border: 1px solid #47745b; border-radius: 10px;
+    background: linear-gradient(120deg, #1c4430, #17342d);
+    color: #eaffef; font-size: 12px; font-weight: 700;
+    text-align: left; transition: border-color .16s ease, background .16s ease;
+  }
+  .selected-layer-shortcut span:nth-child(2) {
+    flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .selected-layer-shortcut span:last-child { font-size: 21px; line-height: 1; }
+  .selected-layer-shortcut:focus-visible { outline: 2px solid #b0ffd2; outline-offset: 2px; }
   .precision-panel { display: flex; margin-top: 12px; }
   .nudge-pad { flex-shrink: 0; }
   .mobile-nav.mobile-only {
