@@ -183,7 +183,7 @@ export function createMobileQA(){
     "redoButton.click();await until(()=>targetAgain.style.left===committed.x&&",
     "targetAgain.style.top===committed.y);",
     "if(captureId!==null||ownedId!==null)errors.push('pointer capture leaked after drag');",
-    "nav[3].click();
+    "nav[3].click();",
     "const previewCount=await until(()=>page.querySelector('.mobile-sheet .demo-count input[type=number]'));",
     "if(previewCount.max!=='999999999999')errors.push('preview count still capped below 12 digits');",
     "setter.call(previewCount,'999999999999');",
