@@ -58,7 +58,7 @@ describe("strict, lossless Studio design-file import", () => {
       { ...sample, layers: [{ ...layer, width: sample.width + 1 }] },
       { ...sample, layers: [{ ...layer, fontSize: 1000 }] },
       { ...sample, layers: [{ ...layer, text: "x".repeat(121) }] },
-      { ...sample, layers: [{ ...layer, text: "unsafe\\u0001text" }] },
+      { ...sample, layers: [{ ...layer, text: "unsafe\u0001text" }] },
       { ...sample, layers: [{ ...layer, color: "red" }] },
       { ...sample, layers: [{ ...layer, visible: "yes" }] }
     ];
