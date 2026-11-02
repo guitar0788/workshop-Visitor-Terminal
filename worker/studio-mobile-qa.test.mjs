@@ -53,6 +53,11 @@ test("mobile browser integration page exercises real app tabs and six current st
   assert(html.includes("mobile text alignment options are incomplete"));
   assert(html.includes("text-anchor="));
   assert(html.includes("alignmentValues"));
+  assert(html.includes("accessible names and labelled control groups"));
+  assert(html.includes("buttons without accessible names"));
+  assert(html.includes("form controls without associated labels"));
+  assert(html.includes("card picker is missing its named group role"));
+  assert(html.includes("layer tools are missing their named group role"));
   assert(html.includes("Invalid (?:or unsupported )?design JSON|设计 JSON 无效"));
   assert(html.includes("send('pointerup'"));
   assert(html.includes("undoButton.click()"));
