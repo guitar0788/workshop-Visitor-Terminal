@@ -12,7 +12,9 @@ test("visual browser QA applies to future internal card/editor PRs", async () =>
   for (const path of [
     "src/main.tsx", "src/model.ts", "src/history.ts",
     "src/design-file.ts", "src/local-draft.ts",
-    "src/style.css", "src/card-art.ts", "src/minecraft-card-art.ts"
+    "src/style.css", "src/card-art.ts", "src/minecraft-card-art.ts",
+    "src/minecraft-card-legacy-art.ts", "src/minecraft-art-compat.test.ts",
+    "src/minecraft-card-art.test.ts", "src/model.test.ts"
   ]) assert(workflow.includes('      - "' + path + '"'), path + " must trigger QA");
 });
 
