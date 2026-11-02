@@ -164,6 +164,49 @@ describe("Cloudflare D1 counter Worker", () => {
     expect((await list()).status).toBe(405);
   });
 
+  it("recovers only a self-host admin's sanitized design without changing counts or leaking D1 metadata", async () => {
+    const env = setup();
+    await register(env, "restore-this");
+    const path = "/v1/admin/counters/restore-this/design";
+    const get = (secret = TOKEN, method = "GET") =>
+      handleRequest(adminRequest(path, undefined, secret, method), env, NOW);
+    expect((await get()).status).toBe(405);
+    env.SELF_HOST_ADMIN_LIST_ENABLED = "true";
+    expect((await get()).status).toBe(405);
+    env.PUBLISHING_ENABLED = "false";
+    expect((await handleRequest(publicRequest(path), env, NOW)).status).toBe(401);
+    expect((await get("wrong")).status).toBe(401);
+    expect((await get(TOKEN, "HEAD")).status).toBe(405);
+    expect((await handleRequest(adminRequest(
+      "/v1/admin/counters/missing/design", undefined, TOKEN, "GET"), env, NOW)).status).toBe(404);
+
+    const revised = sanitizeDesign({
+      ...clonePreset("mc-nether"),
+      layers: clonePreset("mc-nether").layers.map(layer =>
+        layer.id === "heading" ? { ...layer, text: "RECOVER THIS TITLE" } : layer)
+    });
+    const updated = await handleRequest(adminRequest(path, { design: revised }), env, NOW);
+    expect(updated.status).toBe(200);
+    env.DB.counters.get("restore-this")!.hits = 1234;
+    const windowsBefore = env.DB.windows.size;
+    const storedBefore = env.DB.counters.get("restore-this")!.design_json;
+    const response = await get();
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
+    expect(response.headers.get("X-Content-Type-Options")).toBe("nosniff");
+    const raw = await response.text();
+    expect(JSON.parse(raw)).toEqual({ slug: "restore-this", design: revised });
+    for (const key of ["owner", "hits", "createdAt", "baseline", "sourceIp",
+      "ipHash", "visit_window", "created_at"]) {
+      expect(raw).not.toContain('"' + key + '"');
+    }
+    expect(env.DB.windows.size).toBe(windowsBefore);
+    expect(env.DB.counters.get("restore-this")!.hits).toBe(1234);
+    expect(env.DB.counters.get("restore-this")!.design_json).toBe(storedBefore);
+    env.PUBLISHING_ENABLED = "true";
+    expect((await get()).status).toBe(405);
+  });
+
   it("bounds read-only listing to 100 sorted counters without designs or owners", async () => {
     const env = setup();
     env.PUBLISHING_ENABLED = "false";
