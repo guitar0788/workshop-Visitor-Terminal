@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { clonePreset, moveLayer, renderSvg } from "./model";
+import { clonePreset, duplicateLayer, moveLayer, renderSvg } from "./model";
 import {
   createHistory, finishDrag, previewDrag, recordEdit, redoEdit, undoEdit
 } from "./history";
@@ -39,6 +39,19 @@ describe("mobile studio history and editing", () => {
     const committed = finishDrag(history, original);
     expect(committed.past).toHaveLength(1);
     expect(undoEdit(committed).present).toEqual(original);
+  });
+
+  it("records duplication as one undoable and redoable edit without altering the source", () => {
+    const original = clonePreset("mc-nether");
+    const copied = duplicateLayer(original, "heading", "heading_copy");
+    const history = recordEdit(createHistory(original), copied);
+    expect(history.past).toHaveLength(1);
+    expect(history.present.layers.some(layer => layer.id === "heading_copy")).toBe(true);
+    const undone = undoEdit(history);
+    expect(undone.present).toEqual(original);
+    expect(undone.future).toHaveLength(1);
+    expect(redoEdit(undone).present).toEqual(copied);
+    expect(original.layers.some(layer => layer.id === "heading_copy")).toBe(false);
   });
 
   it("ignores a no-op gesture", () => {
