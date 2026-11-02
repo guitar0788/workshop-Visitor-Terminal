@@ -6,6 +6,7 @@ export { CARD_THEMES } from "./card-art";
 export type { CardTheme } from "./card-art";
 export type Theme = "pixel" | "minimal" | "cyber" | CardTheme;
 export type LayerKind = "text" | "count" | "dot" | "panel";
+export type TextAlign = "left" | "center" | "right";
 /** Shared public preview and Worker renderer limit (12 decimal digits). */
 export const MAX_VISITOR_COUNT = 999_999_999_999;
 
@@ -20,6 +21,8 @@ export interface Layer {
   fontSize: number;
   color: string;
   visible: boolean;
+  /** Optional for schema-v1 backups created before text alignment was introduced. */
+  textAlign?: TextAlign;
 }
 
 export interface TerminalDesign {
@@ -36,6 +39,8 @@ const COLOR = /^#[0-9a-fA-F]{6}$/;
 const isTheme = (v: unknown): v is Theme => v === "pixel" || v === "minimal" || v === "cyber" || isCardTheme(v);
 const isKind = (v: unknown): v is LayerKind =>
   v === "text" || v === "count" || v === "dot" || v === "panel";
+const isTextAlign = (v: unknown): v is TextAlign =>
+  v === "left" || v === "center" || v === "right";
 const number = (value: unknown, fallback: number, min: number, max: number): number => {
   const n = typeof value === "number" ? value : Number.NaN;
   return Number.isFinite(n) ? Math.max(min, Math.min(max, Math.round(n))) : fallback;
@@ -128,7 +133,9 @@ export const presets: Record<Theme, TerminalDesign> = {
 
 export function clonePreset(theme: Theme): TerminalDesign {
   const preset = presets[theme];
-  return { ...preset, layers: preset.layers.map(layer => ({ ...layer })) };
+  return { ...preset, layers: preset.layers.map(layer => ({
+    ...layer, textAlign: layer.textAlign ?? "left"
+  })) };
 }
 
 export function sanitizeDesign(input: unknown): TerminalDesign {
@@ -156,7 +163,8 @@ export function sanitizeDesign(input: unknown): TerminalDesign {
       text: text(raw.text, "", 120),
       fontSize: number(raw.fontSize, 16, 8, 80),
       color: color(raw.color, base.accent),
-      visible: typeof raw.visible === "boolean" ? raw.visible : true
+      visible: typeof raw.visible === "boolean" ? raw.visible : true,
+      textAlign: isTextAlign(raw.textAlign) ? raw.textAlign : "left"
     }];
   }) : base.layers;
   return {
@@ -264,6 +272,10 @@ export function renderSvg(input: unknown, visits: number): string {
     } else {
       const content = layer.kind === "count" ? counter : layer.text;
       const fittedSize = layer.kind === "count" ? fittedCountSize(layer, counter) : layer.fontSize;
+      const alignment = layer.textAlign ?? "left";
+      const textAnchor = alignment === "center" ? "middle" : alignment === "right" ? "end" : "start";
+      const textX = layer.x + (alignment === "center" ? layer.width / 2 :
+        alignment === "right" ? layer.width : 0);
       // Actual Chrome font metrics put hanging glyphs ABOVE their nominal
       // baseline. Offset illustrated-card labels by their actual font size;
       // otherwise the clipPath cuts off the top of the live count.
@@ -277,8 +289,9 @@ export function renderSvg(input: unknown, visits: number): string {
         '"><rect x="', String(layer.x), '" y="', String(layer.y),
         '" width="', String(layer.width), '" height="', String(layer.height),
         '"/></clipPath></defs><text clip-path="url(#', clipId,
-        ')" x="', String(layer.x), '" y="', String(baselineY),
-        '" dominant-baseline="hanging" fill="', layer.color,
+        ')" x="', String(textX), '" y="', String(baselineY),
+        '"', alignment === "left" ? "" : ' text-anchor="' + textAnchor + '"',
+        ' dominant-baseline="hanging" fill="', layer.color,
         '" font-size="', String(fittedSize),
         '"', ...(layer.kind === "count" && fittedSize * counter.length * 0.63 > layer.width - 4
           ? [' textLength="', String(Math.max(1, layer.width - 4)), '" lengthAdjust="spacingAndGlyphs"']
