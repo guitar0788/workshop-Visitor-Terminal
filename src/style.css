@@ -99,6 +99,7 @@ button.danger { color: #ffb3b3; background: #3b2026; border-color: #79313d; }
 .import-label input { position: absolute; inset: 0; width: 100%; opacity: 0; cursor: pointer; }
 button.small { min-height: 32px; padding: 7px 9px; font-size: 11px; }
 .notice { color: #b4dcbf; font-size: 12px; line-height: 1.6; min-height: 18px; }
+.notice.draft-warning { color: #e6bd77; }
 .disclaimer { font-size: 12px; line-height: 1.6; color: #8c9aa8; margin-top: 23px; border-top: 1px solid #2a3642; padding-top: 16px; }
 .note { font-size: 12px; color: #91a0af; line-height: 1.5; }
 footer { text-align: center; padding: 29px 0 4px; font-size: 11px; color: #738394; letter-spacing: .1em; }
