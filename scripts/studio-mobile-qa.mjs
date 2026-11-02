@@ -243,7 +243,7 @@ export function createMobileQA(){
     "'invalid-design.json',{type:'application/json'}));",
     "importInput.files=transfer.files;",
     "importInput.dispatchEvent(new frame.contentWindow.Event('change',{bubbles:true}));",
-    "await until(()=>/Invalid design JSON|设计 JSON 无效/.test(",
+    "await until(()=>/Invalid (?:or unsupported )?design JSON|设计 JSON 无效/.test(",
     "page.querySelector('.mobile-sheet .notice[role=status]')?.textContent||''));",
     "if(currentDraft()!==beforeBadImport)errors.push('invalid import overwrote local draft');",
     "const preserved=decodeURIComponent(page.querySelector('.stage > img').src.split(',').slice(1).join(','));",
