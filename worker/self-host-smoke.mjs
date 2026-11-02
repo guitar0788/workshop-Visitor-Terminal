@@ -185,14 +185,19 @@ async function publishAndVerifyCatalog(api) {
 async function verifyCatalogAfterRestart(api, catalog) {
   assert.equal(catalog.length, 12);
   for (const { slug, theme, ip, svgMarker } of catalog) {
+    // Emit only a non-sensitive stage label on failure. Never print response
+    // bodies, request headers, local tokens or private Worker configuration.
+    smokeStage = "restart-catalog:" + theme + ":read-count";
     const state = await checked(await api("/v1/admin/counters/" + slug, {
       headers: { Authorization: "Bearer " + ADMIN_TOKEN }
     }), 200);
     assert.equal(state.hits, 1, "D1 count lost on restart for " + theme);
+    smokeStage = "restart-catalog:" + theme + ":fetch-svg";
     const response = await api("/v1/counters/" + slug + ".svg", {
       headers: { "CF-Connecting-IP": ip }
     });
     assert.equal(response.status, 200, "Persisted SVG failed for " + theme);
+    smokeStage = "restart-catalog:" + theme + ":validate-svg";
     const svg = await response.text();
     assert(svg.includes(">1</text>"), "Counter lost from persisted SVG: " + theme);
     if (svgMarker) assert(svg.includes(svgMarker), "Scene lost after restart: " + theme);
@@ -201,6 +206,7 @@ async function verifyCatalogAfterRestart(api, catalog) {
       assert(svg.includes("data:image/avif;base64,"),
         "Approved raster artwork lost after restart: " + theme);
     }
+    smokeStage = "restart-catalog:" + theme + ":recheck-count";
     const again = await checked(await api("/v1/admin/counters/" + slug, {
       headers: { Authorization: "Bearer " + ADMIN_TOKEN }
     }), 200);
