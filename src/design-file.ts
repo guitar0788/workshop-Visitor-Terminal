@@ -66,7 +66,7 @@ export function parseDesignFile(json: string): TerminalDesign {
         !isIntegerBetween(entry.y, 0, input.height - entry.height) ||
         !isIntegerBetween(entry.fontSize, 8, 80) ||
         typeof entry.text !== "string" || entry.text.length > 120 ||
-        /[\\u0000-\\u0008\\u000B\\u000C\\u000E-\\u001F]/.test(entry.text) ||
+        /[\u0000-\u0008\u000B\u000C\u000E-\u001F]/.test(entry.text) ||
         typeof entry.color !== "string" || !COLOR.test(entry.color) ||
         typeof entry.visible !== "boolean") {
       throw new Error("Invalid design file");
