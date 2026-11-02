@@ -1,4 +1,5 @@
 import { isCardTheme } from "./card-art";
+import { isMinecraftTheme } from "./minecraft-card-art";
 import { sanitizeDesign, type LayerKind, type TerminalDesign, type Theme } from "./model";
 
 /** Match the editor's existing import-size limit, measured in UTF-8 bytes. */
@@ -52,7 +53,9 @@ export function parseDesignFile(json: string): TerminalDesign {
       !isIntegerBetween(input.height, 160, 480) ||
       typeof input.background !== "string" || !COLOR.test(input.background) ||
       typeof input.accent !== "string" || !COLOR.test(input.accent) ||
-      !Array.isArray(input.layers) || input.layers.length > 32) {
+      !Array.isArray(input.layers) || input.layers.length > 32 ||
+      (input.artworkVersion !== undefined &&
+        (!isMinecraftTheme(input.theme) || input.artworkVersion !== "v061"))) {
     throw new Error("Invalid design file");
   }
 

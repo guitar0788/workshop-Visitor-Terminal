@@ -1,4 +1,5 @@
 import { CARD_THEMES, LEGACY_CARD_THEMES, isCardTheme, cardArtwork, type CardTheme } from "./card-art";
+import { isMinecraftTheme } from "./minecraft-card-art";
 import { isApprovedTheme, approvedBackdrop, approvedCountMarkup,
   defaultApprovedCountLayer, approvedCanvasWidth, approvedReferenceIsPristine, REFERENCE_HEIGHT }
   from "./approved-reference-cards";
@@ -28,6 +29,8 @@ export interface Layer {
 export interface TerminalDesign {
   schemaVersion: 1;
   theme: Theme;
+  /** New v0.6.1 artwork. Absence means the original published v0.6 scene. */
+  artworkVersion?: "v061";
   width: number;
   height: number;
   background: string;
@@ -122,6 +125,7 @@ function makeCardPreset(theme: CardTheme): TerminalDesign {
       height:28, text:c.caption, fontSize:c.captionSize, color:c.accent, visible:theme === "minimal-card" || theme.startsWith("mc-") }
   ];
   return { schemaVersion:1, theme, width:600, height:210,
+    ...(isMinecraftTheme(theme) ? { artworkVersion: "v061" as const } : {}),
     background:c.background, accent:c.accent, layers };
 }
 
@@ -142,6 +146,9 @@ export function sanitizeDesign(input: unknown): TerminalDesign {
   const source = input && typeof input === "object" ? input as Record<string, unknown> : {};
   const theme: Theme = isTheme(source.theme) ? source.theme : "pixel";
   const base = clonePreset(theme);
+  // v0.6 saved designs lack this field: preserve their original illustration.
+  const artworkVersion = isMinecraftTheme(theme) && source.artworkVersion === "v061"
+    ? "v061" as const : undefined;
   const width = number(source.width, base.width, 280, 800);
   const height = number(source.height, base.height, 160, 480);
   const seen = new Set<string>();
@@ -169,6 +176,7 @@ export function sanitizeDesign(input: unknown): TerminalDesign {
   }) : base.layers;
   return {
     schemaVersion: 1, theme, width, height,
+    ...(artworkVersion ? { artworkVersion } : {}),
     background: color(source.background, base.background),
     accent: color(source.accent, base.accent),
     layers
@@ -197,8 +205,12 @@ export function fittedCountSize(layer: Layer, value: string): number {
 
 /** Prevent cross-card SVG fragment collisions in pages with many inline SVGs. */
 export function svgInstanceScope(design: TerminalDesign, counter: string): string {
-  const source = JSON.stringify([design.theme, design.width, design.height,
-    design.layers, counter]);
+  const identity: Array<Theme | number | Layer[] | string> = [
+    design.theme, design.width, design.height, design.layers, counter
+  ];
+  // Keep v0.6 IDs intact while differentiating the re-illustrated edition.
+  if (design.artworkVersion) identity.push(design.artworkVersion);
+  const source = JSON.stringify(identity);
   let a = 2166136261, b = 2166136261 ^ 0x9e3779b9;
   for (let i = 0; i < source.length; i++) {
     const code = source.charCodeAt(i);
@@ -249,7 +261,7 @@ export function renderSvg(input: unknown, visits: number): string {
     // Minecraft-inspired scenes use image-authored self-contained plates;
     // visitor numbers and labels remain editable overlay layers.
     parts.push('<g transform="scale(', String(d.width / 600), ' ', String(d.height / 210),
-      ')">', scopedCardArtwork(cardArtwork(d.theme), scope), '</g>');
+      ')">', scopedCardArtwork(cardArtwork(d.theme, d.artworkVersion), scope), '</g>');
   } else {
     parts.push('<rect x="2" y="2" width="', String(d.width - 4),
       '" height="', String(d.height - 4), '" rx="', d.theme === "pixel" ? "2" : "12",
