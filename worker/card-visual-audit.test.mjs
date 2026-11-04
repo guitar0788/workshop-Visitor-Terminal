@@ -23,21 +23,45 @@ test("gallery builds from actual bundled model with all six selectable cards at 
     assert.match(html,/getBBox\(\)/);
     assert(html.includes("remote SVG")==false);
     assert.equal(html.split("data:image/avif;base64,").length-1,6);
+    assert.equal(html.split("data:image/webp;base64,").length-1,6);
     assert(!html.includes('href="https://'));
     assert(!/https:\/\/evil\.example|<foreignObject\b/i.test(html));
     assert(html.includes("NOT cloud statistics."));
   } finally { await rm(root,{recursive:true,force:true}); }
 });
 
+const FIXTURE_THEMES = [
+  "pixel-card", "terminal-card", "rpg-card",
+  "mc-overworld", "mc-nether", "mc-end"
+];
+function fixtureSvg(theme, clipId = "unique") {
+  const approved = ["pixel-card","terminal-card","rpg-card"].includes(theme);
+  const image = approved
+    ? '<image href="data:image/avif;base64,' + "A".repeat(93000) + '"/>'
+    : '<image width="600" height="210" href="data:image/webp;base64,' + "A".repeat(7500) + '"/>';
+  return '<svg xmlns="http://www.w3.org/2000/svg"><defs><clipPath id="' +
+    clipId + '"><rect/></clipPath></defs>' + image +
+    '<text clip-path="url(#' + clipId + ')">12,847</text></svg>';
+}
+function fakeSamples(reuseClip = false) {
+  return Array.from({ length: SAMPLES }, (_, i) => {
+    const theme = FIXTURE_THEMES[i % FIXTURE_THEMES.length];
+    return {
+      name: theme, count: COUNTS[Math.floor(i / FIXTURE_THEMES.length)],
+      svg: fixtureSvg(theme, reuseClip ? "clip-visits" : "clip-" + i)
+    };
+  });
+}
+
 test("gallery source rejects duplicate, injected, and incomplete samples", () => {
-  const fake=Array.from({length:SAMPLES},(_,i)=>({
-    name:"card-"+String.fromCharCode(97+i),count:COUNTS[i%2],
-    svg:'<svg xmlns="http://www.w3.org/2000/svg"><text>1</text></svg>'
-  }));
-  assert.match(createGallery(fake),/six-card visual QA/);
-  assert.throws(()=>createGallery(fake.slice(1)),/Wrong card count/);
-  assert.throws(()=>createGallery(fake.map((r,i)=>i===3?fake[0]:r)),/duplicate/i);
-  assert.throws(()=>createGallery(fake.map((r,i)=>i===3?{...r,svg:r.svg.replace("<text>","<script></script><text>")}:r)),/Invalid|markup/i);
+  const fake = fakeSamples();
+  assert.match(createGallery(fake), /six-card visual QA/);
+  assert.throws(() => createGallery(fake.slice(1)), /Wrong card count/);
+  assert.throws(() => createGallery(fake.map((r, i) => i === 3 ? fake[0] : r)), /duplicate/i);
+  assert.throws(() => createGallery(fake.map((r, i) => i === 3 ?
+    { ...r, svg: r.svg.replace("<text ", "<script></script><text ") } : r)), /markup/i);
+  assert.throws(() => createGallery(fake.map((r, i) => i === 3 ?
+    { ...r, svg: r.svg.replace("data:image/webp;", "data:image/png;") } : r)), /Unapproved/);
 });
 
 test("browser report is accepted only with exact full render coverage", async () => {
@@ -76,10 +100,6 @@ test("the verifier flags actual browser-measured clipping, not just SVG string c
 
 
 test("fails closed on the exact cross-SVG ID collision from the owner's screenshot", () => {
-  const fake=Array.from({length:SAMPLES},(_,i)=>({
-    name:"card-"+String.fromCharCode(97+i),
-    count:COUNTS[i%2],
-    svg:'<svg xmlns="http://www.w3.org/2000/svg"><defs><clipPath id="clip-visits"><rect/></clipPath></defs><text clip-path="url(#clip-visits)">12,847</text></svg>'
-  }));
-  assert.throws(()=>createGallery(fake),/Repeated SVG fragment ID across cards: clip-visits/);
+  assert.throws(() => createGallery(fakeSamples(true)),
+    /Repeated SVG fragment ID across cards: clip-visits/);
 });
