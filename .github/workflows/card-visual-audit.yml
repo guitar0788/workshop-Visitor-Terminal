@@ -17,6 +17,9 @@ on:
       - "src/card-art.ts"
       - "src/minecraft-card-art.ts"
       - "src/main.tsx"
+      - "src/history.ts"
+      - "src/design-file.ts"
+      - "src/local-draft.ts"
       - "src/i18n.ts"
       - "scripts/studio-mobile-qa.mjs"
       - "worker/studio-mobile-qa.test.mjs"
@@ -34,7 +37,8 @@ concurrency:
 jobs:
   browser-render:
     name: Render six selectable cards in headless Chrome
-    if: github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'release/v0.6-cards-editor-only'
+    # No secrets, OIDC, write permissions, or deployment. Audit every same-repo PR.
+    if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
