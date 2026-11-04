@@ -23,9 +23,10 @@ test("builds eighteen real <img> SVG previews from all six illustrations without
   }finally{await rm(root,{recursive:true,force:true})}
 });
 
-test("rejects duplicates, cross-network art, and unapproved Minecraft embedded images",()=>{
+test("rejects duplicates, cross-network art, extra images and wrong image MIME",()=>{
   const fake=IMAGE_THEMES.flatMap(theme=>IMAGE_COUNTS.map(count=>({
-    theme,count,svg:theme.startsWith('mc-') ? '<svg xmlns="http://www.w3.org/2000/svg"><path d="M0 0h10"/></svg>' :
+    theme,count,svg:theme.startsWith('mc-') ?
+      '<svg xmlns="http://www.w3.org/2000/svg"><image href="data:image/webp;base64,'+'A'.repeat(7500)+'"/></svg>' :
       '<svg xmlns="http://www.w3.org/2000/svg"><image href="data:image/avif;base64,AAAA"/></svg>'
   })));
   assert.match(makeImageReview(fake),/approved-image-audit/);
@@ -34,6 +35,7 @@ test("rejects duplicates, cross-network art, and unapproved Minecraft embedded i
   assert.throws(()=>makeImageReview(fake.map((x,i)=>i===1?{...x,svg:x.svg.replace('data:image/avif;base64,AAAA','https://example.org/art.png')}:x)),/Unapproved/);
   assert.throws(()=>makeImageReview(fake.map((x,i)=>i===1?{...x,svg:x.svg.replace('</svg>','<script></script></svg>')}:x)),/Unapproved/);
   assert.throws(()=>makeImageReview(fake.map((x,i)=>i===9?{...x,svg:x.svg.replace('</svg>','<image href="data:image/avif;base64,AAAA"/></svg>')}:x)),/Unapproved/);
+  assert.throws(()=>makeImageReview(fake.map((x,i)=>i===9?{...x,svg:x.svg.replace('data:image/webp;', 'data:image/png;')}:x)),/Unapproved/);
 });
 
 test("browser audit is fail-closed and never claims real GitHub proxy verification",()=>{

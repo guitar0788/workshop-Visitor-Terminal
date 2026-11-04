@@ -1,9 +1,10 @@
-/** Original vector recreation of the owner's nine-card visual reference.
- *  Artwork contains no headings or numbers: live visitor data is drawn by the
- *  existing editable layers. Native canvas for new cards: 600 × 210.
- *  No script, image href, remote font, CDN or external resource.
+/** Self-contained illustrated card assets: no remote fonts, CDNs or scripts.
+ * Minecraft-inspired scenes use generated local WebP art, not primitive SVG
+ * constructions. Live visitor metrics remain independent editable layers.
+ * The three approved source plates are handled in approved-reference-cards.
  */
 import { minecraftArtwork, isMinecraftTheme, type MinecraftTheme } from "./minecraft-card-art";
+import { legacyMinecraftArtwork } from "./minecraft-card-legacy-art";
 export { MINECRAFT_THEMES } from "./minecraft-card-art";
 /** Only these six appear in Studio's illustrated gallery. */
 export const CARD_THEMES = ["pixel-card","terminal-card","rpg-card","mc-overworld","mc-nether","mc-end"] as const;
@@ -28,6 +29,9 @@ const ART: Record<Exclude<CardTheme,MinecraftTheme>, string> = {
   "neon-card": "<defs>\n<linearGradient id=\"neonStroke\" x2=\"1\" y2=\"1\"><stop stop-color=\"#35f4f0\"/><stop offset=\".48\" stop-color=\"#5699ff\"/><stop offset=\"1\" stop-color=\"#ef62ff\"/></linearGradient>\n<linearGradient id=\"neonBg\" x2=\"0\" y2=\"1\"><stop stop-color=\"#0c1936\"/><stop offset=\"1\" stop-color=\"#150c36\"/></linearGradient>\n<filter id=\"neonGlow\" x=\"-20%\" y=\"-45%\" width=\"140%\" height=\"190%\"><feGaussianBlur stdDeviation=\"7\"/></filter>\n</defs>\n<rect x=\"9\" y=\"18\" width=\"582\" height=\"175\" rx=\"25\" fill=\"none\" stroke=\"url(#neonStroke)\" stroke-width=\"9\" opacity=\".45\" filter=\"url(#neonGlow)\"/>\n<rect x=\"10\" y=\"19\" width=\"579\" height=\"172\" rx=\"24\" fill=\"url(#neonBg)\" stroke=\"url(#neonStroke)\" stroke-width=\"5\"/>\n<rect x=\"22\" y=\"31\" width=\"555\" height=\"149\" rx=\"14\" fill=\"none\" stroke=\"#506dd4\" stroke-opacity=\".5\" stroke-width=\"2\"/>\n<path d=\"M36 56h20V39m492 0h20v19M36 155h20v20m492 0h20v-20\" stroke=\"#8c7dff\" stroke-width=\"4\" fill=\"none\"/>\n<rect x=\"54\" y=\"133\" width=\"20\" height=\"35\" fill=\"#37f3ed\"/><rect x=\"88\" y=\"110\" width=\"20\" height=\"58\" fill=\"#4fd0fc\"/><rect x=\"122\" y=\"80\" width=\"20\" height=\"88\" fill=\"#6798ff\"/>\n<path d=\"M192 53v114\" stroke=\"#7c9ff9\" stroke-width=\"3\"/>\n<path d=\"M496 161l13-15h13l-13 15Zm27 0 13-15h13l-13 15Zm27 0 13-15h13l-13 15Z\" fill=\"#a36cff\"/>\n<path d=\"M225 175h251\" stroke=\"#5d76bd\" stroke-width=\"2\" stroke-dasharray=\"8 8\" opacity=\".65\"/>\n",
   "minimal-card": "<defs>\n<linearGradient id=\"minBg\" x2=\"1\" y2=\"1\"><stop stop-color=\"#f8fff9\"/><stop offset=\"1\" stop-color=\"#e3fff0\"/></linearGradient>\n<filter id=\"minShadow\"><feGaussianBlur stdDeviation=\"5\"/></filter>\n</defs>\n<rect x=\"12\" y=\"45\" width=\"576\" height=\"124\" rx=\"63\" fill=\"#356954\" opacity=\".2\" filter=\"url(#minShadow)\"/>\n<rect x=\"9\" y=\"38\" width=\"582\" height=\"130\" rx=\"65\" fill=\"url(#minBg)\" stroke=\"#a7dfbd\" stroke-width=\"4\"/>\n<circle cx=\"104\" cy=\"96\" r=\"19\" fill=\"#2eb968\"/><circle cx=\"67\" cy=\"107\" r=\"13\" fill=\"#58ca88\"/><circle cx=\"142\" cy=\"107\" r=\"13\" fill=\"#58ca88\"/>\n<path d=\"M67 140q2-29 37-29 35 0 37 29v9H67Z\" fill=\"#30b96e\"/>\n<path d=\"M36 142q0-24 24-28 9 4 14 11v24H36Zm98-17q10-15 24-11 16 8 16 28v7h-40Z\" fill=\"#69cd92\"/>\n<path d=\"M202 69v70\" stroke=\"#a7e5c0\" stroke-width=\"3\"/>\n<rect x=\"438\" y=\"70\" width=\"128\" height=\"69\" rx=\"35\" fill=\"#7be7a1\"/>\n<rect x=\"446\" y=\"77\" width=\"111\" height=\"54\" rx=\"27\" fill=\"#8ff2b1\" opacity=\".55\"/>\n"
 };
-export function cardArtwork(theme: CardTheme): string {
-  return isMinecraftTheme(theme) ? minecraftArtwork(theme) : ART[theme];
+export function cardArtwork(theme: CardTheme, artworkVersion?: "v061"): string {
+  if (!isMinecraftTheme(theme)) return ART[theme];
+  return artworkVersion === "v061"
+    ? minecraftArtwork(theme)
+    : legacyMinecraftArtwork(theme);
 }

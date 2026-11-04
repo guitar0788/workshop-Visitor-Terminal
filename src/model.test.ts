@@ -106,6 +106,10 @@ describe("v0.6 illustrated visitor cards", () => {
       if (isApprovedTheme(theme)) {
         expect(first).toContain('href="data:image/avif;base64,');
         expect(first).not.toMatch(/<script|<foreignObject|href="https?:/i);
+      } else if (theme.startsWith("mc-")) {
+        expect(first.match(/<image\b/g)).toHaveLength(1);
+        expect(first).toContain('href="data:image/webp;base64,');
+        expect(first).not.toMatch(/<script|<foreignObject|href="https?:/i);
       } else {
         expect(first).not.toMatch(/<script|<foreignObject|<image|href=|url\(https?:/i);
       }
@@ -140,6 +144,9 @@ describe("v0.6 illustrated visitor cards", () => {
       if (isApprovedTheme(theme)) {
         expect(output.match(/<image\b/g)).toHaveLength(1);
         expect(output).toContain('data:image/avif;base64,');
+      } else if (theme.startsWith("mc-")) {
+        expect(output.match(/<image\b/g)).toHaveLength(1);
+        expect(output).toContain('data:image/webp;base64,');
       } else {
         expect(output).not.toContain('<image');
       }
@@ -342,23 +349,27 @@ describe("visual fidelity — approved three plus three Minecraft-inspired voxel
     expect(old.height).toBe(220);
   });
 
-  it("renders distinct actual vector scenes rather than switching only colors or text", () => {
+  it("renders three distinct image-authored voxel landscapes, not assembled SVG geometry", () => {
     const scenes = CARD_THEMES.map(theme => renderSvg(clonePreset(theme), 12_847));
     expect(new Set(scenes).size).toBe(6);
+    const generatedPlates = new Set<string>();
     for (const [i, svg] of scenes.entries()) {
       const theme = CARD_THEMES[i];
       if (isApprovedTheme(theme)) {
         expect(svg).toContain('data:image/avif;base64,');
         expect(svg.match(/<image\b/g)).toHaveLength(1);
       } else {
-        expect(svg.match(/<(?:path|rect|circle|ellipse)\b/g)?.length ?? 0).toBeGreaterThan(8);
-        expect(svg).not.toMatch(/<image\b|<script\b|<foreignObject\b|\shref\s*=/i);
+        const image = svg.match(/<image\b[^>]+href="(data:image\/webp;base64,[^"]+)"/)?.[1];
+        expect(image).toBeTruthy();
+        expect(image!.length).toBeGreaterThan(6000);
+        generatedPlates.add(image!);
+        expect(svg.match(/<image\b/g)).toHaveLength(1);
+        expect(svg).not.toMatch(/<script\b|<foreignObject\b|href="https?:/i);
+        expect(svg).not.toContain('shape-rendering="crispEdges"');
       }
       expect(svg).toContain("<defs>");
     }
-    expect(scenes[3]).toContain("ovsky");
-    expect(scenes[4]).toContain("lavaGlow");
-    expect(scenes[5]).toContain("eGlow");
+    expect(generatedPlates.size).toBe(3);
   });
 });
 
@@ -424,11 +435,12 @@ describe("owner-approved 1 / 3 / 5 composition fidelity", () => {
     }
   });
 
-  it("keeps other six illustrated cards free of embedded reference art", () => {
+  it("keeps new voxel WebP plates separate from approved AVIF reference art", () => {
     for (const theme of CARD_THEMES.filter(theme => !isApprovedTheme(theme))) {
       const svg = renderSvg(clonePreset(theme), 12_848);
       expect(svg).not.toContain('data:image/avif;base64,');
-      expect(svg).not.toMatch(/<image\b/);
+      expect(svg.match(/<image\b/g)).toHaveLength(1);
+      expect(svg).toContain('href="data:image/webp;base64,');
     }
   });
 
@@ -458,8 +470,8 @@ describe("selectable Minecraft styles and retired-card compatibility", () => {
       expect(svg).not.toContain("<script");
       expect(svg).not.toContain("https://");
       if (theme.startsWith("mc-")) {
-        expect(svg).not.toMatch(/<image\b/);
-        expect(svg).toContain('shape-rendering="crispEdges"');
+        expect(svg.match(/<image\b/g)).toHaveLength(1);
+        expect(svg).toContain('href="data:image/webp;base64,');
       }
     }
   });
@@ -510,7 +522,9 @@ describe("six illustrated-card editing and exported-design parity", () => {
           svg.split('href="data:image/avif;base64,')[1]?.split('"')[0];
         expect(image(rendered)).toBe(image(original));
       } else {
-        expect(rendered).toContain('shape-rendering="crispEdges"');
+        const image = (svg: string) =>
+          svg.split('href="data:image/webp;base64,')[1]?.split('"')[0];
+        expect(image(rendered)).toBe(image(original));
       }
     }
   });
@@ -573,7 +587,7 @@ describe("canvas resizing preserves illustrated art and overlay alignment", () =
       if (isApprovedTheme(theme)) {
         expect(svg).toContain('href="data:image/avif;base64,');
       } else {
-        expect(svg).toContain('shape-rendering="crispEdges"');
+        expect(svg).toContain('href="data:image/webp;base64,');
       }
     }
   });

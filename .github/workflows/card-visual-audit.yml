@@ -16,6 +16,10 @@ on:
       - "src/model.ts"
       - "src/card-art.ts"
       - "src/minecraft-card-art.ts"
+      - "src/minecraft-card-legacy-art.ts"
+      - "src/minecraft-art-compat.test.ts"
+      - "src/minecraft-card-art.test.ts"
+      - "src/model.test.ts"
       - "src/main.tsx"
       - "src/history.ts"
       - "src/design-file.ts"
@@ -99,6 +103,18 @@ jobs:
             --screenshot="$PWD/dist/WVT-Six-Cards-External-Image-Mode.png" \
             "file://$PWD/dist/Six-Cards-External-Image-Review.html" 2> /dev/null
           test -s dist/WVT-Six-Cards-External-Image-Mode.png
+      # Vite's build clears dist by default. Keep browser-rendered previews
+      # outside dist before its mobile smoke build, then restore for artifacts.
+      - name: Preserve illustrated-card preview before Vite build
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/wvt-illustrated-card-preview"
+          cp -v dist/WVT-Six-Cards-Visual-Review.png \
+            dist/Card-Visual-Review.html \
+            dist/card-browser-dom.html \
+            dist/Six-Cards-External-Image-Review.html \
+            dist/WVT-Six-Cards-External-Image-Mode.png \
+            "$RUNNER_TEMP/wvt-illustrated-card-preview/"
       - name: Exercise actual Studio six-card picker in phone viewport
         run: |
           set -euo pipefail
@@ -140,6 +156,18 @@ jobs:
             --screenshot="$PWD/dist/WVT-GitHub-Actual-README-Proxy-Preview.png" \
             "$url" 2> /dev/null
           test -s dist/WVT-GitHub-Actual-README-Proxy-Preview.png
+      - name: Restore illustrated-card preview files for review
+        if: always()
+        run: |
+          set -euo pipefail
+          review_dir="$RUNNER_TEMP/wvt-illustrated-card-preview"
+          if test -d "$review_dir"; then
+            mkdir -p dist
+            cp -v "$review_dir/"* dist/
+            test -s dist/WVT-Six-Cards-Visual-Review.png
+            test -s dist/Card-Visual-Review.html
+            test -s dist/Six-Cards-External-Image-Review.html
+          fi
       - name: Upload browser preview image and self-contained HTML (not a release)
         if: always()
         uses: actions/upload-artifact@v4
